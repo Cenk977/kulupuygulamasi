@@ -34,7 +34,7 @@
     min-height:100vh;
     -webkit-font-smoothing:antialiased;
   }
-  
+
   /* GİRİŞ EKRANI TASARIMI */
   .login-container {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -56,20 +56,28 @@
   .google-btn:hover { background: #fdfaf2; border-color: var(--lane-coral); }
   .google-btn img { width: 20px; height: 20px; }
 
-  /* ANA İÇERİK YAPISI */
-  .wrap{max-width:920px; margin:0 auto; padding:28px 20px 80px; display:none;}
+  /* OTURUM BİLGİSİ BARBARI */
+  .auth-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(11,46,60,0.05); padding: 8px 12px; margin-bottom: 15px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; border-radius: var(--radius);
+  }
+  .logout-btn { color: var(--bad); cursor: pointer; text-decoration: underline; font-weight: bold; }
+
+  /* UYGULAMA WRAPPER (GİRİŞ YAPILANA KADAR GİZLİ) */
+  .wrap{max-width:920px;margin:0 auto;padding:28px 20px 80px; display:none;}
   
   header.top{
-    display:flex; align-items:flex-end; justify-content:space-between;
+    display:flex;align-items:flex-end;justify-content:space-between;
     border-bottom:3px solid var(--lane-coral);
-    padding-bottom:18px; margin-bottom:28px;
-    gap:16px; flex-wrap:wrap;
+    padding-bottom:18px;margin-bottom:28px;
+    gap:16px;flex-wrap:wrap;
   }
-  .brandline{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;}
+  .brandline{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
   .lap-no{
     font-family:'JetBrains Mono', monospace;
-    font-size:13px; letter-spacing:0.12em; color:var(--lane-coral);
-    border:1px solid var(--lane-coral); padding:3px 8px; border-radius:var(--radius);
+    font-size:13px;letter-spacing:0.12em;color:var(--lane-coral);
+    border:1px solid var(--lane-coral);padding:3px 8px;border-radius:var(--radius);
   }
   h1{
     font-family:'Archivo Black', sans-serif;
@@ -78,86 +86,88 @@
     margin:6px 0 0;
     letter-spacing:-0.01em;
   }
-  .sub{font-size:13px; color:var(--foam-dim); margin-top:6px; max-width:520px;}
-  .user-info-bar { font-family:'JetBrains Mono', monospace; font-size:12px; margin-top:10px; color:var(--good); display:flex; gap:15px; align-items:center;}
-  .logout-lnk { color:var(--bad); cursor:pointer; text-decoration:underline; }
+  .sub{font-size:13px;color:var(--foam-dim);margin-top:6px;max-width:520px;}
   .clubmark{
-    font-family:'JetBrains Mono', monospace; font-size:11px; text-align:right;
-    color:var(--foam-dim); line-height:1.5; white-space:nowrap;
+    font-family:'JetBrains Mono', monospace;font-size:11px;text-align:right;
+    color:var(--foam-dim);line-height:1.5;white-space:nowrap;
   }
-  .lanes{display:flex; gap:6px; margin-bottom:22px; overflow-x:auto; padding-bottom:2px;}
+  .lanes{display:flex;gap:6px;margin-bottom:22px;overflow-x:auto;padding-bottom:2px;}
   .lane-btn{
-    flex:1 1 auto; min-width:fit-content;
-    background:transparent; border:1px solid rgba(26,46,53,0.25);
-    color:var(--foam-dim); font-family:'JetBrains Mono',monospace;
-    font-size:11.5px; letter-spacing:0.04em; padding:10px 12px;
-    cursor:pointer; border-radius:var(--radius); text-align:left;
-    transition:all .15s ease; position:relative;
+    flex:1 1 auto;min-width:fit-content;
+    background:transparent;border:1px solid rgba(26,46,53,0.25);
+    color:var(--foam-dim);font-family:'JetBrains Mono',monospace;
+    font-size:11.5px;letter-spacing:0.04em;padding:10px 12px;
+    cursor:pointer;border-radius:var(--radius);text-align:left;
+    transition:all .15s ease;position:relative;
   }
   .lane-btn .num{
-    display:inline-block; font-family:'Archivo Black',sans-serif; font-size:15px;
-    color:var(--foam); margin-right:8px;
+    display:inline-block;font-family:'Archivo Black',sans-serif;font-size:15px;
+    color:var(--foam);margin-right:8px;
   }
   .lane-btn.active{
-    border-color:var(--lane-coral); background:rgba(232,85,31,0.1); color:var(--foam);
+    border-color:var(--lane-coral);background:rgba(232,85,31,0.1);color:var(--foam);
   }
   .lane-btn.active .num{color:var(--lane-coral);}
   .panel{
-    background:#fffdf9; border:1px solid rgba(26,46,53,0.15);
-    box-shadow:0 1px 3px rgba(26,46,53,0.05); border-radius:var(--radius);
-    padding:24px 22px; margin-bottom:18px;
+    background:#fffdf9;border:1px solid rgba(26,46,53,0.15);
+    box-shadow:0 1px 3px rgba(26,46,53,0.05);border-radius:var(--radius);
+    padding:24px 22px;margin-bottom:18px;
   }
-  .panel h2{font-family:'Archivo Black',sans-serif; font-size:18px; margin:2px 0 4px; letter-spacing:-0.01em;}
+  .panel h2{font-family:'Archivo Black',sans-serif;font-size:18px;margin:2px 0 4px;letter-spacing:-0.01em;}
   .field{margin-bottom:16px;}
-  .field label{display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--foam);}
+  .field label{display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--foam);}
   input[type=text], input[type=number], textarea, select, input[type=month]{
-    width:100%; background:rgba(255,255,255,0.7); border:1px solid rgba(26,46,53,0.22);
-    color:var(--foam); font-family:'Archivo',sans-serif; font-size:13.5px;
-    padding:9px 10px; border-radius:var(--radius); outline:none;
+    width:100%;background:rgba(255,255,255,0.7);border:1px solid rgba(26,46,53,0.22);
+    color:var(--foam);font-family:'Archivo',sans-serif;font-size:13.5px;
+    padding:9px 10px;border-radius:var(--radius);outline:none;
   }
-  textarea{resize:vertical; min-height:64px; line-height:1.5;}
-  input:focus, textarea:focus, select:focus{border-color:var(--lane-coral); box-shadow:0 0 0 3px rgba(232,85,31,0.15);}
-  .row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  textarea{resize:vertical;min-height:64px;line-height:1.5;}
+  input:focus, textarea:focus, select:focus{border-color:var(--lane-coral);box-shadow:0 0 0 3px rgba(232,85,31,0.15);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media (max-width:560px){.row2{grid-template-columns:1fr;}}
-  .rate-row{display:grid; grid-template-columns:140px 1fr 34px; align-items:center; gap:12px; margin-bottom:14px;}
-  @media (max-width:560px){.rate-row{grid-template-columns:1fr; gap:6px;}}
-  .rate-row input[type=range]{accent-color:var(--lane-coral); width:100%;}
-  .rate-val{font-family:'JetBrains Mono',monospace; font-size:14px; text-align:center; color:var(--lane-coral); font-weight:600;}
-  .nav-row{display:flex; justify-content:space-between; gap:10px; margin-top:8px; flex-wrap:wrap;}
-  .btn{font-family:'Archivo',sans-serif; font-weight:700; font-size:13px; padding:11px 20px; border-radius:var(--radius); cursor:pointer; border:none;}
-  .btn-primary{background:var(--lane-coral); color:#fffdf9;}
-  .btn-ghost{background:transparent; border:1px solid rgba(26,46,53,0.3); color:var(--foam); margin-right:8px;}
-  .savebar{display:flex; justify-content:flex-end; gap:10px; margin-top:6px;}
-  .board-head{display:flex; justify-content:space-between; align-items:baseline; margin:36px 0 14px; border-bottom:1px solid rgba(26,46,53,0.18); padding-bottom:10px;}
-  .board-head h2{font-family:'Archivo Black',sans-serif; font-size:16px; margin:0;}
-  .board-head .count{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--foam-dim);}
-  .empty{border:1px dashed rgba(26,46,53,0.2); padding:30px 20px; text-align:center; color:var(--foam-dim); font-size:13px;}
-  .athlete-card{background:#fffdf9; border:1px solid rgba(26,46,53,0.15); border-left:3px solid var(--lane-coral); padding:16px 18px; margin-bottom:10px; border-radius:var(--radius);}
-  .ac-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px;}
-  .ac-name{font-family:'Archivo Black',sans-serif; font-size:16px;}
-  .ac-meta{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--foam-dim);}
-  .ac-actions{display:flex; gap:8px; margin-top:12px;}
-  .ac-actions button{font-family:'JetBrains Mono',monospace; font-size:11px; background:transparent; border:1px solid rgba(26,46,53,0.25); padding:6px 10px; cursor:pointer;}
-  .ac-actions button.del:hover{border-color:var(--bad); color:var(--bad);}
+  .rate-row{display:grid;grid-template-columns:140px 1fr 34px;align-items:center;gap:12px;margin-bottom:14px;}
+  @media (max-width:560px){.rate-row{grid-template-columns:1fr;gap:6px;}}
+  .rate-row input[type=range]{accent-color:var(--lane-coral);width:100%;}
+  .rate-val{font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;color:var(--lane-coral);font-weight:600;}
+  .nav-row{display:flex;justify-content:space-between;gap:10px;margin-top:8px;flex-wrap:wrap;}
+  .btn{font-family:'Archivo',sans-serif;font-weight:700;font-size:13px;padding:11px 20px;border-radius:var(--radius);cursor:pointer;border:none;}
+  .btn-primary{background:var(--lane-coral);color:#fffdf9;}
+  .btn-ghost{background:transparent;border:1px solid rgba(26,46,53,0.3);color:var(--foam);margin-right:8px;}
+  .savebar{display:flex;justify-content:flex-end;gap:10px;margin-top:6px;}
+  .board-head{display:flex;justify-content:space-between;align-items:baseline;margin:36px 0 14px;border-bottom:1px solid rgba(26,46,53,0.18);padding-bottom:10px;}
+  .board-head h2{font-family:'Archivo Black',sans-serif;font-size:16px;margin:0;}
+  .board-head .count{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--foam-dim);}
+  .empty{border:1px dashed rgba(26,46,53,0.2);padding:30px 20px;text-align:center;color:var(--foam-dim);font-size:13px;}
+  .athlete-card{background:#fffdf9;border:1px solid rgba(26,46,53,0.15);border-left:3px solid var(--lane-coral);padding:16px 18px;margin-bottom:10px;border-radius:var(--radius);}
+  .ac-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .ac-name{font-family:'Archivo Black',sans-serif;font-size:16px;}
+  .ac-meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--foam-dim);}
+  .ac-actions{display:flex;gap:8px;margin-top:12px;}
+  .ac-actions button{font-family:'JetBrains Mono',monospace;font-size:11px;background:transparent;border:1px solid rgba(26,46,53,0.25);padding:6px 10px;cursor:pointer;}
+  .ac-actions button.del:hover{border-color:var(--bad);color:var(--bad);}
   .toast{
-    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
-    background:var(--lane-coral); color:#fffdf9; font-weight:700; font-size:13px;
-    padding:11px 22px; border-radius:var(--radius); opacity:0; transition:all .25s ease; z-index:100;
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--lane-coral);color:#fffdf9;font-weight:700;font-size:13px;
+    padding:11px 22px;border-radius:var(--radius);opacity:0;transition:all .25s ease;z-index:100;
   }
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
-  .loading-note{font-size:12px; color:var(--foam-dim); text-align:center; padding:20px;}
-  .mode-tabs{display:flex; gap:0; margin-bottom:22px; border-bottom:2px solid rgba(26,46,53,0.12);}
-  .mode-tab{background:transparent; border:none; font-family:'Archivo Black',sans-serif; font-size:14px; padding:10px 18px 14px; cursor:pointer; color:var(--foam-dim); border-bottom:3px solid transparent;}
-  .mode-tab.active{color:var(--lane-coral); border-bottom-color:var(--lane-coral);}
-  .calendar{display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin-top:14px;}
-  .cal-day{aspect-ratio:1; background:#fffdf9; border:1px solid rgba(26,46,53,0.14); padding:6px; cursor:pointer; display:flex; flex-direction:column; justify-content:space-between;}
-  .cal-day.geldi{border-left:3px solid var(--good);}
-  .cal-day.gelmedi{border-left:3px solid var(--bad); background:rgba(194,63,46,0.05);}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .loading-note{font-size:12px;color:var(--foam-dim);text-align:center;padding:20px;}
+  .mode-tabs{display:flex;gap:0;margin-bottom:22px;border-bottom:2px solid rgba(26,46,53,0.12);}
+  .mode-tab{background:transparent;border:none;font-family:'Archivo Black',sans-serif;font-size:14px;padding:10px 18px 14px;cursor:pointer;color:var(--foam-dim);border-bottom:3px solid transparent;}
+  .mode-tab.active{color:var(--lane-coral);border-bottom-color:var(--lane-coral);}
+  .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:14px;}
+  .cal-day{aspect-ratio:1;background:#fffdf9;border:1px solid rgba(26,46,53,0.14);padding:6px;cursor:pointer;display:flex;flex-direction:column;justify-content:space-between;}
+  .cal-day .day-num{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--foam-dim);}
+  .cal-day .day-status{font-size:10px;font-weight:700;text-align:right;}
+  .cal-day.geldi{border-left:3px solid var(--good);background:rgba(47,138,87,0.04);}
+  .cal-day.geldi .day-status{color:var(--good);}
+  .cal-day.gelmedi{border-left:3px solid var(--bad);background:rgba(194,63,46,0.04);}
+  .cal-day.gelmedi .day-status{color:var(--bad);}
 </style>
 </head>
 <body>
 
-<div class="login-container" id="loginScreen">
+<div id="loginScreen" class="login-container">
   <div class="login-card">
     <h2>Yönetim Paneli Girişi</h2>
     <p>Bursa Kolejliler Spor Kulübü veri yönetim arayüzüne erişmek için yetkili Google hesabınızla giriş yapın.</p>
@@ -169,16 +179,17 @@
 </div>
 
 <div class="wrap" id="mainApp">
+  <div class="auth-bar">
+    <span id="userDisplay">Oturum açıldı: -</span>
+    <span class="logout-btn" id="logoutBtn">Güvenli Çıkış</span>
+  </div>
 
   <header class="top">
     <div class="brandline">
       <div>
-        <span class="lap-no">GÜVENLİ SÜRÜM (GOOGLE SSO)</span>
+        <span class="lap-no">LAP 01</span>
         <h1>Sezon Öncesi<br>Değerlendirme Panosu</h1>
-        <div class="user-info-bar">
-          <span id="userDisplay">Kullanıcı: Giriş Yapıldı</span>
-          <span class="logout-lnk" id="logoutBtn">Oturumu Kapat</span>
-        </div>
+        <div class="sub">Yüzücülerin geçmiş performans analizi, mevcut durum tespiti ve yeni dönem makrosiklus hedeflerinin yapılandırılması için teknik takip formu.</div>
       </div>
     </div>
     <div class="clubmark">BURSA KOLEJLİLER SPOR KULÜBÜ<br>TECHNICAL TEAM SYSTEM</div>
@@ -201,17 +212,19 @@
       <section class="panel step-panel" data-step="1">
         <h2>Antrenman Geçmişinin Analizi</h2>
         <div class="field">
-          <label for="evalAthleteSelect">Geçmiş Bir Değerlendirmeyi Aç</label>
-          <select id="evalAthleteSelect"><option value="">+ Yeni değerlendirme ekle...</option></select>
+          <label for="evalAthleteSelect">Geçmiş Bir Değerlendirmeyi Aç / Düzenle</label>
+          <select id="evalAthleteSelect">
+            <option value="">+ Yeni değerlendirme ekle...</option>
+          </select>
         </div>
         <div class="field">
-          <label for="sporcuAdi">Sporcu Adı *</label>
-          <input type="text" id="sporcuAdi" placeholder="Örnek Sporcu İsim">
+          <label for="sporcuAdi">Sporcu Adı ve Soyadı *</label>
+          <input type="text" id="sporcuAdi" placeholder="Örn. Can Yılmaz">
         </div>
         <div class="row2">
           <div class="field">
             <label for="dogumYili">Doğum Yılı</label>
-            <input type="number" id="dogumYili" placeholder="2012">
+            <input type="number" id="dogumYili" placeholder="2010">
           </div>
           <div class="field">
             <label for="degerlendirmeTarihi">Değerlendirme Tarihi</label>
@@ -219,61 +232,66 @@
           </div>
         </div>
         <div class="field">
-          <label>Hangi yarışma ve antrenman hedeflerine ulaşıldı?</label>
-          <textarea id="hedeflereUlasildi" placeholder="Ulaşılan hedefleri sırala..."></textarea>
+          <label for="hedeflereUlasildi">Geçtiğimiz Sezon Hangi Yarışma ve Antrenman Hedeflerine Ulaşıldı?</label>
+          <textarea id="hedeflereUlasildi" placeholder="Bölge karması barajları geçildi, 100m serbest tekniği stabilize edildi..."></textarea>
         </div>
         <div class="field">
-          <label>Hangi hedeflere ulaşılamadı?</label>
-          <textarea id="hedeflereUlasilamadi" placeholder="Notlar..."></textarea>
+          <label for="hedeflereUlasilamadi">Hangi Hedeflere Ulaşılamadı? (Nedenleri ile)</label>
+          <textarea id="hedeflereUlasilamadi" placeholder="Devamsızlık nedeniyle aerobik kapasite gelişimi yarıda kaldı..."></textarea>
         </div>
         <div class="nav-row">
           <span></span>
-          <button type="button" class="btn btn-primary" data-next="2">Devam Et →</button>
+          <button type="button" class="btn btn-primary" data-next="2">Mevcut Düzey Analizi →</button>
         </div>
       </section>
 
       <section class="panel step-panel" data-step="2" style="display:none;">
         <h2>Mevcut Performans Düzeyinin Analizi</h2>
         <div class="rate-row">
-          <label for="kondisyon">Kondisyon düzeyi</label>
+          <label for="kondisyon">Kondisyonel Özellikler</label>
           <input type="range" id="kondisyon" min="1" max="10" value="5">
           <span class="rate-val" id="kondisyonVal">5</span>
         </div>
         <div class="rate-row">
-          <label for="teknik">Teknik özellikler</label>
+          <label for="teknik">Teknik Özellikler</label>
           <input type="range" id="teknik" min="1" max="10" value="5">
           <span class="rate-val" id="teknikVal">5</span>
         </div>
         <div class="rate-row">
-          <label for="zihinsel">Zihinsel özellikler</label>
+          <label for="zihinsel">Zihinsel Özellikler</label>
           <input type="range" id="zihinsel" min="1" max="10" value="5">
           <span class="rate-val" id="zihinselVal">5</span>
         </div>
+        <div class="field" style="margin-top:20px;">
+          <label for="teknikEksiklikler">Teknik ve Taktik Eksiklikler Nedir?</label>
+          <textarea id="teknikEksiklikler" placeholder="Dönüşlerdeki ayak vuruşu sayısı yetersiz, çıkış reaksiyonu yavaş..."></textarea>
+        </div>
         <div class="nav-row">
           <button type="button" class="btn btn-ghost" data-next="1">← Geri</button>
-          <button type="button" class="btn btn-primary" data-next="3">Devam Et →</button>
+          <button type="button" class="btn btn-primary" data-next="3">Hedef Belirleme →</button>
         </div>
       </section>
 
       <section class="panel step-panel" data-step="3" style="display:none;">
-        <h2>Performans Hedeflerinin Belirlenmesi</h2>
+        <h2>Gelecek Sezon Performans Hedeflerinin Belirlenmesi</h2>
         <div class="field">
-          <label>Sezon Hedefleri</label>
-          <textarea id="hedefNotlar" placeholder="Sezon hedeflerini buraya yazın..."></textarea>
+          <label for="hedefNotlar">Yeni Dönem Hedefleri ve Stratejik Planlamalar</label>
+          <textarea id="hedefNotlar" placeholder="Türkiye Şampiyonası A barajı, haftalık minimum 5 antrenman devamlılığı..."></textarea>
         </div>
         <div class="nav-row">
           <button type="button" class="btn btn-ghost" data-next="2">← Geri</button>
-          <button type="button" class="btn btn-primary" data-next="4">Devam Et →</button>
+          <button type="button" class="btn btn-primary" data-next="4">Özet ve Tamamlama →</button>
         </div>
       </section>
 
       <section class="panel step-panel" data-step="4" style="display:none;">
-        <h2>Özet &amp; Bulut Senkronizasyonu</h2>
+        <h2>Değerlendirme Özeti ve Onay</h2>
         <div id="summaryBox" style="padding:15px; background:rgba(26,46,53,0.04); margin-bottom:15px;"></div>
         <div class="nav-row">
           <button type="button" class="btn btn-ghost" data-next="3">← Geri</button>
           <div class="savebar">
-            <button type="button" class="btn btn-ghost" id="resetBtn">Temizle</button>
+            <button type="button" class="btn btn-ghost" id="resetBtn">Formu Temizle</button>
+            <button type="button" class="btn btn-ghost" style="border-color:var(--pool-500);color:var(--pool-500);" id="pdfBtn">PDF Raporu Al</button>
             <button type="button" class="btn btn-primary" id="saveBtn">Buluta Güvenli Kaydet</button>
           </div>
         </div>
@@ -281,19 +299,23 @@
     </form>
 
     <div class="board-head">
-      <h2>Kayıtlı Sporcu Havuzu (Şifreli &amp; Canlı Senkronize)</h2>
-      <span class="count" id="boardCount">0 kayıt</span>
+      <h2>Kayıtlı Sporcu Havuzu (Canlı Veritabanı)</h2>
+      <span class="count" id="boardCount">0 kayıt yüklendi</span>
     </div>
-    <div id="board"><p class="loading-note">Oturum açılması bekleniyor...</p></div>
+    <div id="board">
+      <p class="loading-note">Veritabanı senkronizasyonu bekleniyor...</p>
+    </div>
   </div>
 
   <div id="modeAttendance" style="display:none;">
     <div class="panel">
-      <h2>Canlı Yoklama Sistemi</h2>
+      <h2>Canlı Yoklama Takvimi</h2>
       <div class="row2">
         <div class="field">
           <label for="attAthleteSelect">Sporcu Seçin</label>
-          <select id="attAthleteSelect"><option value="">Yükleniyor...</option></select>
+          <select id="attAthleteSelect">
+            <option value="">Yükleniyor...</option>
+          </select>
         </div>
         <div class="field">
           <label for="attMonthSelect">Çalışma Ayı</label>
@@ -330,73 +352,78 @@
   const provider = new firebase.auth.GoogleAuthProvider();
 
   let athletesData = {};
+  let attendanceData = {};
 
-  // GOOGLE GİRİŞ TETİKLEYİCİ
+  // GOOGLE AUTH MOTORU
   document.getElementById('googleLoginBtn').addEventListener('click', () => {
     auth.signInWithPopup(provider)
-      .then((result) => {
-        toast("Başarıyla giriş yapıldı!");
-      })
-      .catch((error) => {
-        alert("Giriş başarısız: " + error.message);
-      });
+      .then(() => toast("Giriş Başarılı!"))
+      .catch((err) => alert("Giriş Hatası: " + err.message));
   });
 
-  // ÇIKIŞ TETİKLEYİCİ
   document.getElementById('logoutBtn').addEventListener('click', () => {
-    auth.signOut().then(() => {
-      toast("Oturum kapatıldı.");
-    });
+    auth.signOut().then(() => toast("Oturum Kapatıldı."));
   });
 
-  // OTURUM DURUMU KONTROL MOTORU (OTOMATİK ÇALIŞIR)
+  // OTURUM DURUMU KONTROLÜ
   auth.onAuthStateChanged((user) => {
     const loginScreen = document.getElementById('loginScreen');
     const mainApp = document.getElementById('mainApp');
-    
     if (user) {
-      // Giriş yapılmışsa ekranı aç
       loginScreen.style.display = 'none';
       mainApp.style.display = 'block';
-      document.getElementById('userDisplay').innerText = "Antrenör: " + user.displayName;
-      initLiveSync();
+      document.getElementById('userDisplay').innerText = "Antrenör: " + user.displayName + " (" + user.email + ")";
+      initLiveSync(); // Giriş başarılı olunca veritabanı dinleyicilerini başlat
     } else {
-      // Giriş yapılmamışsa giriş ekranını göster
       loginScreen.style.display = 'flex';
       mainApp.style.display = 'none';
     }
   });
 
-  // CANLI BULUT SENKRONİZASYONU
+  // VERİTABANI BAĞLANTISI (GİRİŞ YAPILDIKTAN SONRA AKTİF OLUR)
   function initLiveSync() {
     db.ref('athletes').on('value', (snapshot) => {
       athletesData = snapshot.val() || {};
       updateSelectLists();
       renderAthleteBoard();
-    }, (error) => {
-      console.error("Yetkisiz veya hatalı erişim: ", error);
+    });
+
+    db.ref('attendance').on('value', (snapshot) => {
+      attendanceData = snapshot.val() || {};
+      const currentAth = document.getElementById('attAthleteSelect').value;
+      if (currentAth) {
+        renderCalendar();
+      }
     });
   }
 
   function updateSelectLists() {
     const evSel = document.getElementById('evalAthleteSelect');
     const attSel = document.getElementById('attAthleteSelect');
+    
+    const activeEv = evSel.value;
+    const activeAtt = attSel.value;
+
     evSel.innerHTML = '<option value="">+ Yeni değerlendirme ekle...</option>';
     attSel.innerHTML = '<option value="">Sporcu seçin...</option>';
+
     Object.keys(athletesData).forEach(id => {
       const name = athletesData[id].name || 'İsimsiz';
       evSel.innerHTML += `<option value="${id}">${name}</option>`;
       attSel.innerHTML += `<option value="${id}">${name}</option>`;
     });
+
+    evSel.value = activeEv;
+    attSel.value = activeAtt;
   }
 
   function renderAthleteBoard() {
     const board = document.getElementById('board');
     const keys = Object.keys(athletesData);
-    document.getElementById('boardCount').innerText = `${keys.length} sporcu`;
+    document.getElementById('boardCount').innerText = `${keys.length} sporcu yüklendi`;
 
     if(keys.length === 0){
-      board.innerHTML = '<div class="empty">Kayıtlı sporcu bulunamadı.</div>';
+      board.innerHTML = '<div class="empty">Kayıtlı sporcu bulunamadı. Formu doldurarak ekleyebilirsiniz.</div>';
       return;
     }
 
@@ -408,11 +435,11 @@
       card.innerHTML = `
         <div class="ac-top">
           <span class="ac-name">${ath.name}</span>
-          <span class="ac-meta">Doğum: ${ath.birthYear || '—'} | Veri Güncelleme: ${ath.date || '—'}</span>
+          <span class="ac-meta">Doğum: ${ath.birthYear || '—'} | Değerlendirme: ${ath.date || '—'}</span>
         </div>
         <div class="ac-actions">
-          <button type="button" onclick="loadAthleteToForm('${id}')">Profili Düzenle</button>
-          <button type="button" class="del" onclick="deleteAthlete('${id}')">Kalıcı Sil</button>
+          <button type="button" onclick="loadAthleteToForm('${id}')">Formu Düzenle</button>
+          <button type="button" class="del" onclick="deleteAthlete('${id}')">Kayıttan Kaldır</button>
         </div>
       `;
       board.appendChild(card);
@@ -422,75 +449,69 @@
   window.loadAthleteToForm = function(id) {
     const ath = athletesData[id];
     if(!ath) return;
+    
     document.getElementById('evalAthleteSelect').value = id;
     document.getElementById('sporcuAdi').value = ath.name || '';
     document.getElementById('dogumYili').value = ath.birthYear || '';
     document.getElementById('degerlendirmeTarihi').value = ath.date || '';
     document.getElementById('hedeflereUlasildi').value = ath.reachedGoals || '';
     document.getElementById('hedeflereUlasilamadi').value = ath.unreachedGoals || '';
+    document.getElementById('teknikEksiklikler').value = ath.technicalFlaws || '';
+    document.getElementById('hedefNotlar').value = ath.hedefNotlar || '';
+
     if(ath.metrics) {
       document.getElementById('kondisyon').value = ath.metrics.kondisyon || 5;
       document.getElementById('teknik').value = ath.metrics.teknik || 5;
       document.getElementById('zihinsel').value = ath.metrics.zihinsel || 5;
+      
       document.getElementById('kondisyonVal').innerText = ath.metrics.kondisyon || 5;
       document.getElementById('teknikVal').innerText = ath.metrics.teknik || 5;
       document.getElementById('zihinselVal').innerText = ath.metrics.zihinsel || 5;
     }
-    document.getElementById('hedefNotlar').value = ath.hedefNotlar || '';
-    toast("Sporcu formu yüklendi.");
+
+    document.querySelectorAll('.step-panel').forEach(p => p.style.display = 'none');
+    document.querySelector('[data-step="1"]').style.display = 'block';
+    document.querySelectorAll('.lane-btn').forEach(b => b.classList.toggle('active', b.dataset.step == 1));
+
+    toast("Sporcu verileri forma yüklendi.");
   };
 
-  document.getElementById('saveBtn').addEventListener('click', () => {
-    const name = document.getElementById('sporcuAdi').value.trim();
-    if(!name) { alert("Lütfen Sporcu Adı girin!"); return; }
-
-    let id = document.getElementById('evalAthleteSelect').value;
-    if(!id) { id = 'ath_' + Date.now(); }
-
-    const payload = {
-      name: name,
-      birthYear: document.getElementById('dogumYili').value,
-      date: document.getElementById('degerlendirmeTarihi').value,
-      reachedGoals: document.getElementById('hedeflereUlasildi').value,
-      unreachedGoals: document.getElementById('hedeflereUlasilamadi').value,
-      hedefNotlar: document.getElementById('hedefNotlar').value,
-      metrics: {
-        kondisyon: document.getElementById('kondisyon').value,
-        teknik: document.getElementById('teknik').value,
-        zihinsel: document.getElementById('zihinsel').value
-      }
-    };
-
-    db.ref('athletes/' + id).set(payload)
-      .then(() => {
-        toast("Veri güvenli sunucuya kaydedildi!");
-        document.getElementById('evalForm').reset();
-        document.getElementById('evalAthleteSelect').value = "";
-      });
-  });
-
   window.deleteAthlete = function(id) {
-    if(confirm("Bu sporcuyu silmek istediğinize emin misiniz?")) {
-      db.ref('athletes/' + id).remove().then(() => toast("Kayıt silindi."));
+    if(confirm("Bu sporcuyu ve değerlendirme verilerini silmek istediğinize emin misiniz?")) {
+      db.ref('athletes/' + id).remove().then(() => {
+        toast("Sporcu havuzdan kaldırıldı.");
+      });
     }
   };
 
-  // SEKME VE ADIM GEÇİŞLERİ
-  document.getElementById('modeTabs').addEventListener('click', (e) => {
-    if(!e.target.classList.contains('mode-tab')) return;
-    document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    const m = e.target.dataset.mode;
-    document.getElementById('modeEval').style.display = m === 'eval' ? 'block' : 'none';
-    document.getElementById('modeAttendance').style.display = m === 'attendance' ? 'block' : 'none';
-  });
-
+  // ADIM GEÇİŞLERİ VE GÖSTERGE MOTORU
   document.querySelectorAll('[data-next]').forEach(btn => {
     btn.addEventListener('click', () => {
       const next = btn.dataset.next;
+      
+      if (next == 4) {
+        buildSummary();
+      }
+
       document.querySelectorAll('.step-panel').forEach(p => p.style.display = 'none');
       document.querySelector(`[data-step="${next}"]`).style.display = 'block';
-      document.querySelectorAll('.lane-btn').forEach(b => b.classList.toggle('active', b.dataset.step == next));
+
+      document.querySelectorAll('.lane-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.step == next);
+      });
+    });
+  });
+
+  document.querySelectorAll('.lane-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetStep = btn.dataset.step;
+      if (targetStep == 4) buildSummary();
+      
+      document.querySelectorAll('.step-panel').forEach(p => p.style.display = 'none');
+      document.querySelector(`[data-step="${targetStep}"]`).style.display = 'block';
+      
+      document.querySelectorAll('.lane-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
     });
   });
 
@@ -500,13 +521,181 @@
     });
   });
 
+  function buildSummary() {
+    const name = document.getElementById('sporcuAdi').value || 'Belirtilmedi';
+    const dy = document.getElementById('dogumYili').value || 'Belirtilmedi';
+    const dt = document.getElementById('degerlendirmeTarihi').value || 'Belirtilmedi';
+    const k = document.getElementById('kondisyon').value;
+    const t = document.getElementById('teknik').value;
+    const z = document.getElementById('zihinsel').value;
+
+    document.getElementById('summaryBox').innerHTML = `
+      <p><strong>Sporcu:</strong> ${name} (${dy}) - <strong>Tarih:</strong> ${dt}</p>
+      <p><strong>Mevcut Durum Puanları:</strong> Kondisyon: ${k}/10 | Teknik: ${t}/10 | Zihinsel: ${z}/10</p>
+      <p style="font-size:12px;color:var(--foam-dim);">Verileriniz bulut mimarisiyle anlık olarak eşitlenecektir.</p>
+    `;
+  }
+
+  // BULUTA GÜVENLİ KAYIT FONKSİYONU
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    const name = document.getElementById('sporcuAdi').value.trim();
+    if(!name) { alert("Lütfen en azından Sporcu Adı alanını doldurun!"); return; }
+
+    let id = document.getElementById('evalAthleteSelect').value;
+    if(!id) {
+      id = 'ath_' + Date.now();
+    }
+
+    const payload = {
+      name: name,
+      birthYear: document.getElementById('dogumYili').value,
+      date: document.getElementById('degerlendirmeTarihi').value,
+      reachedGoals: document.getElementById('hedeflereUlasildi').value,
+      unreachedGoals: document.getElementById('hedeflereUlasilamadi').value,
+      technicalFlaws: document.getElementById('teknikEksiklikler').value,
+      hedefNotlar: document.getElementById('hedefNotlar').value,
+      metrics: {
+        kondisyon: document.getElementById('kondisyon').value,
+        teknik: document.getElementById('teknik').value,
+        zihinsel: document.getElementById('zihinsel').value
+      }
+    };
+
+    db.ref('athletes/' + id).set(payload).then(() => {
+      toast("Bulut senkronizasyonu başarılı!");
+      document.getElementById('evalForm').reset();
+      document.getElementById('evalAthleteSelect').value = "";
+      
+      // Başa dön
+      document.querySelectorAll('.step-panel').forEach(p => p.style.display = 'none');
+      document.querySelector('[data-step="1"]').style.display = 'block';
+      document.querySelectorAll('.lane-btn').forEach(b => b.classList.toggle('active', b.dataset.step == 1));
+    });
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if(confirm("Formdaki verileri temizlemek istiyor musunuz?")) {
+      document.getElementById('evalForm').reset();
+      document.getElementById('evalAthleteSelect').value = "";
+    }
+  });
+
+  // SEKME YÖNETİMİ
+  document.getElementById('modeTabs').addEventListener('click', (e) => {
+    if(!e.target.classList.contains('mode-tab')) return;
+    document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+
+    const mode = e.target.dataset.mode;
+    if(mode === 'eval') {
+      document.getElementById('modeEval').style.display = 'block';
+      document.getElementById('modeAttendance').style.display = 'none';
+    } else {
+      document.getElementById('modeEval').style.display = 'none';
+      document.getElementById('modeAttendance').style.display = 'block';
+      renderCalendar();
+    }
+  });
+
+  // YOKLAMA TAKVİM MOTORU (ORİJİNAL FONKSİYONLAR BİREBİR KORUNDU)
+  const monthInput = document.getElementById('attMonthSelect');
+  const athleteSelect = document.getElementById('attAthleteSelect');
+  
+  monthInput.addEventListener('change', renderCalendar);
+  athleteSelect.addEventListener('change', renderCalendar);
+
+  function renderCalendar() {
+    const grid = document.getElementById('calendarGrid');
+    grid.innerHTML = '';
+
+    const athleteId = athleteSelect.value;
+    if(!athleteId) {
+      grid.innerHTML = '<div class="empty" style="grid-column: span 7;">Yoklama takvimini görmek için yukarıdan bir sporcu seçin.</div>';
+      return;
+    }
+
+    const [year, month] = monthInput.value.split('-');
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    for(let d = 1; d <= daysInMonth; d++) {
+      const dayKey = `${year}-${month}-${String(d).padStart(2, '0')}`;
+      const dayBox = document.createElement('div');
+      dayBox.className = 'cal-day';
+      
+      // Mevcut durumu çek
+      let currentStatus = '';
+      if(attendanceData[athleteId] && attendanceData[athleteId][dayKey]) {
+        currentStatus = attendanceData[athleteId][dayKey];
+        dayBox.classList.add(currentStatus);
+      }
+
+      dayBox.innerHTML = `
+        <span class="day-num">${d}</span>
+        <span class="day-status">${currentStatus === 'geldi' ? 'ANT' : currentStatus === 'gelmedi' ? 'X' : ''}</span>
+      `;
+
+      // TIKLAMA VE YOKLAMA DEĞİŞTİRME MEKANİZMASI
+      dayBox.addEventListener('click', () => {
+        let nextStatus = '';
+        if(!currentStatus) nextStatus = 'geldi';
+        else if(currentStatus === 'geldi') nextStatus = 'gelmedi';
+        else nextStatus = ''; // Başa dön
+
+        db.ref(`attendance/${athleteId}/${dayKey}`).set(nextStatus ? nextStatus : null)
+          .then(() => {
+            toast(`Yoklama güncellendi: Gün ${d}`);
+          });
+      });
+
+      grid.appendChild(dayBox);
+    }
+  }
+
+  // PDF RAPORLAMA ÇIKTISI
+  document.getElementById('pdfBtn').addEventListener('click', () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    
+    const name = document.getElementById('sporcuAdi').value || 'Isimsiz_Sporcu';
+    
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("BURSA KOLEJLILER SPOR KULUBU", 20, 20);
+    doc.setFontSize(14);
+    doc.text("Sezon Oncesi Degerlendirme Raporu", 20, 30);
+    doc.line(20, 35, 190, 35);
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(11);
+    doc.text(`Sporcu Adi: ${name}`, 20, 45);
+    doc.text(`Dogum Yili: ${document.getElementById('dogumYili').value || '---'}`, 20, 52);
+    doc.text(`Degerlendirme Tarihi: ${document.getElementById('degerlendirmeTarihi').value || '---'}`, 20, 59);
+    
+    doc.text("Mevcut Durum Analizi:", 20, 72);
+    doc.text(`- Kondisyon: ${document.getElementById('kondisyon').value}/10`, 25, 79);
+    doc.text(`- Teknik: ${document.getElementById('teknik').value}/10`, 25, 86);
+    doc.text(`- Zihinsel: ${document.getElementById('zihinsel').value}/10`, 25, 93);
+    
+    doc.text("Ulasilan Hedefler:", 20, 106);
+    doc.text(doc.splitTextToSize(document.getElementById('hedeflereUlasildi').value || '---', 160), 20, 113);
+    
+    doc.text("Ulasilamayan Hedefler:", 20, 140);
+    doc.text(doc.splitTextToSize(document.getElementById('hedeflereUlasilamadi').value || '---', 160), 20, 147);
+    
+    doc.text("Teknik Eksiklikler:", 20, 175);
+    doc.text(doc.splitTextToSize(document.getElementById('teknikEksiklikler').value || '---', 160), 20, 182);
+
+    doc.text("Yeni Sezon Planlamasi ve Hedefleri:", 20, 210);
+    doc.text(doc.splitTextToSize(document.getElementById('hedefNotlar').value || '---', 160), 20, 217);
+    
+    doc.save(`Değerlendirme_${name}.pdf`);
+  });
+
   function toast(msg) {
     const t = document.getElementById('toastMessage');
     t.innerText = msg; t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+    setTimeout(() => t.classList.remove('show'), 2000);
   }
-  
-  document.getElementById('resetBtn').addEventListener('click', () => { document.getElementById('evalForm').reset(); });
 </script>
 </body>
 </html>
