@@ -128,6 +128,14 @@
 
 
 
+  .backup-bar{display:flex; gap:8px; flex-wrap:wrap; width:100%; justify-content:flex-end; order:3;}
+
+  .backup-btn{font-size:11px; padding:8px 12px; white-space:nowrap;}
+
+
+
+
+
   /* TABS as lane numbers */
 
   .lanes{display:flex; gap:6px; margin-bottom:22px; overflow-x:auto; padding-bottom:2px;}
@@ -731,6 +739,71 @@
 
 
 
+  /* BULK DAY ATTENDANCE (Güne Göre Toplu İşaretle) */
+
+  .bulk-date-row{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
+
+  .bulk-date-row .field{margin-bottom:0; flex:1; min-width:180px;}
+
+  .bulk-daylabel{
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--lane-coral);
+    border:1px solid var(--lane-coral); padding:8px 12px; border-radius:var(--radius);
+    white-space:nowrap; letter-spacing:0.03em;
+  }
+
+  .session-tabs{display:flex; gap:6px; margin-bottom:16px; overflow-x:auto; flex-wrap:wrap;}
+  .session-tab{
+    flex:1 1 auto; min-width:fit-content; background:transparent;
+    border:1px solid rgba(26,46,53,0.22); color:var(--foam-dim);
+    font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.02em;
+    padding:9px 11px; cursor:pointer; border-radius:var(--radius); text-align:center;
+  }
+  .session-tab.active{border-color:var(--lane-coral); background:rgba(232,85,31,0.1); color:var(--foam); font-weight:600;}
+  .session-tab .scount{
+    display:inline-block; margin-left:5px; font-family:'Archivo',sans-serif; font-size:10px;
+    color:var(--good);
+  }
+
+  .bulk-athlete-row{
+    display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px;
+    padding:11px 12px; border:1px solid rgba(26,46,53,0.14); border-radius:var(--radius);
+    margin-bottom:8px; background:#fffdf9;
+  }
+  .bulk-athlete-row.is-geldi{border-left:3px solid var(--good);}
+  .bulk-athlete-row.is-gelmedi{border-left:3px solid var(--bad); background:rgba(194,63,46,0.04);}
+  .bulk-athlete-name{font-size:13.5px; font-weight:600;}
+  .bulk-athlete-sub{font-size:11px; color:var(--foam-dim); margin-top:2px;}
+  .bulk-athlete-controls{display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-end;}
+  .bulk-toggle-btn{
+    font-family:'Archivo',sans-serif; font-weight:700; font-size:11.5px;
+    padding:7px 10px; border-radius:var(--radius); cursor:pointer;
+    border:1px solid rgba(26,46,53,0.25); background:transparent; color:var(--foam-dim);
+  }
+  .bulk-toggle-btn[data-val="geldi"].active{background:var(--good); border-color:var(--good); color:#fffdf9;}
+  .bulk-toggle-btn[data-val="gelmedi"].active{background:var(--bad); border-color:var(--bad); color:#fffdf9;}
+  .bulk-reason-select{
+    width:auto; min-width:110px; font-size:11.5px; padding:6px 8px;
+  }
+  .bulk-tags-btn{
+    background:transparent; border:1px dashed rgba(26,46,53,0.35); color:var(--foam-dim);
+    padding:6px 9px; border-radius:var(--radius); cursor:pointer; font-size:11px;
+    font-family:'JetBrains Mono',monospace;
+  }
+  .bulk-tags-btn.has-tags{border-style:solid; border-color:var(--lane-coral); color:var(--lane-coral);}
+  .bulk-tags-popover{
+    display:none; margin-top:10px; padding:10px; border-radius:var(--radius);
+    border:1px solid rgba(26,46,53,0.16); background:rgba(26,46,53,0.03);
+    grid-column:1/-1;
+  }
+  .bulk-tags-popover.show{display:block;}
+  .bulk-save-bar{
+    position:sticky; bottom:0; background:#f3eee3; padding:14px 0 4px; margin-top:6px;
+    display:flex; justify-content:flex-end; gap:10px; border-top:1px solid rgba(26,46,53,0.12);
+  }
+  .bulk-empty-note{font-size:12.5px; color:var(--foam-dim); text-align:center; padding:24px 0;}
+
+
+
   /* PDF EXPORT BUTTON */
 
   .pdf-btn{
@@ -839,6 +912,20 @@
 
   .pdf-doc .pdf-pill-row{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;}
 
+  .pdf-doc table.pdf-table-matrix{font-size:9px; table-layout:fixed;}
+
+  .pdf-doc table.pdf-table-matrix th, .pdf-doc table.pdf-table-matrix td{padding:3px 1px; text-align:center;}
+
+  .pdf-doc table.pdf-table-matrix th.sticky-name, .pdf-doc table.pdf-table-matrix td.sticky-name{
+    width:90px; text-align:left; padding-left:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:10px;
+  }
+
+  .pdf-doc table.pdf-table-matrix th.matrix-day, .pdf-doc table.pdf-table-matrix td.matrix-day{width:auto;}
+
+  .pdf-doc table.pdf-table-matrix td.matrix-p{background:#e6f3ea; color:#2f8a57; font-weight:700;}
+
+  .pdf-doc table.pdf-table-matrix td.matrix-a{background:#fbe9e6; color:#c23f2e; font-weight:700;}
+
   .pdf-doc .pdf-pill{
 
     font-family:'JetBrains Mono',monospace; font-size:10.5px; border:1px solid rgba(26,46,53,0.3);
@@ -901,6 +988,16 @@
 
     <div class="clubmark">BURSA KOLEJLİLER SPOR KULÜBÜ<br>2012–2013 DOĞUMLU GRUP</div>
 
+    <div class="backup-bar">
+
+      <button type="button" class="btn btn-ghost backup-btn" id="exportBackupBtn">⭳ Yedek Al (Dışa Aktar)</button>
+
+      <button type="button" class="btn btn-ghost backup-btn" id="importBackupBtn">⭱ Yedekten Geri Yükle</button>
+
+      <input type="file" id="importBackupFile" accept="application/json,.json" style="display:none;">
+
+    </div>
+
   </header>
 
 
@@ -910,6 +1007,7 @@
     <button class="mode-tab active" data-mode="eval">Sezon Değerlendirmesi</button>
 
     <button class="mode-tab" data-mode="attendance">Yoklama &amp; Performans</button>
+    <button class="mode-tab" data-mode="bulkAtt">Güne Göre Toplu İşaretle</button>
 
     <button class="mode-tab" data-mode="body">Vücut Ölçümleri</button>
 
@@ -1394,6 +1492,59 @@
 
 
 
+  <div id="modeBulkAtt" style="display:none;">
+
+    <div class="panel" id="bulkAttSelectPanel">
+
+      <div class="panel-head"><span class="tag">TOPLU YOKLAMA</span></div>
+
+      <h2>Güne Göre Toplu İşaretle</h2>
+
+      <p class="desc">Bir tarih seç; o günün antrenman seansları (sabah/akşam kara &amp; yüzme, ya da Pazar günü yarış) için tüm sporcuların yoklamasını tek ekrandan al ve kaydet.</p>
+
+      <div class="bulk-date-row">
+        <div class="field">
+          <label for="bulkDateInput">Tarih</label>
+          <input type="date" id="bulkDateInput">
+        </div>
+        <span class="bulk-daylabel" id="bulkDayLabel">—</span>
+      </div>
+
+      <button type="button" class="btn btn-ghost" id="manageRosterBtnBulk">+ Sporcu Ekle / Çıkar</button>
+
+    </div>
+
+    <div class="panel" id="bulkPdfPanel">
+      <h2 style="font-size:15px;">Aylık Toplu Yoklama Raporu (PDF)</h2>
+      <p class="desc">Seçtiğin ay için tüm sporcuların yoklama/devamsızlık özetini ve gün gün katılım tablosunu tek bir PDF olarak indir.</p>
+      <div class="bulk-date-row">
+        <div class="field">
+          <label for="bulkPdfMonthInput">Ay</label>
+          <input type="month" id="bulkPdfMonthInput">
+        </div>
+        <button type="button" class="pdf-btn" id="bulkPdfBtn" style="align-self:flex-end;">PDF Olarak İndir (Tüm Sporcular)</button>
+      </div>
+    </div>
+
+    <div id="bulkAttBody" style="display:none;">
+
+      <div class="session-tabs" id="bulkSessionTabs"></div>
+
+      <div id="bulkAthleteList"></div>
+
+      <div class="bulk-save-bar">
+        <span class="hint" id="bulkSaveHint" style="align-self:center; margin-right:auto;"></span>
+        <button type="button" class="btn btn-primary" id="bulkSaveBtn">Tümünü Kaydet</button>
+      </div>
+
+    </div>
+
+    <div class="empty" id="bulkAttEmpty">Önce yukarıdan bir tarih seç.</div>
+
+  </div><!-- /modeBulkAtt -->
+
+
+
   <div id="modeBody" style="display:none;">
 
 
@@ -1419,6 +1570,8 @@
       </div>
 
       <button type="button" class="btn btn-ghost" id="manageRosterBtnBody">+ Sporcu Ekle / Çıkar</button>
+
+      <button type="button" class="pdf-btn" id="bodyBulkPdfBtn" style="margin-top:10px;width:100%;">Tüm Sporcular — Toplu Ölçüm Raporu (PDF)</button>
 
     </div>
 
@@ -1618,6 +1771,10 @@
 
 
 
+    <div class="session-tabs" id="modalSessionTabs"></div>
+
+
+
     <div class="modal-attend-toggle">
 
       <button type="button" class="att-toggle-btn" id="toggleGeldi" data-val="geldi">Geldi</button>
@@ -1626,6 +1783,13 @@
 
       <button type="button" class="att-toggle-btn" id="toggleBos" data-val="">Boş bırak</button>
 
+    </div>
+
+
+
+    <div id="modalReasonWrap" style="margin-bottom:14px; display:none;">
+      <label for="modalReasonSelect" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--foam);">Gelmeme sebebi</label>
+      <select id="modalReasonSelect" class="bulk-reason-select" style="width:100%;"></select>
     </div>
 
 
@@ -2527,7 +2691,7 @@ document.getElementById('rosterModalDoneBtn').addEventListener('click', async ()
 
 });
 
-['manageRosterBtnAtt','manageRosterBtnBody','manageRosterBtnTeknik'].forEach(id=>{
+['manageRosterBtnAtt','manageRosterBtnBody','manageRosterBtnTeknik','manageRosterBtnBulk'].forEach(id=>{
 
   const btn = document.getElementById(id);
 
@@ -2901,11 +3065,15 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
 
     document.getElementById('modeAttendance').style.display = (mode==='attendance') ? '' : 'none';
 
+    document.getElementById('modeBulkAtt').style.display = (mode==='bulkAtt') ? '' : 'none';
+
     document.getElementById('modeBody').style.display = (mode==='body') ? '' : 'none';
 
     document.getElementById('modeTeknik').style.display = (mode==='teknik') ? '' : 'none';
 
     if(mode==='attendance') initAttendanceMode();
+
+    if(mode==='bulkAtt') initBulkAttMode();
 
     if(mode==='body') initBodyMode();
 
@@ -2922,6 +3090,69 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
    ATTENDANCE & PERFORMANCE MODULE
 
 ========================================================= */
+
+/* =========================================================
+   SESSION DEFINITIONS — günlük çift antrenman yapısı
+   (Pazar hariç her gün: sabah kara + sabah yüzme + akşam kara + akşam yüzme.
+    Pazar günü: sadece "Yarış" seansı.)
+========================================================= */
+const SESSION_DEFS = [
+  {id:'sabah_kara',  label:'Sabah - Kara Antrenmanı'},
+  {id:'sabah_yuzme', label:'Sabah - Yüzme Antrenmanı'},
+  {id:'aksam_kara',  label:'Akşam - Kara Antrenmanı'},
+  {id:'aksam_yuzme', label:'Akşam - Yüzme Antrenmanı'},
+];
+const SUNDAY_SESSION_DEFS = [
+  {id:'yaris', label:'Yarış'},
+];
+
+const ABSENCE_REASONS = [
+  {id:'belirtilmedi', label:'Belirtilmedi'},
+  {id:'hasta',     label:'Hasta'},
+  {id:'sakat',     label:'Sakat'},
+  {id:'regl',      label:'Regl'},
+  {id:'tatil',     label:'Tatil'},
+  {id:'raporlu',   label:'Raporlu'},
+  {id:'yarista',   label:'Yarışta'},
+];
+
+function sessionDefsForDate(dateStr){
+  const dow = new Date(dateStr+'T00:00:00').getDay(); // 0=Pazar
+  return dow===0 ? SUNDAY_SESSION_DEFS : SESSION_DEFS;
+}
+
+function emptySessionEntry(){ return {durum:'', sebep:'', tags:[]}; }
+
+/* Eski tek-seanslı kayıtları ({attend, tags}) yeni çoklu-seans
+   modeline taşır. Geriye dönük uyumluluk için: eski kayıt 'geldi'
+   ise sabah_yuzme seansına, 'gelmedi' ise tüm seanslara gelmedi
+   olarak işlenmiş kabul edilmez — sadece sabah_yuzme'ye taşınır,
+   diğer seanslar boş kalır (öğretmen daha sonra tamamlayabilir). */
+function normalizeDayEntry(raw, dateStr){
+  if(!raw) return {sessions:{}};
+  if(raw.sessions) return raw; // already new format
+  if(raw.attend){
+    const sessions = {};
+    const targetSession = sessionDefsForDate(dateStr)[0].id;
+    sessions[targetSession] = {durum: raw.attend, sebep:'', tags: raw.tags||[]};
+    return {sessions, _migrated:true};
+  }
+  return {sessions:{}};
+}
+
+function computeSessionScore(sessionEntry){
+  if(!sessionEntry || !sessionEntry.tags) return 0;
+  return sessionEntry.tags.reduce((sum, tagId)=>{
+    const t = attendanceTags.find(x=>x.id===tagId);
+    return sum + (t ? t.points : 0);
+  }, 0);
+}
+
+function computeDayScore(dayEntry){
+  const norm = dayEntry && dayEntry.sessions ? dayEntry : normalizeDayEntry(dayEntry, '2000-01-01');
+  if(!norm.sessions) return 0;
+  return Object.values(norm.sessions).reduce((sum, s)=> sum + computeSessionScore(s), 0);
+}
 
 const DEFAULT_TAGS = [
 
@@ -2953,7 +3184,9 @@ let currentAttAthleteId = null;
 
 let modalActiveDate = null; // 'YYYY-MM-DD'
 
-let modalState = {attend:'', tags:[]};
+let modalActiveSession = null; // current session id within modal
+
+let modalSessions = {}; // {sessionId: {durum, sebep, tags}}
 
 
 
@@ -3089,27 +3322,11 @@ async function saveAttendanceData(athleteId, data){
 
 
 
-function computeDayScore(dayEntry){
-
-  if(!dayEntry || !dayEntry.tags) return 0;
-
-  return dayEntry.tags.reduce((sum, tagId)=>{
-
-    const t = attendanceTags.find(x=>x.id===tagId);
-
-    return sum + (t ? t.points : 0);
-
-  }, 0);
-
-}
-
-
-
 async function renderCalendar(athleteId, monthStr){
 
   const [year, month] = monthStr.split('-').map(Number);
 
-  const data = await getAttendanceData(athleteId);
+  const rawData = await getAttendanceData(athleteId);
 
   const firstDay = new Date(year, month-1, 1);
 
@@ -3127,15 +3344,19 @@ async function renderCalendar(athleteId, monthStr){
 
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
 
-    const entry = data[dateStr];
+    const entry = normalizeDayEntry(rawData[dateStr], dateStr);
 
-    if(entry && entry.attend){
+    const sessVals = Object.values(entry.sessions||{});
+
+    const marked = sessVals.filter(s=>s.durum);
+
+    if(marked.length){
 
       totalDays++;
 
-      if(entry.attend==='geldi') presentDays++;
+      const anyPresent = marked.some(s=>s.durum==='geldi');
 
-      if(entry.attend==='gelmedi') absentDays++;
+      if(anyPresent) presentDays++; else absentDays++;
 
       totalScore += computeDayScore(entry);
 
@@ -3175,7 +3396,11 @@ async function renderCalendar(athleteId, monthStr){
 
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
 
-    const entry = data[dateStr];
+    const entry = normalizeDayEntry(rawData[dateStr], dateStr);
+
+    const sessDefs = sessionDefsForDate(dateStr);
+
+    const sessVals = sessDefs.map(sd=>({def:sd, val:entry.sessions[sd.id]})).filter(x=>x.val && x.val.durum);
 
     const isFuture = dateStr > todayStr;
 
@@ -3183,33 +3408,29 @@ async function renderCalendar(athleteId, monthStr){
 
     if(isFuture) cls += ' future';
 
-    if(entry && entry.attend==='geldi') cls += ' geldi';
+    const anyPresent = sessVals.some(x=>x.val.durum==='geldi');
 
-    if(entry && entry.attend==='gelmedi') cls += ' gelmedi';
+    const anyAbsent = sessVals.some(x=>x.val.durum==='gelmedi');
+
+    if(anyPresent) cls += ' geldi';
+
+    else if(anyAbsent) cls += ' gelmedi';
 
 
 
     let bottomHtml = '';
 
-    if(entry && entry.attend==='geldi'){
+    if(sessVals.length){
 
       const score = computeDayScore(entry);
 
       const scoreCls = score>0?'pos':score<0?'neg':'zero';
 
-      const dots = (entry.tags||[]).slice(0,6).map(tid=>{
+      const sessCount = sessDefs.length;
 
-        const t = attendanceTags.find(x=>x.id===tid);
+      const presentCount = sessVals.filter(x=>x.val.durum==='geldi').length;
 
-        return t ? `<span class="ddot ${t.type}"></span>` : '';
-
-      }).join('');
-
-      bottomHtml = `<div class="ddots">${dots}</div><div class="dscore ${scoreCls}">${score>0?'+':''}${score}</div>`;
-
-    } else if(entry && entry.attend==='gelmedi'){
-
-      bottomHtml = `<div class="dabsent">GELMEDİ</div>`;
+      bottomHtml = `<div class="ddots"><span class="dabsent" style="color:var(--foam-dim);">${presentCount}/${sessCount}</span></div><div class="dscore ${scoreCls}">${score>0?'+':''}${score}</div>`;
 
     }
 
@@ -3259,19 +3480,101 @@ async function openDayModal(dateStr){
 
   const data = await getAttendanceData(currentAttAthleteId);
 
-  const entry = data[dateStr] || {attend:'', tags:[]};
+  const entry = normalizeDayEntry(data[dateStr], dateStr);
 
-  modalState = {attend: entry.attend || '', tags: (entry.tags||[]).slice()};
+  const sessDefs = sessionDefsForDate(dateStr);
+
+  modalSessions = {};
+
+  sessDefs.forEach(sd=>{
+
+    const existing = entry.sessions[sd.id];
+
+    modalSessions[sd.id] = existing ? {durum: existing.durum||'', sebep: existing.sebep||'', tags:(existing.tags||[]).slice()} : emptySessionEntry();
+
+  });
+
+  modalActiveSession = sessDefs[0].id;
 
 
+
+  renderModalSessionTabs();
+
+  renderModalSessionUI();
+
+  document.getElementById('dayModal').classList.add('show');
+
+}
+
+
+
+function renderModalSessionTabs(){
+
+  const sessDefs = sessionDefsForDate(modalActiveDate);
+
+  const wrap = document.getElementById('modalSessionTabs');
+
+  if(sessDefs.length<=1){ wrap.innerHTML=''; wrap.style.display='none'; return; }
+
+  wrap.style.display='';
+
+  wrap.innerHTML = sessDefs.map(sd=>{
+
+    const s = modalSessions[sd.id];
+
+    const mark = s && s.durum==='geldi' ? '✓' : s && s.durum==='gelmedi' ? '✕' : '';
+
+    return `<button type="button" class="session-tab ${sd.id===modalActiveSession?'active':''}" data-sid="${sd.id}">${escapeHtml(sd.label)} ${mark?`<span class="scount" style="color:${mark==='✓'?'var(--good)':'var(--bad)'}">${mark}</span>`:''}</button>`;
+
+  }).join('');
+
+  wrap.querySelectorAll('.session-tab').forEach(btn=>{
+
+    btn.addEventListener('click', ()=>{
+
+      modalActiveSession = btn.dataset.sid;
+
+      renderModalSessionTabs();
+
+      renderModalSessionUI();
+
+    });
+
+  });
+
+}
+
+
+
+function renderModalSessionUI(){
+
+  const s = modalSessions[modalActiveSession] || emptySessionEntry();
+
+  document.querySelectorAll('#dayModal .att-toggle-btn').forEach(btn=>{
+
+    btn.classList.toggle('active', btn.dataset.val === s.durum);
+
+  });
+
+  document.getElementById('modalTagsWrap').style.display = (s.durum==='geldi') ? '' : 'none';
+
+  const reasonWrap = document.getElementById('modalReasonWrap');
+
+  reasonWrap.style.display = (s.durum==='gelmedi') ? '' : 'none';
+
+  if(s.durum==='gelmedi'){
+
+    const sel = document.getElementById('modalReasonSelect');
+
+    sel.innerHTML = ABSENCE_REASONS.map(r=>`<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
+
+    sel.value = s.sebep || 'belirtilmedi';
+
+  }
 
   renderModalTagGrid();
 
-  updateModalToggleUI();
-
   updateModalScoreLine();
-
-  document.getElementById('dayModal').classList.add('show');
 
 }
 
@@ -3281,9 +3584,11 @@ function renderModalTagGrid(){
 
   const grid = document.getElementById('modalTagGrid');
 
+  const s = modalSessions[modalActiveSession] || emptySessionEntry();
+
   grid.innerHTML = attendanceTags.map(t=>{
 
-    const checked = modalState.tags.includes(t.id);
+    const checked = s.tags.includes(t.id);
 
     return `
 
@@ -3307,9 +3612,11 @@ function renderModalTagGrid(){
 
       const tagId = cb.value;
 
-      if(cb.checked){ if(!modalState.tags.includes(tagId)) modalState.tags.push(tagId); }
+      const sess = modalSessions[modalActiveSession];
 
-      else { modalState.tags = modalState.tags.filter(id=>id!==tagId); }
+      if(cb.checked){ if(!sess.tags.includes(tagId)) sess.tags.push(tagId); }
+
+      else { sess.tags = sess.tags.filter(id=>id!==tagId); }
 
       cb.closest('.tag-opt').classList.toggle('selected', cb.checked);
 
@@ -3323,55 +3630,49 @@ function renderModalTagGrid(){
 
 
 
-function updateModalToggleUI(){
-
-  document.querySelectorAll('.att-toggle-btn').forEach(btn=>{
-
-    btn.classList.toggle('active', btn.dataset.val === modalState.attend);
-
-  });
-
-  document.getElementById('modalTagsWrap').style.display = (modalState.attend==='geldi') ? '' : 'none';
-
-}
-
-
-
 function updateModalScoreLine(){
 
-  const score = modalState.tags.reduce((sum,tid)=>{
-
-    const t = attendanceTags.find(x=>x.id===tid);
-
-    return sum + (t?t.points:0);
-
-  }, 0);
+  const totalScore = Object.values(modalSessions).reduce((sum,s)=> sum + computeSessionScore(s), 0);
 
   const line = document.getElementById('modalScoreLine');
 
-  line.textContent = 'Gün puanı: ' + (score>0?'+':'') + score;
+  line.textContent = 'Gün puanı (tüm seanslar): ' + (totalScore>0?'+':'') + totalScore;
 
-  line.style.color = score>0 ? 'var(--good)' : score<0 ? 'var(--bad)' : 'var(--ink)';
+  line.style.color = totalScore>0 ? 'var(--good)' : totalScore<0 ? 'var(--bad)' : 'var(--ink)';
 
 }
 
 
 
-document.querySelectorAll('.att-toggle-btn').forEach(btn=>{
+document.querySelectorAll('#dayModal .att-toggle-btn').forEach(btn=>{
 
   btn.addEventListener('click', ()=>{
 
-    modalState.attend = btn.dataset.val;
+    const sess = modalSessions[modalActiveSession];
 
-    if(modalState.attend !== 'geldi') modalState.tags = [];
+    sess.durum = btn.dataset.val;
 
-    updateModalToggleUI();
+    if(sess.durum !== 'geldi') sess.tags = [];
 
-    renderModalTagGrid();
+    if(sess.durum !== 'gelmedi') sess.sebep = '';
 
-    updateModalScoreLine();
+    else if(!sess.sebep) sess.sebep = 'belirtilmedi';
+
+    renderModalSessionTabs();
+
+    renderModalSessionUI();
 
   });
+
+});
+
+
+
+document.getElementById('modalReasonSelect').addEventListener('change', (e)=>{
+
+  const sess = modalSessions[modalActiveSession];
+
+  sess.sebep = e.target.value;
 
 });
 
@@ -3399,13 +3700,25 @@ document.getElementById('modalSaveBtn').addEventListener('click', async ()=>{
 
   const data = await getAttendanceData(currentAttAthleteId);
 
-  if(!modalState.attend){
+  const sessions = {};
+
+  let anyMarked = false;
+
+  Object.keys(modalSessions).forEach(sid=>{
+
+    const s = modalSessions[sid];
+
+    if(s.durum){ sessions[sid] = {durum:s.durum, sebep:s.sebep||'', tags:s.tags||[]}; anyMarked = true; }
+
+  });
+
+  if(!anyMarked){
 
     delete data[modalActiveDate];
 
   } else {
 
-    data[modalActiveDate] = {attend: modalState.attend, tags: modalState.tags};
+    data[modalActiveDate] = {sessions};
 
   }
 
@@ -3578,6 +3891,372 @@ document.getElementById('tagModalDoneBtn').addEventListener('click', async ()=>{
   }
 
 });
+
+
+
+/* =========================================================
+   BULK DAY ATTENDANCE MODULE (Güne Göre Toplu İşaretle)
+   Tüm sporcuların belirli bir tarihteki tüm seanslarını
+   (sabah kara/yüzme, akşam kara/yüzme, ya da Pazar->yarış)
+   tek ekrandan işaretleyip kaydetmeyi sağlar. Aynı
+   attendance_{athleteId} kayıtlarını kullanır; tekli
+   sporcu takviminde de aynı veriler görünür.
+========================================================= */
+
+let bulkDateStr = null;
+
+let bulkAthletes = []; // roster snapshot
+
+let bulkActiveSession = null;
+
+let bulkDataByAthlete = {}; // {athleteId: {sessions:{...}}}  (full day entry per athlete)
+
+let bulkOpenTagsAthleteId = null; // which athlete row currently shows the tag popover
+
+
+
+const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+const TR_DOWS_FULL = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
+
+
+
+async function initBulkAttMode(){
+
+  await loadTags();
+
+  await loadRoster();
+
+  bulkAthletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
+
+  const dateInput = document.getElementById('bulkDateInput');
+
+  if(!dateInput.value){
+
+    dateInput.value = new Date().toISOString().slice(0,10);
+
+  }
+
+  const pdfMonthInput = document.getElementById('bulkPdfMonthInput');
+
+  if(pdfMonthInput && !pdfMonthInput.value){
+
+    const now = new Date();
+
+    pdfMonthInput.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+  }
+
+  await maybeRenderBulkDay();
+
+}
+
+
+
+document.getElementById('bulkDateInput').addEventListener('change', maybeRenderBulkDay);
+
+
+
+async function maybeRenderBulkDay(){
+
+  const dateStr = document.getElementById('bulkDateInput').value;
+
+  const body = document.getElementById('bulkAttBody');
+
+  const empty = document.getElementById('bulkAttEmpty');
+
+  if(!dateStr){ body.style.display='none'; empty.style.display=''; return; }
+
+  bulkDateStr = dateStr;
+
+  const d = new Date(dateStr+'T00:00:00');
+
+  document.getElementById('bulkDayLabel').textContent = d.getDate()+' '+TR_MONTHS[d.getMonth()]+' '+d.getFullYear()+' — '+TR_DOWS_FULL[(d.getDay()+6)%7];
+
+  if(!bulkAthletes.length){
+
+    body.style.display='none';
+
+    empty.style.display='';
+
+    empty.textContent = 'Önce sporcu listesine en az bir sporcu ekle (+ Sporcu Ekle / Çıkar).';
+
+    return;
+
+  }
+
+  body.style.display='';
+
+  empty.style.display='none';
+
+  await loadBulkDataForDate(dateStr);
+
+  const sessDefs = sessionDefsForDate(dateStr);
+
+  bulkActiveSession = sessDefs[0].id;
+
+  bulkOpenTagsAthleteId = null;
+
+  renderBulkSessionTabs();
+
+  renderBulkAthleteList();
+
+}
+
+
+
+async function loadBulkDataForDate(dateStr){
+
+  bulkDataByAthlete = {};
+
+  for(const a of bulkAthletes){
+
+    const raw = await getAttendanceData(a.id);
+
+    const entry = normalizeDayEntry(raw[dateStr], dateStr);
+
+    bulkDataByAthlete[a.id] = entry;
+
+  }
+
+}
+
+
+
+function renderBulkSessionTabs(){
+
+  const sessDefs = sessionDefsForDate(bulkDateStr);
+
+  const wrap = document.getElementById('bulkSessionTabs');
+
+  wrap.innerHTML = sessDefs.map(sd=>{
+
+    const count = bulkAthletes.filter(a=>{
+
+      const s = bulkDataByAthlete[a.id].sessions[sd.id];
+
+      return s && s.durum==='geldi';
+
+    }).length;
+
+    return `<button type="button" class="session-tab ${sd.id===bulkActiveSession?'active':''}" data-sid="${sd.id}">${escapeHtml(sd.label)}<span class="scount">${count}/${bulkAthletes.length}</span></button>`;
+
+  }).join('');
+
+  wrap.querySelectorAll('.session-tab').forEach(btn=>{
+
+    btn.addEventListener('click', ()=>{
+
+      bulkActiveSession = btn.dataset.sid;
+
+      bulkOpenTagsAthleteId = null;
+
+      renderBulkSessionTabs();
+
+      renderBulkAthleteList();
+
+    });
+
+  });
+
+}
+
+
+
+function renderBulkAthleteList(){
+
+  const wrap = document.getElementById('bulkAthleteList');
+
+  if(!bulkAthletes.length){
+
+    wrap.innerHTML = `<p class="bulk-empty-note">Sporcu listesi boş.</p>`;
+
+    return;
+
+  }
+
+  wrap.innerHTML = bulkAthletes.map(a=>{
+
+    const entry = bulkDataByAthlete[a.id];
+
+    const s = entry.sessions[bulkActiveSession] || emptySessionEntry();
+
+    if(!entry.sessions[bulkActiveSession]) entry.sessions[bulkActiveSession] = s;
+
+    const rowCls = s.durum==='geldi' ? 'is-geldi' : s.durum==='gelmedi' ? 'is-gelmedi' : '';
+
+    const tagCount = (s.tags||[]).length;
+
+    const score = computeSessionScore(s);
+
+    const scoreNote = s.durum==='geldi' && tagCount ? ` <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:${score>0?'var(--good)':score<0?'var(--bad)':'var(--foam-dim)'};">(${score>0?'+':''}${score} puan)</span>` : '';
+
+    const reasonHtml = s.durum==='gelmedi' ? `
+      <select class="bulk-reason-select" data-aid="${a.id}">
+        ${ABSENCE_REASONS.map(r=>`<option value="${r.id}" ${ (s.sebep||'belirtilmedi')===r.id ? 'selected':''}>${escapeHtml(r.label)}</option>`).join('')}
+      </select>
+    ` : '';
+
+    const tagsBtnHtml = s.durum==='geldi' ? `
+      <button type="button" class="bulk-tags-btn ${tagCount?'has-tags':''}" data-aid="${a.id}">Davranış${tagCount?' ('+tagCount+')':''}</button>
+    ` : '';
+
+    const showPopover = bulkOpenTagsAthleteId===a.id && s.durum==='geldi';
+
+    return `
+      <div class="bulk-athlete-row ${rowCls}" data-aid="${a.id}">
+        <div>
+          <div class="bulk-athlete-name">${escapeHtml(a.sporcuAdi)}${scoreNote}</div>
+        </div>
+        <div class="bulk-athlete-controls">
+          <button type="button" class="bulk-toggle-btn" data-val="geldi" data-aid="${a.id}" ${s.durum==='geldi'?'style="background:var(--good);border-color:var(--good);color:#fffdf9;"':''}>Geldi</button>
+          <button type="button" class="bulk-toggle-btn" data-val="gelmedi" data-aid="${a.id}" ${s.durum==='gelmedi'?'style="background:var(--bad);border-color:var(--bad);color:#fffdf9;"':''}>Gelmedi</button>
+          <button type="button" class="bulk-toggle-btn" data-val="" data-aid="${a.id}">Boş</button>
+          ${reasonHtml}
+          ${tagsBtnHtml}
+        </div>
+        <div class="bulk-tags-popover ${showPopover?'show':''}" data-aid-pop="${a.id}">
+          ${showPopover ? attendanceTags.map(t=>{
+            const checked = s.tags.includes(t.id);
+            return `<label class="tag-opt ${t.type} ${checked?'selected':''}" style="margin-bottom:6px; display:flex;">
+              <input type="checkbox" data-aid="${a.id}" data-tagid="${t.id}" ${checked?'checked':''}>
+              <span class="tag-label">${escapeHtml(t.label)}</span>
+              <span class="tag-pts">${t.points>0?'+':''}${t.points}</span>
+            </label>`;
+          }).join('') : ''}
+        </div>
+      </div>
+    `;
+
+  }).join('');
+
+
+
+  wrap.querySelectorAll('.bulk-toggle-btn').forEach(btn=>{
+
+    btn.addEventListener('click', ()=>{
+
+      const aid = btn.dataset.aid;
+
+      const entry = bulkDataByAthlete[aid];
+
+      const s = entry.sessions[bulkActiveSession];
+
+      const newVal = btn.dataset.val;
+
+      s.durum = newVal;
+
+      if(s.durum !== 'geldi') s.tags = [];
+
+      if(s.durum !== 'gelmedi') s.sebep = '';
+
+      else if(!s.sebep) s.sebep = 'belirtilmedi';
+
+      if(s.durum !== 'geldi' && bulkOpenTagsAthleteId===aid) bulkOpenTagsAthleteId = null;
+
+      renderBulkSessionTabs();
+
+      renderBulkAthleteList();
+
+    });
+
+  });
+
+
+
+  wrap.querySelectorAll('.bulk-reason-select').forEach(sel=>{
+
+    sel.addEventListener('change', (e)=>{
+
+      const aid = sel.dataset.aid;
+
+      bulkDataByAthlete[aid].sessions[bulkActiveSession].sebep = e.target.value;
+
+    });
+
+  });
+
+
+
+  wrap.querySelectorAll('.bulk-tags-btn').forEach(btn=>{
+
+    btn.addEventListener('click', ()=>{
+
+      const aid = btn.dataset.aid;
+
+      bulkOpenTagsAthleteId = (bulkOpenTagsAthleteId===aid) ? null : aid;
+
+      renderBulkAthleteList();
+
+    });
+
+  });
+
+
+
+  wrap.querySelectorAll('.bulk-tags-popover input[type=checkbox]').forEach(cb=>{
+
+    cb.addEventListener('change', ()=>{
+
+      const aid = cb.dataset.aid;
+
+      const tagId = cb.dataset.tagid;
+
+      const s = bulkDataByAthlete[aid].sessions[bulkActiveSession];
+
+      if(cb.checked){ if(!s.tags.includes(tagId)) s.tags.push(tagId); }
+
+      else { s.tags = s.tags.filter(id=>id!==tagId); }
+
+      renderBulkAthleteList();
+
+    });
+
+  });
+
+}
+
+
+
+document.getElementById('bulkSaveBtn').addEventListener('click', async ()=>{
+
+  let savedCount = 0;
+
+  for(const a of bulkAthletes){
+
+    const entry = bulkDataByAthlete[a.id];
+
+    const data = await getAttendanceData(a.id);
+
+    const cleanSessions = {};
+
+    let anyMarked = false;
+
+    Object.keys(entry.sessions).forEach(sid=>{
+
+      const s = entry.sessions[sid];
+
+      if(s.durum){ cleanSessions[sid] = {durum:s.durum, sebep:s.sebep||'', tags:s.tags||[]}; anyMarked = true; }
+
+    });
+
+    if(anyMarked){ data[bulkDateStr] = {sessions: cleanSessions}; }
+
+    else { delete data[bulkDateStr]; }
+
+    const ok = await saveAttendanceData(a.id, data);
+
+    if(ok) savedCount++;
+
+  }
+
+  showToast(savedCount+'/'+bulkAthletes.length+' sporcu için kayıt güncellendi');
+
+  document.getElementById('bulkSaveHint').textContent = 'Son kaydedilme: az önce';
+
+});
+
+
 
 
 
@@ -4846,6 +5525,64 @@ async function renderHtmlToPdf(innerHtml, filename, triggerBtn){
 
 }
 
+/* Birden fazla "sayfa" HTML parçasını sırayla ayrı ayrı canvas'a render edip
+   her birini kendi PDF sayfasına basar. renderHtmlToPdf'ten farkı: tek bir
+   uzun görseli piksel yüksekliğine göre körlemesine dilimlemek yerine, her
+   sayfa parçası önceden mantıklı şekilde bölündüğü (örn. tablo satırları
+   gruplanarak) için bir satırın iki sayfa arasında yarıda kesilmesi önlenir.
+   Her sayfa parçası yine de (beklenmedik şekilde) bir PDF sayfasından uzun
+   çıkarsa, güvenlik amacıyla aynı dilimleme mantığı o parça için de devreye
+   girer. */
+async function renderMultiPagePdf(pageHtmls, filename, triggerBtn){
+  if(!window.jspdf || !window.html2canvas){
+    showToast('PDF kütüphanesi yüklenemedi, internet bağlantısını kontrol et');
+    return;
+  }
+  const root = document.getElementById('pdfRenderRoot');
+  const original = triggerBtn ? triggerBtn.textContent : null;
+  if(triggerBtn){ triggerBtn.disabled = true; triggerBtn.textContent = 'Hazırlanıyor...'; }
+  try{
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({unit:'pt', format:'a4'});
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    let firstImageAdded = false;
+
+    for(const pageHtml of pageHtmls){
+      root.innerHTML = `<div class="pdf-doc">${pageHtml}</div>`;
+      const node = root.querySelector('.pdf-doc');
+      const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const imgW = pageW;
+      const imgH = (canvas.height * imgW) / canvas.width;
+
+      let heightLeft = imgH;
+      let position = 0;
+      if(firstImageAdded) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+      firstImageAdded = true;
+      heightLeft -= pageH;
+      while(heightLeft > 0){
+        position = heightLeft - imgH;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+      }
+    }
+
+    pdf.save(filename);
+    showToast('PDF indirildi');
+  }catch(e){
+    console.error('PDF export failed', e);
+    showToast('PDF oluşturulamadı, tekrar dene');
+  }finally{
+    root.innerHTML = '';
+    if(triggerBtn){ triggerBtn.disabled = false; triggerBtn.textContent = original; }
+  }
+}
+
 
 
 /* ---------- 1) SEZON DEĞERLENDİRMESİ PDF ---------- */
@@ -4990,7 +5727,7 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
   const monthStr = document.getElementById('attMonthSelect').value;
 
-  const data = await getAttendanceData(currentAttAthleteId);
+  const rawData = await getAttendanceData(currentAttAthleteId);
 
 
 
@@ -4999,6 +5736,8 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
   const daysInMonth = new Date(year, month, 0).getDate();
 
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+
+  const reasonLabel = (id)=> (ABSENCE_REASONS.find(r=>r.id===id)||{}).label || '—';
 
 
 
@@ -5010,39 +5749,53 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
 
-    const entry = data[dateStr];
+    const entry = normalizeDayEntry(rawData[dateStr], dateStr);
 
-    if(!entry || !entry.attend) continue;
+    const sessDefs = sessionDefsForDate(dateStr);
+
+    const marked = sessDefs.filter(sd=> entry.sessions[sd.id] && entry.sessions[sd.id].durum);
+
+    if(!marked.length) continue;
 
     totalDays++;
 
-    const score = computeDayScore(entry);
+    const dayScore = computeDayScore(entry);
 
-    if(entry.attend==='geldi'){ presentDays++; totalScore += score; }
+    const anyPresent = marked.some(sd=>entry.sessions[sd.id].durum==='geldi');
 
-    if(entry.attend==='gelmedi') absentDays++;
+    if(anyPresent){ presentDays++; totalScore += dayScore; } else { absentDays++; }
 
     const dObj = new Date(dateStr+'T00:00:00');
 
     const dowLabel = dows[(dObj.getDay()+6)%7];
 
-    const tagLabels = (entry.tags||[]).map(tid=>{
+    marked.forEach(sd=>{
 
-      const t = attendanceTags.find(x=>x.id===tid);
+      const s = entry.sessions[sd.id];
 
-      return t ? t.label : null;
+      const tagLabels = (s.tags||[]).map(tid=>{
 
-    }).filter(Boolean);
+        const t = attendanceTags.find(x=>x.id===tid);
 
-    rows.push({
+        return t ? t.label : null;
 
-      gun: d+' '+dowLabel,
+      }).filter(Boolean);
 
-      durum: entry.attend==='geldi' ? 'Geldi' : 'Gelmedi',
+      const score = computeSessionScore(s);
 
-      puan: entry.attend==='geldi' ? (score>0?'+':'')+score : '—',
+      rows.push({
 
-      detay: tagLabels.length ? tagLabels.join(', ') : '—'
+        gun: d+' '+dowLabel,
+
+        seans: sd.label,
+
+        durum: s.durum==='geldi' ? 'Geldi' : 'Gelmedi ('+reasonLabel(s.sebep)+')',
+
+        puan: s.durum==='geldi' ? (score>0?'+':'')+score : '—',
+
+        detay: tagLabels.length ? tagLabels.join(', ') : '—'
+
+      });
 
     });
 
@@ -5064,7 +5817,7 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
       <div><b>${pdfMonthLabel(monthStr)}</b><span>DÖNEM</span></div>
 
-      <div><b>${presentDays}/${totalDays}</b><span>KATILIM</span></div>
+      <div><b>${presentDays}/${totalDays}</b><span>KATILIM (GÜN)</span></div>
 
       <div><b>%${attendanceRate}</b><span>DEVAM ORANI</span></div>
 
@@ -5076,7 +5829,7 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
   `;
 
-  html += `<h2 class="pdf-h2">Gün Bazlı Kayıtlar</h2>`;
+  html += `<h2 class="pdf-h2">Seans Bazlı Kayıtlar</h2>`;
 
   if(rows.length===0){
 
@@ -5084,11 +5837,11 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
   } else {
 
-    html += `<table class="pdf-table"><tr><th style="width:80px;">Gün</th><th style="width:70px;">Durum</th><th style="width:60px;">Puan</th><th>Gözlenen Davranışlar</th></tr>`;
+    html += `<table class="pdf-table"><tr><th style="width:70px;">Gün</th><th style="width:130px;">Seans</th><th style="width:110px;">Durum</th><th style="width:50px;">Puan</th><th>Gözlenen Davranışlar</th></tr>`;
 
     rows.forEach(r=>{
 
-      html += `<tr><td class="num">${escapeHtml(r.gun)}</td><td class="num">${escapeHtml(r.durum)}</td><td class="num">${escapeHtml(r.puan)}</td><td>${escapeHtml(r.detay)}</td></tr>`;
+      html += `<tr><td class="num">${escapeHtml(r.gun)}</td><td>${escapeHtml(r.seans)}</td><td class="num">${escapeHtml(r.durum)}</td><td class="num">${escapeHtml(r.puan)}</td><td>${escapeHtml(r.detay)}</td></tr>`;
 
     });
 
@@ -5114,6 +5867,168 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
 
   await renderHtmlToPdf(html, fname, e.currentTarget);
 
+});
+
+
+
+/* ---------- 2b) TOPLU YOKLAMA — TÜM SPORCULAR İÇİN AYLIK PDF ---------- */
+
+const ATTENDANCE_REASON_ABBR = {
+  belirtilmedi: 'X',
+  hasta: 'H',
+  sakat: 'S',
+  regl: 'Re',
+  tatil: 'T',
+  raporlu: 'R',
+  yarista: 'Y'
+};
+
+document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
+
+  const monthStr = document.getElementById('bulkPdfMonthInput').value;
+  if(!monthStr){ showToast('Önce bir ay seç'); return; }
+
+  await loadRoster();
+  const athletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
+  if(!athletes.length){ showToast('Sporcu listesi boş'); return; }
+
+  const [year, month] = monthStr.split('-').map(Number);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+
+  // Her sporcu için bu ayın verisini topla
+  const perAthlete = [];
+  let classTotalPresent = 0, classTotalDays = 0, classTotalScore = 0;
+
+  for(const a of athletes){
+    const rawData = await getAttendanceData(a.id);
+    let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
+    const dayMarks = {}; // d -> {mark:'P'} | {mark:'A', reason:'hasta'} | null
+
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const entry = normalizeDayEntry(rawData[dateStr], dateStr);
+      const sessDefs = sessionDefsForDate(dateStr);
+      const marked = sessDefs.filter(sd=> entry.sessions[sd.id] && entry.sessions[sd.id].durum);
+      if(!marked.length){ dayMarks[d]=null; continue; }
+      totalDays++;
+      const dayScore = computeDayScore(entry);
+      const anyPresent = marked.some(sd=>entry.sessions[sd.id].durum==='geldi');
+      if(anyPresent){
+        presentDays++; totalScore += dayScore;
+        dayMarks[d] = {mark:'P'};
+      } else {
+        absentDays++;
+        const absentSession = marked.find(sd=>entry.sessions[sd.id].durum==='gelmedi');
+        const reasonId = absentSession ? (entry.sessions[absentSession.id].sebep || 'belirtilmedi') : 'belirtilmedi';
+        dayMarks[d] = {mark:'A', reason:reasonId};
+      }
+    }
+
+    const rate = totalDays>0 ? Math.round((presentDays/totalDays)*100) : null;
+    perAthlete.push({athlete:a, totalDays, presentDays, absentDays, totalScore, rate, dayMarks});
+    classTotalPresent += presentDays;
+    classTotalDays += totalDays;
+    classTotalScore += totalScore;
+  }
+
+  const classRate = classTotalDays>0 ? Math.round((classTotalPresent/classTotalDays)*100) : 0;
+
+  const metaHtml = `
+    <div class="pdf-meta">
+      <div><b>${escapeHtml(pdfMonthLabel(monthStr))}</b><span>DÖNEM</span></div>
+      <div><b>${athletes.length}</b><span>SPORCU SAYISI</span></div>
+      <div><b>%${classRate}</b><span>TAKIM DEVAM ORANI</span></div>
+      <div><b class="${classTotalScore>0?'pdf-score-badge pos':classTotalScore<0?'pdf-score-badge neg':''}">${classTotalScore>0?'+':''}${classTotalScore}</b><span>TAKIM TOPLAM PUAN</span></div>
+    </div>
+  `;
+
+  function chunkArray(arr, size){
+    const out = [];
+    for(let i=0; i<arr.length; i+=size) out.push(arr.slice(i, i+size));
+    return out;
+  }
+
+  // Her sayfa kendi bağımsız canvas'ı olarak render edilir; bu sayede
+  // bir sporcu satırı asla iki sayfa arasında bölünmez (önceki sürümde
+  // tek bir uzun görsel piksel yüksekliğine göre dilimlendiği için
+  // satırlar ortadan kesilebiliyordu).
+  const SUMMARY_ROWS_PAGE1 = 20;
+  const SUMMARY_ROWS_CONT = 32;
+  const MATRIX_ROWS_PER_PAGE = 20;
+
+  const pages = [];
+
+  // --- Sporcu Bazlı Özet sayfaları ---
+  const summaryRemaining = perAthlete.slice();
+  const summaryChunks = [];
+  summaryChunks.push(summaryRemaining.splice(0, SUMMARY_ROWS_PAGE1));
+  while(summaryRemaining.length) summaryChunks.push(summaryRemaining.splice(0, SUMMARY_ROWS_CONT));
+
+  summaryChunks.forEach((chunk, idx)=>{
+    let html = '';
+    if(idx===0){
+      html += pdfHeadHtml('Aylık Toplu Yoklama Raporu', 'TOPLU YOKLAMA');
+      html += metaHtml;
+      html += `<h2 class="pdf-h2">Sporcu Bazlı Özet</h2>`;
+    } else {
+      html += `<h2 class="pdf-h2" style="margin-top:0;">Sporcu Bazlı Özet (devam — sayfa ${idx+1}/${summaryChunks.length})</h2>`;
+    }
+    html += `<table class="pdf-table"><tr><th>Sporcu</th><th style="width:70px;">Katılım</th><th style="width:70px;">Devamsız</th><th style="width:70px;">Oran</th><th style="width:70px;">Puan</th></tr>`;
+    chunk.forEach(p=>{
+      html += `<tr>
+        <td>${escapeHtml(p.athlete.sporcuAdi)}</td>
+        <td class="num">${p.presentDays}</td>
+        <td class="num">${p.absentDays}</td>
+        <td class="num">${p.rate===null?'—':'%'+p.rate}</td>
+        <td class="num">${p.totalScore>0?'+':''}${p.totalScore}</td>
+      </tr>`;
+    });
+    html += `</table>`;
+    pages.push(html);
+  });
+
+  // --- Gün Gün Katılım Tablosu sayfaları ---
+  function matrixHeaderRowHtml(){
+    let h = `<tr><th class="sticky-name">Sporcu</th>`;
+    for(let d=1; d<=daysInMonth; d++){
+      const dObj = new Date(year, month-1, d);
+      const dowLabel = dows[(dObj.getDay()+6)%7];
+      h += `<th class="matrix-day">${d}<br><span style="font-weight:400;font-size:8px;">${dowLabel}</span></th>`;
+    }
+    h += `</tr>`;
+    return h;
+  }
+
+  const matrixChunks = chunkArray(perAthlete, MATRIX_ROWS_PER_PAGE);
+  matrixChunks.forEach((chunk, idx)=>{
+    let html = '';
+    html += `<h2 class="pdf-h2" style="margin-top:0;">Gün Gün Katılım Tablosu${matrixChunks.length>1 ? ' (Sayfa '+(idx+1)+'/'+matrixChunks.length+')' : ''}</h2>`;
+    if(idx===0){
+      html += `<p class="pdf-empty-note" style="margin-bottom:8px;">G = Geldi · Gelmedi nedeni: H = Hasta, S = Sakat, Re = Regl, T = Tatil, R = Raporlu, Y = Yarışta, X = Belirtilmedi · boş hücre = kayıt girilmedi</p>`;
+    }
+    html += `<table class="pdf-table pdf-table-matrix">${matrixHeaderRowHtml()}`;
+    chunk.forEach(p=>{
+      html += `<tr><td class="sticky-name">${escapeHtml(p.athlete.sporcuAdi)}</td>`;
+      for(let d=1; d<=daysInMonth; d++){
+        const dm = p.dayMarks[d];
+        let cls = '', label = '';
+        if(dm){
+          if(dm.mark==='P'){ cls='matrix-p'; label='G'; }
+          else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[dm.reason] || 'X'; }
+        }
+        html += `<td class="num matrix-day ${cls}">${label}</td>`;
+      }
+      html += `</tr>`;
+    });
+    html += `</table>`;
+    pages.push(html);
+  });
+
+  pages[pages.length-1] += pdfFootHtml();
+
+  const fname = 'Toplu_Yoklama_' + monthStr + '.pdf';
+  await renderMultiPagePdf(pages, fname, e.currentTarget);
 });
 
 
@@ -5204,7 +6119,112 @@ document.getElementById('bodyPdfBtn').addEventListener('click', async (e)=>{
 
 
 
-/* ---------- 4) TEKNİK EKSİKLİKLER PDF (tarihli kayıt bazlı) ---------- */
+/* ---------- 3b) VÜCUT ÖLÇÜMLERİ — TOPLU TÜM SPORCULAR PDF ---------- */
+
+document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
+
+  await loadRoster();
+
+  const athletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
+
+  if(!athletes.length){ showToast('Sporcu listesi boş'); return; }
+
+  const pages = [];
+
+  // 1. Sayfa: Karşılaştırma tablosu (tüm sporcular, son ölçüm)
+  {
+    let html = pdfHeadHtml('Toplu Vücut Ölçümleri Raporu', 'ÖLÇÜM');
+    html += `<div class="pdf-meta">
+      <div><b>${athletes.length}</b><span>SPORCU SAYISI</span></div>
+      <div><b>${pdfTodayLabel()}</b><span>RAPOR TARİHİ</span></div>
+    </div>`;
+
+    html += `<h2 class="pdf-h2">Son Ölçüm Karşılaştırması</h2>`;
+    html += `<table class="pdf-table"><tr>
+      <th>Sporcu</th><th>Ölçüm Tarihi</th><th>Boy (cm)</th><th>Kilo (kg)</th><th>Kas %</th><th>Yağ %</th><th>Kayıt Sayısı</th>
+    </tr>`;
+
+    for(const a of athletes){
+      const list = (await getMeasurements(a.id)).slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
+      if(!list.length){
+        html += `<tr><td>${escapeHtml(a.sporcuAdi)}</td><td class="num" colspan="6" style="color:#aaa;">Ölçüm yok</td></tr>`;
+        continue;
+      }
+      const last = list[list.length-1];
+      const dStr = new Date(last.tarih+'T00:00:00').toLocaleDateString('tr-TR');
+      html += `<tr>
+        <td>${escapeHtml(a.sporcuAdi)}</td>
+        <td class="num">${dStr}</td>
+        <td class="num">${last.boy||'—'}</td>
+        <td class="num">${last.kilo||'—'}</td>
+        <td class="num">${last.kas||'—'}</td>
+        <td class="num">${last.yag||'—'}</td>
+        <td class="num">${list.length}</td>
+      </tr>`;
+    }
+    html += `</table>`;
+    pages.push(html);
+  }
+
+  // Sonraki sayfalar: her sporcu için kendi ölçüm geçmişi + değişim özeti
+  const ROWS_PER_PAGE = 28;
+  for(const a of athletes){
+    const list = (await getMeasurements(a.id)).slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
+    if(!list.length) continue;
+
+    const chunks = [];
+    for(let i=0; i<list.length; i+=ROWS_PER_PAGE) chunks.push(list.slice(i, i+ROWS_PER_PAGE));
+
+    chunks.forEach((chunk, idx)=>{
+      let html = '';
+      if(idx===0){
+        html += `<h2 class="pdf-h2" style="margin-top:0;">${escapeHtml(a.sporcuAdi)} — Ölçüm Geçmişi</h2>`;
+      } else {
+        html += `<h2 class="pdf-h2" style="margin-top:0;">${escapeHtml(a.sporcuAdi)} — Ölçüm Geçmişi (devam)</h2>`;
+      }
+      html += `<table class="pdf-table"><tr>
+        <th>Tarih</th><th>Boy (cm)</th><th>Kilo (kg)</th><th>Kas %</th><th>Yağ %</th>
+      </tr>`;
+      chunk.slice().reverse().forEach(m=>{
+        const dStr = new Date(m.tarih+'T00:00:00').toLocaleDateString('tr-TR');
+        html += `<tr>
+          <td class="num">${dStr}</td>
+          <td class="num">${m.boy||'—'}</td>
+          <td class="num">${m.kilo||'—'}</td>
+          <td class="num">${m.kas||'—'}</td>
+          <td class="num">${m.yag||'—'}</td>
+        </tr>`;
+      });
+      html += `</table>`;
+
+      // İlk → Son değişim özetini sadece son chunk'ın sonuna ekle
+      if(idx===chunks.length-1 && list.length>=2){
+        const first = list[0], last = list[list.length-1];
+        const delta = (a,b)=>(a!==''&&a!=null&&b!==''&&b!=null)?(+b-+a).toFixed(1):null;
+        const dKilo = delta(first.kilo, last.kilo);
+        const dYag  = delta(first.yag,  last.yag);
+        const dBoy  = delta(first.boy,  last.boy);
+        const dKas  = delta(first.kas,  last.kas);
+        html += `<h2 class="pdf-h2">İlk → Son Ölçüm Değişimi</h2><div class="pdf-pill-row">`;
+        if(dBoy!==null)  html += `<span class="pdf-pill">Boy: ${dBoy>0?'+':''}${dBoy} cm</span>`;
+        if(dKilo!==null) html += `<span class="pdf-pill ${+dKilo>0?'neg':+dKilo<0?'pos':''}">Kilo: ${+dKilo>0?'+':''}${dKilo} kg</span>`;
+        if(dYag!==null)  html += `<span class="pdf-pill ${+dYag>0?'neg':+dYag<0?'pos':''}">Yağ %: ${+dYag>0?'+':''}${dYag}</span>`;
+        if(dKas!==null)  html += `<span class="pdf-pill ${+dKas>0?'pos':+dKas<0?'neg':''}">Kas %: ${+dKas>0?'+':''}${dKas}</span>`;
+        html += `</div>`;
+      }
+      pages.push(html);
+    });
+  }
+
+  pages[pages.length-1] += pdfFootHtml();
+
+  const fname = 'Toplu_Vucut_Olcum_' + new Date().toISOString().slice(0,10) + '.pdf';
+
+  await renderMultiPagePdf(pages, fname, e.currentTarget);
+
+});
+
+
 
 async function exportTeknikRecordPdf(athleteName, record, triggerEl){
 
@@ -5235,6 +6255,157 @@ async function exportTeknikRecordPdf(athleteName, record, triggerEl){
   const fname = 'Teknik_Eksiklik_' + pdfFilenameSafe(athleteName||'') + '_' + record.tarih + '.pdf';
   await renderHtmlToPdf(html, fname, triggerEl);
 }
+
+
+
+/* =========================================================
+   YEDEKLEME / GERİ YÜKLEME (Backup & Restore)
+   Tüm window.storage verilerini tek bir JSON dosyasına
+   dışa aktarır ve aynı dosyadan geri yükler. Telefon ve
+   bilgisayar arasında manuel senkronizasyon için kullanılır:
+   bir cihazda "Yedek Al" -> dosyayı diğer cihaza taşı
+   (AirDrop / WhatsApp / e-posta / Drive) -> orada
+   "Yedekten Geri Yükle" ile aynı veriler yüklenir.
+========================================================= */
+
+const BACKUP_APP_ID = 'bursa-kolejliler-sezon-panosu';
+const BACKUP_FORMAT_VERSION = 1;
+
+// Sabit (içeriği önceden bilinen) tekil anahtarlar.
+const BACKUP_FIXED_KEYS = ['athletes_index', 'roster_v1', 'attendance_tags', 'teknik_branslar_v2'];
+// Sporcu id'sine göre türeyen anahtar önekleri.
+const BACKUP_PER_ATHLETE_PREFIXES = ['athlete_', 'attendance_', 'measurements_', 'teknik_records_', 'teknik_'];
+
+async function collectAllAthleteIds(){
+  const ids = new Set();
+  try{
+    const idx = await loadAthletes();
+    (idx||[]).forEach(a=>{ if(a.id) ids.add(a.id); });
+  }catch(e){}
+  try{
+    await loadRoster();
+    (rosterCache||[]).forEach(a=>{ if(a.id) ids.add(a.id); });
+  }catch(e){}
+  return Array.from(ids);
+}
+
+async function discoverAllStorageKeys(){
+  // Önce window.storage.list() ile gerçek anahtar listesini almayı dene
+  // (prefix verilmezse tüm anahtarları döndürmesi beklenir).
+  try{
+    const res = await window.storage.list(undefined, false);
+    if(res && Array.isArray(res.keys) && res.keys.length){
+      return res.keys;
+    }
+  }catch(e){ /* list desteklenmiyor veya boş -> aşağıdaki yedek yönteme düş */ }
+
+  // Yedek yöntem: bilinen sabit anahtarlar + tüm sporcu id'lerinden türeyen anahtarlar.
+  const ids = await collectAllAthleteIds();
+  const keys = new Set(BACKUP_FIXED_KEYS);
+  ids.forEach(id=>{
+    BACKUP_PER_ATHLETE_PREFIXES.forEach(p=> keys.add(p+id));
+  });
+  return Array.from(keys);
+}
+
+function setBackupBusy(btnId, busy, busyLabel, idleLabel){
+  const btn = document.getElementById(btnId);
+  if(!btn) return;
+  btn.disabled = busy;
+  btn.textContent = busy ? busyLabel : idleLabel;
+}
+
+document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
+  setBackupBusy('exportBackupBtn', true, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
+  try{
+    const keys = await discoverAllStorageKeys();
+    const payload = {};
+    let okCount = 0, failCount = 0;
+    for(const key of keys){
+      try{
+        const res = await window.storage.get(key, false);
+        if(res && res.value !== undefined){
+          payload[key] = res.value; // ham string olarak sakla (zaten JSON string)
+          okCount++;
+        }
+      }catch(e){ failCount++; }
+    }
+
+    const backupObj = {
+      app: BACKUP_APP_ID,
+      formatVersion: BACKUP_FORMAT_VERSION,
+      exportedAt: new Date().toISOString(),
+      keyCount: okCount,
+      data: payload
+    };
+
+    const json = JSON.stringify(backupObj, null, 2);
+    const blob = new Blob([json], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    a.href = url;
+    a.download = `kolejliler-yedek_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast(failCount ? `${okCount} kayıt yedeklendi (${failCount} okunamadı)` : `${okCount} kayıt başarıyla yedeklendi`);
+  }catch(e){
+    console.error('Backup export failed', e);
+    showToast('Yedek alma başarısız oldu, tekrar dene');
+  } finally {
+    setBackupBusy('exportBackupBtn', false, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
+  }
+});
+
+document.getElementById('importBackupBtn').addEventListener('click', ()=>{
+  document.getElementById('importBackupFile').click();
+});
+
+document.getElementById('importBackupFile').addEventListener('change', async (e)=>{
+  const file = e.target.files && e.target.files[0];
+  e.target.value = ''; // aynı dosyayı tekrar seçebilmek için sıfırla
+  if(!file) return;
+
+  let parsed;
+  try{
+    const text = await file.text();
+    parsed = JSON.parse(text);
+  }catch(err){
+    showToast('Dosya okunamadı: geçerli bir yedek JSON dosyası seç');
+    return;
+  }
+
+  if(!parsed || typeof parsed !== 'object' || !parsed.data || typeof parsed.data !== 'object'){
+    showToast('Bu dosya geçerli bir yedek dosyası değil');
+    return;
+  }
+
+  const entries = Object.entries(parsed.data);
+  if(!entries.length){
+    showToast('Yedek dosyası boş görünüyor');
+    return;
+  }
+
+  const confirmMsg = `${entries.length} kayıt bu cihaza yüklenecek ve mevcut verilerin üzerine yazılacak.\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}\n\nDevam etmek istiyor musun?`;
+  if(!window.confirm(confirmMsg)) return;
+
+  setBackupBusy('importBackupBtn', true, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
+  let okCount = 0, failCount = 0;
+  for(const [key, value] of entries){
+    try{
+      const strVal = (typeof value === 'string') ? value : JSON.stringify(value);
+      await window.storage.set(key, strVal, false);
+      okCount++;
+    }catch(err){ failCount++; }
+  }
+  setBackupBusy('importBackupBtn', false, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
+
+  showToast(failCount ? `${okCount} kayıt yüklendi (${failCount} başarısız)` : `${okCount} kayıt başarıyla yüklendi, sayfa yenileniyor…`);
+  setTimeout(()=> window.location.reload(), 1400);
+});
 
 
 
