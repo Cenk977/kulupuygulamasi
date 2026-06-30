@@ -988,6 +988,12 @@
 
     <div class="clubmark">BURSA KOLEJLİLER SPOR KULÜBÜ<br>2012–2013 DOĞUMLU GRUP</div>
 
+    <div id="authBar" style="display:flex;align-items:center;gap:10px;margin:10px 0;flex-wrap:wrap;">
+      <span id="authStatus" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--foam-dim);">Bağlanıyor...</span>
+      <button type="button" class="btn btn-ghost backup-btn" id="googleSignInBtn" style="display:none;">🔑 Google ile Giriş Yap</button>
+      <button type="button" class="btn btn-ghost backup-btn" id="googleSignOutBtn" style="display:none;">Çıkış Yap</button>
+    </div>
+
     <div class="backup-bar">
 
       <button type="button" class="btn btn-ghost backup-btn" id="exportBackupBtn">⭳ Yedek Al (Dışa Aktar)</button>
@@ -1935,22 +1941,24 @@ const FIREBASE_CONFIG = {
 (async ()=>{
   function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 
-  try {
-    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
-    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
-    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js');
+  function setAuthUI(user){
+    const statusEl   = document.getElementById('authStatus');
+    const signInBtn  = document.getElementById('googleSignInBtn');
+    const signOutBtn = document.getElementById('googleSignOutBtn');
+    if(!statusEl) return;
+    if(user){
+      statusEl.textContent = '🟢 ' + (user.displayName || user.email || 'Giriş yapıldı');
+      signInBtn.style.display  = 'none';
+      signOutBtn.style.display = '';
+    } else {
+      statusEl.textContent = '🔴 Giriş yapılmadı — veriler bu cihazda saklanıyor';
+      signInBtn.style.display  = '';
+      signOutBtn.style.display = 'none';
+    }
+  }
 
-    firebase.initializeApp(FIREBASE_CONFIG);
-    const auth = firebase.auth();
-    const db   = firebase.database();
-
-    // Anonim giriş
-    await auth.signInAnonymously();
-    const uid = auth.currentUser.uid;
-
-    // Kullanıcıya özel kök yol: /users/{uid}/
+  function setupStorage(db, uid){
     const userRef = (key) => db.ref(`users/${uid}/${key}`);
-
     window.storage = {
       async get(key){
         try{
@@ -1973,7 +1981,6 @@ const FIREBASE_CONFIG = {
       },
       async list(prefix){
         try{
-          // Realtime DB'de prefix filtresi için orderByKey + startAt/endAt
           const snap = await db.ref(`users/${uid}`)
             .orderByKey()
             .startAt(prefix||'')
@@ -1985,13 +1992,10 @@ const FIREBASE_CONFIG = {
         }catch(e){ console.error('storage.list hata:', e); return null; }
       }
     };
+    console.log('Firebase bağlantısı kuruldu. UID:', uid);
+  }
 
-    console.log('Firebase Realtime Database bağlantısı kuruldu. UID:', uid);
-
-  } catch(initErr) {
-    console.error('Firebase başlatılamadı, localStorage\'a düşülüyor:', initErr);
-
-    // Firebase bağlanamadıysa localStorage yedek olarak devreye girer
+  function setupLocalStorage(){
     const P = 'sezonpano_';
     window.storage = {
       async get(k){ try{ const r=localStorage.getItem(P+k); return r===null?null:{key:k,value:r,shared:false}; }catch(e){return null;} },
@@ -1999,6 +2003,83 @@ const FIREBASE_CONFIG = {
       async delete(k){ try{ localStorage.removeItem(P+k); return {key:k,deleted:true,shared:false}; }catch(e){return null;} },
       async list(prefix){ try{ const f=P+(prefix||''),keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith(f))keys.push(k.slice(P.length)); } return {keys,prefix,shared:false}; }catch(e){return null;} }
     };
+  }
+
+  try {
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js');
+
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    const db   = firebase.database();
+
+    // Sayfa yüklendiğinde mevcut oturumu kontrol et
+    await new Promise(resolve=>{
+      const unsub = auth.onAuthStateChanged(user=>{
+        unsub();
+        if(user){
+          setupStorage(db, user.uid);
+          setAuthUI(user);
+        } else {
+          // Giriş yapılmamış — localStorage yedek olarak çalışır,
+          // kullanıcıya giriş butonu gösterilir
+          setupLocalStorage();
+          setAuthUI(null);
+        }
+        resolve();
+      });
+    });
+
+    // Google ile giriş
+    document.getElementById('googleSignInBtn').addEventListener('click', async ()=>{
+      try{
+        const provider = new firebase.auth.GoogleAuthProvider();
+        // Önce popup dene, mobilde redirect'e düş
+        try{
+          await auth.signInWithPopup(provider);
+        } catch(popupErr){
+          if(popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request'){
+            await auth.signInWithRedirect(provider);
+          } else { throw popupErr; }
+        }
+        const user = auth.currentUser;
+        if(user){
+          setupStorage(db, user.uid);
+          setAuthUI(user);
+          // Sayfayı yenile — giriş sonrası Firebase'den veri yüklensin
+          window.location.reload();
+        }
+      } catch(e){
+        console.error('Google giriş hatası:', e);
+        alert('Google ile giriş yapılamadı: ' + e.message);
+      }
+    });
+
+    // Redirect sonucunu yakala (mobilde popup yerine redirect kullanılıyorsa)
+    try{
+      const result = await auth.getRedirectResult();
+      if(result && result.user){
+        setupStorage(db, result.user.uid);
+        setAuthUI(result.user);
+        window.location.reload();
+      }
+    } catch(e){ /* redirect sonucu yoksa hata gelmez */ }
+
+    // Çıkış
+    document.getElementById('googleSignOutBtn').addEventListener('click', async ()=>{
+      if(!confirm('Çıkış yapılacak. Bu cihazda giriş yapılmadan veriler localStorage\'da saklanır.')) return;
+      await auth.signOut();
+      setupLocalStorage();
+      setAuthUI(null);
+      window.location.reload();
+    });
+
+  } catch(initErr) {
+    console.error('Firebase başlatılamadı, localStorage\'a düşülüyor:', initErr);
+    setupLocalStorage();
+    const statusEl = document.getElementById('authStatus');
+    if(statusEl) statusEl.textContent = '⚠️ Firebase bağlanamadı — veriler bu cihazda saklanıyor';
   }
 })();
 
