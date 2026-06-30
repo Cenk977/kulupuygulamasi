@@ -1903,97 +1903,106 @@
 
 <script>
 
-/* ---------------------------------------------------------------
 
-   STORAGE POLYFILL
+/* ================================================================
+   FIREBASE REALTIME DATABASE STORAGE
+   ================================================================
+   Firestore'un aksine Realtime Database ücretsiz Spark planında
+   fatura hesabı gerektirmez. 1 GB depolama, 10 GB/ay indirme
+   ücretsiz — bu uygulama için fazlasıyla yeterli.
 
-   Bu sayfa normal bir tarayıcıda dosya olarak açıldığında
+   VERİ YAPISI:
+     /users/{uid}/{key}  →  { value: "<JSON string>" }
 
-   (Claude sohbet penceresi dışında) window.storage nesnesi
+   KİMLİK:
+     Firebase Anonymous Auth — aynı cihaz/tarayıcı her zaman
+     aynı UID ile erişir. Farklı cihazlarda senkronize için
+     ileride Google girişi eklenebilir.
+================================================================ */
 
-   tanımlı gelmez. Bu da "sporcu seçemiyorum" ve "kayıt başarısız
+// ▼▼▼ BURAYA KENDİ FIREBASE YAPILANDIRMANI YAPISTIR ▼▼▼
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
+  authDomain:        "bursa-kolejliler.firebaseapp.com",
+  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "bursa-kolejliler",
+  storageBucket:     "bursa-kolejliler.firebasestorage.app",
+  messagingSenderId: "905222390930",
+  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
+};
+// ▲▲▲ BURAYA KENDİ FIREBASE YAPILANDIRMANI YAPISTIR ▲▲▲
 
-   oluyor" hatalarının asıl sebebidir: tüm kayıt/okuma çağrıları
+(async ()=>{
+  function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 
-   sessizce başarısız oluyordu. Aşağıdaki blok, window.storage
+  try {
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js');
 
-   yoksa onu tarayıcının kendi localStorage'ı üzerinden, aynı
+    firebase.initializeApp(FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    const db   = firebase.database();
 
-   arayüzle (get/set/delete/list) yeniden oluşturur; böylece
+    // Anonim giriş
+    await auth.signInAnonymously();
+    const uid = auth.currentUser.uid;
 
-   uygulama tek bir bilgisayarda/tarayıcıda kalıcı şekilde çalışır.
+    // Kullanıcıya özel kök yol: /users/{uid}/
+    const userRef = (key) => db.ref(`users/${uid}/${key}`);
 
-   --------------------------------------------------------------- */
+    window.storage = {
+      async get(key){
+        try{
+          const snap = await userRef(key).get();
+          if(!snap.exists()) return null;
+          return { key, value: snap.val().value, shared: false };
+        }catch(e){ console.error('storage.get hata:', e); return null; }
+      },
+      async set(key, value){
+        try{
+          await userRef(key).set({ value, updatedAt: Date.now() });
+          return { key, value, shared: false };
+        }catch(e){ console.error('storage.set hata:', e); return null; }
+      },
+      async delete(key){
+        try{
+          await userRef(key).remove();
+          return { key, deleted: true, shared: false };
+        }catch(e){ console.error('storage.delete hata:', e); return null; }
+      },
+      async list(prefix){
+        try{
+          // Realtime DB'de prefix filtresi için orderByKey + startAt/endAt
+          const snap = await db.ref(`users/${uid}`)
+            .orderByKey()
+            .startAt(prefix||'')
+            .endAt((prefix||'')+'\uf8ff')
+            .get();
+          const keys = [];
+          if(snap.exists()) snap.forEach(child=>keys.push(child.key));
+          return { keys, prefix, shared: false };
+        }catch(e){ console.error('storage.list hata:', e); return null; }
+      }
+    };
 
-if(!window.storage){
+    console.log('Firebase Realtime Database bağlantısı kuruldu. UID:', uid);
 
-  const LS_PREFIX = 'sezonpano_';
+  } catch(initErr) {
+    console.error('Firebase başlatılamadı, localStorage\'a düşülüyor:', initErr);
 
-  window.storage = {
+    // Firebase bağlanamadıysa localStorage yedek olarak devreye girer
+    const P = 'sezonpano_';
+    window.storage = {
+      async get(k){ try{ const r=localStorage.getItem(P+k); return r===null?null:{key:k,value:r,shared:false}; }catch(e){return null;} },
+      async set(k,v){ try{ localStorage.setItem(P+k,v); return {key:k,value:v,shared:false}; }catch(e){return null;} },
+      async delete(k){ try{ localStorage.removeItem(P+k); return {key:k,deleted:true,shared:false}; }catch(e){return null;} },
+      async list(prefix){ try{ const f=P+(prefix||''),keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith(f))keys.push(k.slice(P.length)); } return {keys,prefix,shared:false}; }catch(e){return null;} }
+    };
+  }
+})();
 
-    async get(key){
 
-      try{
-
-        const raw = localStorage.getItem(LS_PREFIX+key);
-
-        if(raw===null) return null;
-
-        return {key, value: raw, shared:false};
-
-      }catch(e){ return null; }
-
-    },
-
-    async set(key, value){
-
-      try{
-
-        localStorage.setItem(LS_PREFIX+key, value);
-
-        return {key, value, shared:false};
-
-      }catch(e){ return null; }
-
-    },
-
-    async delete(key){
-
-      try{
-
-        localStorage.removeItem(LS_PREFIX+key);
-
-        return {key, deleted:true, shared:false};
-
-      }catch(e){ return null; }
-
-    },
-
-    async list(prefix){
-
-      try{
-
-        const full = LS_PREFIX + (prefix||'');
-
-        const keys = [];
-
-        for(let i=0;i<localStorage.length;i++){
-
-          const k = localStorage.key(i);
-
-          if(k.startsWith(full)) keys.push(k.slice(LS_PREFIX.length));
-
-        }
-
-        return {keys, prefix, shared:false};
-
-      }catch(e){ return null; }
-
-    }
-
-  };
-
-}
 
 
 
