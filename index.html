@@ -842,6 +842,12 @@
 
   }
 
+  .pdf-doc.landscape{
+
+    width:1500px; padding:22px 40px 26px;
+
+  }
+
   .pdf-doc .pdf-head{
 
     display:flex; justify-content:space-between; align-items:flex-start;
@@ -925,6 +931,30 @@
   .pdf-doc table.pdf-table-matrix td.matrix-p{background:#e6f3ea; color:#2f8a57; font-weight:700;}
 
   .pdf-doc table.pdf-table-matrix td.matrix-a{background:#fbe9e6; color:#c23f2e; font-weight:700;}
+
+  /* Seans bazlı (Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme) 4 satırlı tablo */
+  .pdf-doc table.pdf-table-sess{font-size:8px; table-layout:fixed; border-collapse:collapse; width:100%; line-height:1.1;}
+  .pdf-doc table.pdf-table-sess th, .pdf-doc table.pdf-table-sess td{
+    border:1px solid rgba(26,46,53,0.18); padding:1px 1px; text-align:center;
+  }
+  .pdf-doc table.pdf-table-sess th.sess-name, .pdf-doc table.pdf-table-sess td.sess-name{
+    width:80px; text-align:left; padding-left:5px; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; font-size:9px; font-weight:700; vertical-align:middle;
+  }
+  .pdf-doc table.pdf-table-sess th.sess-label, .pdf-doc table.pdf-table-sess td.sess-label{
+    width:52px; text-align:left; padding-left:4px; white-space:nowrap; font-size:7px;
+    color:#6b6358; text-transform:uppercase; letter-spacing:0.01em;
+  }
+  .pdf-doc table.pdf-table-sess th.sess-sum, .pdf-doc table.pdf-table-sess td.sess-sum{
+    width:20px; font-family:'JetBrains Mono',monospace;
+  }
+  .pdf-doc table.pdf-table-sess th.matrix-day, .pdf-doc table.pdf-table-sess td.matrix-day{width:auto;}
+  .pdf-doc table.pdf-table-sess td.matrix-p{background:#e6f3ea; color:#2f8a57; font-weight:700;}
+  .pdf-doc table.pdf-table-sess td.matrix-a{background:#fbe9e6; color:#c23f2e; font-weight:700;}
+  .pdf-doc table.pdf-table-sess td.matrix-sun{background:#f3eee3; color:#8a6d3b; font-weight:700;}
+  .pdf-doc table.pdf-table-sess tr.sess-block-start td{border-top:2px solid #1a2e35;}
+  .pdf-doc table.pdf-table-sess tr.sess-row-kara td.sess-label{color:#114a5e;}
+  .pdf-doc table.pdf-table-sess tr.sess-row-yuzme td.sess-label{color:#0f6b8a;}
 
   .pdf-doc .pdf-pill{
 
@@ -5623,11 +5653,13 @@ async function renderHtmlToPdf(innerHtml, filename, triggerBtn){
    Her sayfa parçası yine de (beklenmedik şekilde) bir PDF sayfasından uzun
    çıkarsa, güvenlik amacıyla aynı dilimleme mantığı o parça için de devreye
    girer. */
-async function renderMultiPagePdf(pageHtmls, filename, triggerBtn){
+async function renderMultiPagePdf(pageHtmls, filename, triggerBtn, opts){
   if(!window.jspdf || !window.html2canvas){
     showToast('PDF kütüphanesi yüklenemedi, internet bağlantısını kontrol et');
     return;
   }
+  const orientation = (opts && opts.orientation) || 'p';
+  const docClass = (opts && opts.docClass) || '';
   const root = document.getElementById('pdfRenderRoot');
   const original = triggerBtn ? triggerBtn.textContent : null;
   if(triggerBtn){ triggerBtn.disabled = true; triggerBtn.textContent = 'Hazırlanıyor...'; }
@@ -5635,13 +5667,13 @@ async function renderMultiPagePdf(pageHtmls, filename, triggerBtn){
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({unit:'pt', format:'a4'});
+    const pdf = new jsPDF({unit:'pt', format:'a4', orientation});
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     let firstImageAdded = false;
 
     for(const pageHtml of pageHtmls){
-      root.innerHTML = `<div class="pdf-doc">${pageHtml}</div>`;
+      root.innerHTML = `<div class="pdf-doc ${docClass}">${pageHtml}</div>`;
       const node = root.querySelector('.pdf-doc');
       const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
@@ -5986,6 +6018,14 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
   const daysInMonth = new Date(year, month, 0).getDate();
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
 
+  // Seans satır sırası: Excel'deki Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme mantığı
+  const SESS_ROWS = [
+    {id:'sabah_kara',  label:'Sabah Kara',  group:'kara'},
+    {id:'aksam_kara',  label:'Akşam Kara',  group:'kara'},
+    {id:'sabah_yuzme', label:'Sabah Yüzme', group:'yuzme'},
+    {id:'aksam_yuzme', label:'Akşam Yüzme', group:'yuzme'},
+  ];
+
   // Her sporcu için bu ayın verisini topla
   const perAthlete = [];
   let classTotalPresent = 0, classTotalDays = 0, classTotalScore = 0;
@@ -5995,28 +6035,69 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
     const dayMarks = {}; // d -> {mark:'P'} | {mark:'A', reason:'hasta'} | null
 
+    // Seans bazlı (sabah_kara / aksam_kara / sabah_yuzme / aksam_yuzme) günlük işaretler ve toplamlar
+    const sessData = {};
+    SESS_ROWS.forEach(r=>{ sessData[r.id] = {marks:{}, toplam:0, yapilan:0}; });
+    const sundayMarks = {}; // d -> {mark:'P'|'A', reason?} sadece Pazar (Yarış) günleri için
+
     for(let d=1; d<=daysInMonth; d++){
       const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
       const entry = normalizeDayEntry(rawData[dateStr], dateStr);
       const sessDefs = sessionDefsForDate(dateStr);
+      const isSunday = new Date(dateStr+'T00:00:00').getDay() === 0;
+
+      // --- Genel (özet sayfası) hesaplama: mevcut mantık korunuyor ---
       const marked = sessDefs.filter(sd=> entry.sessions[sd.id] && entry.sessions[sd.id].durum);
-      if(!marked.length){ dayMarks[d]=null; continue; }
-      totalDays++;
-      const dayScore = computeDayScore(entry);
-      const anyPresent = marked.some(sd=>entry.sessions[sd.id].durum==='geldi');
-      if(anyPresent){
-        presentDays++; totalScore += dayScore;
-        dayMarks[d] = {mark:'P'};
+      if(marked.length){
+        totalDays++;
+        const dayScore = computeDayScore(entry);
+        const anyPresent = marked.some(sd=>entry.sessions[sd.id].durum==='geldi');
+        if(anyPresent){
+          presentDays++; totalScore += dayScore;
+          dayMarks[d] = {mark:'P'};
+        } else {
+          absentDays++;
+          const absentSession = marked.find(sd=>entry.sessions[sd.id].durum==='gelmedi');
+          const reasonId = absentSession ? (entry.sessions[absentSession.id].sebep || 'belirtilmedi') : 'belirtilmedi';
+          dayMarks[d] = {mark:'A', reason:reasonId};
+        }
       } else {
-        absentDays++;
-        const absentSession = marked.find(sd=>entry.sessions[sd.id].durum==='gelmedi');
-        const reasonId = absentSession ? (entry.sessions[absentSession.id].sebep || 'belirtilmedi') : 'belirtilmedi';
-        dayMarks[d] = {mark:'A', reason:reasonId};
+        dayMarks[d] = null;
+      }
+
+      // --- Seans bazlı tablo için ayrıntı ---
+      if(isSunday){
+        const sVal = entry.sessions['yaris'];
+        if(sVal && sVal.durum){
+          sundayMarks[d] = sVal.durum==='geldi' ? {mark:'P'} : {mark:'A', reason: sVal.sebep || 'belirtilmedi'};
+        } else {
+          sundayMarks[d] = null;
+        }
+      } else {
+        SESS_ROWS.forEach(r=>{
+          const sVal = entry.sessions[r.id];
+          if(sVal && sVal.durum){
+            sessData[r.id].toplam++;
+            if(sVal.durum==='geldi'){
+              sessData[r.id].yapilan++;
+              sessData[r.id].marks[d] = {mark:'P'};
+            } else {
+              sessData[r.id].marks[d] = {mark:'A', reason: sVal.sebep || 'belirtilmedi'};
+            }
+          } else {
+            sessData[r.id].marks[d] = null;
+          }
+        });
       }
     }
 
+    SESS_ROWS.forEach(r=>{
+      const sd = sessData[r.id];
+      sd.yuzde = sd.toplam>0 ? Math.round((sd.yapilan/sd.toplam)*100) : null;
+    });
+
     const rate = totalDays>0 ? Math.round((presentDays/totalDays)*100) : null;
-    perAthlete.push({athlete:a, totalDays, presentDays, absentDays, totalScore, rate, dayMarks});
+    perAthlete.push({athlete:a, totalDays, presentDays, absentDays, totalScore, rate, dayMarks, sessData, sundayMarks});
     classTotalPresent += presentDays;
     classTotalDays += totalDays;
     classTotalScore += totalScore;
@@ -6045,7 +6126,6 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
   // satırlar ortadan kesilebiliyordu).
   const SUMMARY_ROWS_PAGE1 = 20;
   const SUMMARY_ROWS_CONT = 32;
-  const MATRIX_ROWS_PER_PAGE = 20;
 
   const pages = [];
 
@@ -6078,38 +6158,62 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     pages.push(html);
   });
 
-  // --- Gün Gün Katılım Tablosu sayfaları ---
-  function matrixHeaderRowHtml(){
-    let h = `<tr><th class="sticky-name">Sporcu</th>`;
+  // --- Seans Bazlı Katılım Tablosu sayfaları (Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme) ---
+  function sessHeaderRowHtml(){
+    let h = `<tr><th class="sess-name">Sporcu</th><th class="sess-label">Seans</th>`;
     for(let d=1; d<=daysInMonth; d++){
       const dObj = new Date(year, month-1, d);
       const dowLabel = dows[(dObj.getDay()+6)%7];
-      h += `<th class="matrix-day">${d}<br><span style="font-weight:400;font-size:8px;">${dowLabel}</span></th>`;
+      h += `<th class="matrix-day">${d}<br><span style="font-weight:400;font-size:7px;">${dowLabel}</span></th>`;
     }
-    h += `</tr>`;
+    h += `<th class="sess-sum">Top</th><th class="sess-sum">Yap</th><th class="sess-sum">%</th></tr>`;
     return h;
   }
 
-  const matrixChunks = chunkArray(perAthlete, MATRIX_ROWS_PER_PAGE);
-  matrixChunks.forEach((chunk, idx)=>{
+  const SESS_ATHLETES_PER_PAGE = 19;
+  const sessChunks = chunkArray(perAthlete, SESS_ATHLETES_PER_PAGE);
+  sessChunks.forEach((chunk, idx)=>{
     let html = '';
-    html += `<h2 class="pdf-h2" style="margin-top:0;">Gün Gün Katılım Tablosu${matrixChunks.length>1 ? ' (Sayfa '+(idx+1)+'/'+matrixChunks.length+')' : ''}</h2>`;
+    html += `<h2 class="pdf-h2" style="margin-top:0;">Seans Bazlı Katılım Tablosu${sessChunks.length>1 ? ' (Sayfa '+(idx+1)+'/'+sessChunks.length+')' : ''}</h2>`;
     if(idx===0){
-      html += `<p class="pdf-empty-note" style="margin-bottom:8px;">G = Geldi · Gelmedi nedeni: H = Hasta, S = Sakat, Re = Regl, T = Tatil, R = Raporlu, Y = Yarışta, X = Belirtilmedi · boş hücre = kayıt girilmedi</p>`;
+      html += `<p class="pdf-empty-note" style="margin-bottom:6px;">G = Geldi · Gelmedi nedeni: H = Hasta, S = Sakat, Re = Regl, T = Tatil, R = Raporlu, Y = Yarışta, X = Belirtilmedi · boş hücre = kayıt girilmedi · Pazar sütunu Yarış durumunu gösterir (4 seans için ortak)</p>`;
     }
-    html += `<table class="pdf-table pdf-table-matrix">${matrixHeaderRowHtml()}`;
+    html += `<table class="pdf-table-sess">${sessHeaderRowHtml()}`;
     chunk.forEach(p=>{
-      html += `<tr><td class="sticky-name">${escapeHtml(p.athlete.sporcuAdi)}</td>`;
-      for(let d=1; d<=daysInMonth; d++){
-        const dm = p.dayMarks[d];
-        let cls = '', label = '';
-        if(dm){
-          if(dm.mark==='P'){ cls='matrix-p'; label='G'; }
-          else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[dm.reason] || 'X'; }
+      SESS_ROWS.forEach((row, ri)=>{
+        html += `<tr class="sess-row-${row.group}${ri===0?' sess-block-start':''}">`;
+        if(ri===0){
+          html += `<td class="sess-name" rowspan="4">${escapeHtml(p.athlete.sporcuAdi)}</td>`;
         }
-        html += `<td class="num matrix-day ${cls}">${label}</td>`;
-      }
-      html += `</tr>`;
+        html += `<td class="sess-label">${row.label}</td>`;
+        for(let d=1; d<=daysInMonth; d++){
+          const dObj = new Date(year, month-1, d);
+          const isSunday = dObj.getDay() === 0;
+          if(isSunday){
+            if(ri===0){
+              const sm = p.sundayMarks[d];
+              let cls='matrix-sun', label='';
+              if(sm){
+                if(sm.mark==='P'){ label='Y'; }
+                else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[sm.reason] || 'X'; }
+              }
+              html += `<td class="num matrix-day ${cls}" rowspan="4">${label}</td>`;
+            }
+            // ri>0: bu sütun yukarıdaki hücreyle birleşik (rowspan), tekrar basılmaz
+          } else {
+            const dm = p.sessData[row.id].marks[d];
+            let cls='', label='';
+            if(dm){
+              if(dm.mark==='P'){ cls='matrix-p'; label='G'; }
+              else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[dm.reason] || 'X'; }
+            }
+            html += `<td class="num matrix-day ${cls}">${label}</td>`;
+          }
+        }
+        const sd = p.sessData[row.id];
+        html += `<td class="sess-sum">${sd.toplam}</td><td class="sess-sum">${sd.yapilan}</td><td class="sess-sum">${sd.yuzde===null?'—':sd.yuzde}</td>`;
+        html += `</tr>`;
+      });
     });
     html += `</table>`;
     pages.push(html);
@@ -6118,7 +6222,7 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
   pages[pages.length-1] += pdfFootHtml();
 
   const fname = 'Toplu_Yoklama_' + monthStr + '.pdf';
-  await renderMultiPagePdf(pages, fname, e.currentTarget);
+  await renderMultiPagePdf(pages, fname, e.currentTarget, {orientation:'l', docClass:'landscape'});
 });
 
 
