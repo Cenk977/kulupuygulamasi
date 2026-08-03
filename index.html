@@ -18,6 +18,9 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
+<!-- Sezon planı Excel içe aktarması -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <style>
 
   :root{
@@ -1809,10 +1812,12 @@ td.sp-empty{color:#c3ccd1;}
     <div class="sp-toolbar">
       <div class="sp-title" id="spSheetTitle">Sezon Takvimi</div>
       <div class="sp-toolbar-actions">
+        <button type="button" class="btn btn-ghost" id="spImportBtn">Excel'den Güncelle</button>
         <button type="button" class="btn btn-ghost" id="spPdfBtn" style="display:none;">&#8991; PDF olustur</button>
         <button type="button" class="btn btn-ghost" id="spResetBtn">Sayfayi sifirla</button>
       </div>
     </div>
+    <input type="file" id="spImportFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
     <div id="spNav"></div>
     <div class="sp-hint">Hucreye dokunup duzenleyebilirsin -- degisiklikler otomatik kaydedilir ve butun cihazlarinda senkronize olur.</div>
     <div class="sp-tablewrap"><table class="sp-grid" id="spGrid"></table></div>
@@ -2013,6 +2018,7 @@ const FIREBASE_CONFIG = {
   function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
 
   function setAuthUI(user){
+    window.currentAuthUser = user || null;
     const statusEl   = document.getElementById('authStatus');
     const signInBtn  = document.getElementById('googleSignInBtn');
     const signOutBtn = document.getElementById('googleSignOutBtn');
@@ -6707,6 +6713,66 @@ const SP_NAV = [{"label": "Genel Bakış", "items": [{"key": "26-27 sezon", "lab
 let spCurrentSheet = SP_ORDER[0];
 let spEditsCache = {};
 let spNavBuilt = false;
+let spRemotePlanLoaded = false;
+const SP_REMOTE_PLAN_KEY = 'sezon_plani_v1';
+
+function spNormalizeColor(color){
+  const raw = color && (color.rgb || color.indexed || color.theme);
+  if(typeof raw !== 'string') return null;
+  const hex = raw.replace(/^FF/i, '').replace('#', '');
+  return /^[0-9A-F]{6}$/i.test(hex) ? '#'+hex.toUpperCase() : null;
+}
+
+function spCellValue(cell){
+  if(!cell || cell.v === undefined || cell.v === null) return '';
+  if(cell.t === 'd' && cell.v instanceof Date) return cell.v.toLocaleDateString('tr-TR');
+  return cell.w !== undefined ? String(cell.w) : String(cell.v);
+}
+
+function spWorkbookToPlan(workbook){
+  const missing = SP_ORDER.filter(key => !workbook.SheetNames.includes(key));
+  if(missing.length) throw new Error('Eksik sayfa: ' + missing.join(', '));
+  const plan = {};
+  SP_ORDER.forEach(key => {
+    const ws = workbook.Sheets[key];
+    if(!ws || !ws['!ref']) throw new Error('Boş sayfa: ' + key);
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const grid = [];
+    for(let r=range.s.r; r<=range.e.r; r++){
+      const row = [];
+      for(let c=range.s.c; c<=range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        const value = spCellValue(cell);
+        const bg = spNormalizeColor(cell && cell.s && cell.s.fill && cell.s.fill.fgColor);
+        row.push(bg ? [value, bg] : value);
+      }
+      grid.push(row);
+    }
+    const merges = (ws['!merges'] || []).map(m => [m.s.r-range.s.r, m.s.c-range.s.c, m.e.r-range.s.r, m.e.c-range.s.c]);
+    plan[key] = {grid, merges, cols:range.e.c-range.s.c+1};
+  });
+  return plan;
+}
+
+async function spLoadRemotePlan(){
+  if(spRemotePlanLoaded) return;
+  spRemotePlanLoaded = true;
+  try{
+    const res = await window.storage.get(SP_REMOTE_PLAN_KEY, false);
+    if(!res || !res.value) return;
+    const plan = JSON.parse(res.value);
+    if(!plan || typeof plan !== 'object' || !SP_ORDER.every(key => plan[key] && Array.isArray(plan[key].grid))) throw new Error('Plan verisi geçersiz');
+    Object.keys(SP_DATA).forEach(key => delete SP_DATA[key]);
+    Object.assign(SP_DATA, plan);
+  }catch(e){ console.error('Sezon planı yüklenemedi:', e); showToast('Kaydedilmiş sezon planı yüklenemedi'); }
+}
+
+async function spClearCellEdits(){
+  spEditsCache = {};
+  for(const key of SP_ORDER){
+    try{ await window.storage.delete(spStorageKey(key), false); }catch(e){}
+  }
+}
 
 function spStorageKey(sheetKey){
   const idx = SP_ORDER.indexOf(sheetKey);
@@ -6867,6 +6933,47 @@ document.getElementById('spResetBtn').addEventListener('click', async ()=>{
   showToast('Sayfa sifirlandi');
 });
 
+document.getElementById('spImportBtn').addEventListener('click', ()=>{
+  if(!window.currentAuthUser){
+    showToast('Excel yüklemek için önce Google ile giriş yapmalısın');
+    return;
+  }
+  document.getElementById('spImportFile').click();
+});
+
+document.getElementById('spImportFile').addEventListener('change', async event=>{
+  const input = event.target;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  if(!window.XLSX){ showToast('Excel okuyucu yüklenemedi; sayfayı yenileyip tekrar dene'); return; }
+  if(file.size > 12 * 1024 * 1024){ showToast('Excel dosyası 12 MB’den küçük olmalı'); return; }
+  const button = document.getElementById('spImportBtn');
+  button.disabled = true;
+  button.textContent = 'Excel okunuyor…';
+  try{
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, {type:'array', cellStyles:true, cellDates:true});
+    const plan = spWorkbookToPlan(workbook);
+    if(!confirm(`“${file.name}” dosyasındaki sezon planı yüklenecek. Mevcut planın hücre düzenlemeleri bu Excel ile değiştirilecek. Devam etmek istiyor musun?`)) return;
+    button.textContent = 'Kaydediliyor…';
+    const saved = await window.storage.set(SP_REMOTE_PLAN_KEY, JSON.stringify(plan), false);
+    if(!saved) throw new Error('Firebase kaydı tamamlanamadı');
+    await spClearCellEdits();
+    Object.keys(SP_DATA).forEach(key => delete SP_DATA[key]);
+    Object.assign(SP_DATA, plan);
+    spRemotePlanLoaded = true;
+    await spRenderSheet(spCurrentSheet);
+    showToast('Sezon planı Excel’den güncellendi');
+  }catch(error){
+    console.error('Sezon planı Excel içe aktarma hatası:', error);
+    showToast(error && error.message ? 'Yüklenemedi: '+error.message : 'Excel dosyası okunamadı');
+  }finally{
+    button.disabled = false;
+    button.textContent = "Excel'den Güncelle";
+  }
+});
+
 /* ---- PDF export: her Meso sayfasi 3 mantiksal bloga ayrilir -----
    1) Ana program (3 mikrosiklus, gunluk icerik) -- basliktan bir
       sonraki "Mesocycle ... " tekrarina kadar
@@ -6962,6 +7069,7 @@ document.getElementById('spPdfBtn').addEventListener('click', function(){
 });
 
 async function initSezonplanMode(){
+  await spLoadRemotePlan();
   if(!spNavBuilt){ spBuildNav(); spNavBuilt = true; }
   await spSelectSheet(spCurrentSheet);
 }
