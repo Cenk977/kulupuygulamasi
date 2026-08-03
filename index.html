@@ -1152,7 +1152,7 @@ td.sp-empty{color:#c3ccd1;}
 
         <label for="degerlendirmeTarihi">Değerlendirme Tarihi</label>
 
-        <input type="text" id="degerlendirmeTarihi" placeholder="GG.AA.YYYY">
+        <input type="date" id="degerlendirmeTarihi">
 
       </div>
 
@@ -1828,9 +1828,9 @@ td.sp-empty{color:#c3ccd1;}
 
 <!-- Day entry modal -->
 
-<div class="modal-overlay" id="dayModal">
+<div class="modal-overlay" id="dayModal" role="dialog" aria-modal="true" aria-labelledby="modalAthleteName">
 
-  <div class="modal-box">
+  <div class="modal-box" tabindex="-1">
 
     <div class="modal-head">
 
@@ -1842,7 +1842,7 @@ td.sp-empty{color:#c3ccd1;}
 
       </div>
 
-      <button type="button" class="modal-close" id="modalCloseBtn">×</button>
+      <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Pencereyi kapat">×</button>
 
     </div>
 
@@ -1901,7 +1901,7 @@ td.sp-empty{color:#c3ccd1;}
 
 <!-- Tag management modal -->
 
-<div class="modal-overlay" id="tagModal">
+<div class="modal-overlay" id="tagModal" role="dialog" aria-modal="true" aria-label="Davranış etiketleri">
 
   <div class="modal-box">
 
@@ -1909,7 +1909,7 @@ td.sp-empty{color:#c3ccd1;}
 
       <div class="modal-name">Davranış Etiketleri</div>
 
-      <button type="button" class="modal-close" id="tagModalCloseBtn">×</button>
+      <button type="button" class="modal-close" id="tagModalCloseBtn" aria-label="Pencereyi kapat">×</button>
 
     </div>
 
@@ -1934,11 +1934,11 @@ td.sp-empty{color:#c3ccd1;}
 
 
 <!-- Branch management modal -->
-<div class="modal-overlay" id="branchModal">
+<div class="modal-overlay" id="branchModal" role="dialog" aria-modal="true" aria-label="Branşları düzenle">
   <div class="modal-box">
     <div class="modal-head">
       <div class="modal-name">Branşları Düzenle</div>
-      <button type="button" class="modal-close" id="branchModalCloseBtn">×</button>
+      <button type="button" class="modal-close" id="branchModalCloseBtn" aria-label="Pencereyi kapat">×</button>
     </div>
     <p class="hint" style="margin-bottom:12px;">Her branş kendi teknik eksiklik listesini tutar. Bir branşı silmek, o branşa ait kayıtlı eksiklikleri etkilemez ama görünmez hale getirir.</p>
     <div id="branchEditList" class="tag-edit-list"></div>
@@ -1951,11 +1951,11 @@ td.sp-empty{color:#c3ccd1;}
 </div>
 
 <!-- Roster management modal (shared by Attendance / Body / Teknik tabs) -->
-<div class="modal-overlay" id="rosterModal">
+<div class="modal-overlay" id="rosterModal" role="dialog" aria-modal="true" aria-label="Sporcu listesi">
   <div class="modal-box">
     <div class="modal-head">
       <div class="modal-name">Sporcu Listesi</div>
-      <button type="button" class="modal-close" id="rosterModalCloseBtn">×</button>
+      <button type="button" class="modal-close" id="rosterModalCloseBtn" aria-label="Pencereyi kapat">×</button>
     </div>
     <p class="hint" style="margin-bottom:12px;">Bu liste Yoklama, Vücut Ölçümleri ve Teknik Eksiklikler sekmelerinde ortak kullanılır; Sezon Değerlendirmesi sekmesinden bağımsızdır. Bir sporcuyu çıkarmak, geçmiş kayıtlarını silmez, sadece seçim listesinden kaldırır.</p>
     <div id="rosterEditList" class="tag-edit-list"></div>
@@ -2076,6 +2076,29 @@ const FIREBASE_CONFIG = {
     };
   }
 
+  async function offerLocalDataMigration(){
+    const prefix = 'sezonpano_';
+    const localEntries = [];
+    try{
+      for(let i=0; i<localStorage.length; i++){
+        const fullKey = localStorage.key(i);
+        if(fullKey && fullKey.startsWith(prefix)){
+          const key = fullKey.slice(prefix.length);
+          if(isAllowedBackupKey(key)) localEntries.push([key, localStorage.getItem(fullKey)]);
+        }
+      }
+      const cloud = await window.storage.list();
+      // Bulut listesini kesin olarak okuyamıyorsak mevcut veriyi ezme riski alma.
+      if(!localEntries.length || !cloud || !Array.isArray(cloud.keys) || cloud.keys.length) return;
+      if(!window.confirm(`${localEntries.length} yerel kayıt bulundu. Bunlar Google hesabındaki boş alana kopyalansın mı?\n\nYerel kayıtlar silinmez.`)) return;
+      let copied = 0;
+      for(const [key, value] of localEntries){
+        if(await window.storage.set(key, value)) copied++;
+      }
+      showToast(copied ? `${copied} kayıt hesabına kopyalandı` : 'Yerel kayıtlar kopyalanamadı');
+    }catch(e){ console.error('Yerel veri taşıma hatası:', e); }
+  }
+
   try {
     await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
     await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
@@ -2087,10 +2110,11 @@ const FIREBASE_CONFIG = {
 
     // Sayfa yüklendiğinde mevcut oturumu kontrol et
     await new Promise(resolve=>{
-      const unsub = auth.onAuthStateChanged(user=>{
+      const unsub = auth.onAuthStateChanged(async user=>{
         unsub();
         if(user){
           setupStorage(db, user.uid);
+          await offerLocalDataMigration();
           setAuthUI(user);
         } else {
           // Giriş yapılmamış — localStorage yedek olarak çalışır,
@@ -2438,13 +2462,12 @@ function renderSummary(){
 
 
 
-function escapeHtml(s){
+function escapeHtml(value){
 
-  const div = document.createElement('div');
-
-  div.textContent = s;
-
-  return div.innerHTML;
+  // Hem metin düğümlerinde hem de HTML niteliklerinde güvenle kullanılabilir.
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  })[char]);
 
 }
 
@@ -2558,11 +2581,13 @@ async function saveAthletesIndex(list){
 
   try{
 
-    await window.storage.set('athletes_index', JSON.stringify(list), false);
+    const result = await window.storage.set('athletes_index', JSON.stringify(list), false);
+    return !!result;
 
   }catch(e){
 
     console.error('Index save failed', e);
+    return false;
 
   }
 
@@ -2572,9 +2597,9 @@ async function saveAthleteRecord(id, data){
 
   try{
 
-    await window.storage.set('athlete_'+id, JSON.stringify(data), false);
+    const result = await window.storage.set('athlete_'+id, JSON.stringify(data), false);
 
-    return true;
+    return !!result;
 
   }catch(e){
 
@@ -3160,12 +3185,20 @@ async function handleSave(){
 
     const list = await loadAthletes();
 
+    let indexSaved = true;
     if(!list.find(x=>x.id===id)){
 
       list.push({id, sporcuAdi:name, kayitTarihi: data.kayitTarihi});
 
-      await saveAthletesIndex(list);
+      indexSaved = await saveAthletesIndex(list);
 
+    }
+
+    if(!indexSaved){
+      showToast('Kayıt saklandı ancak liste güncellenemedi; sayfayı yenileyip kontrol et');
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Kaydet';
+      return;
     }
 
     showToast('Kaydedildi: ' + name);
@@ -6515,6 +6548,14 @@ const BACKUP_FIXED_KEYS = ['athletes_index', 'roster_v1', 'attendance_tags', 'te
 // Sporcu id'sine göre türeyen anahtar önekleri.
 const BACKUP_PER_ATHLETE_PREFIXES = ['athlete_', 'attendance_', 'measurements_', 'teknik_records_', 'teknik_'];
 
+function isAllowedBackupKey(key){
+  if(typeof key !== 'string' || key.length > 160) return false;
+  if(BACKUP_FIXED_KEYS.includes(key) || /^sp_edits_s\d+$/.test(key)) return true;
+  return BACKUP_PER_ATHLETE_PREFIXES.some(prefix =>
+    key.startsWith(prefix) && /^[a-z0-9_-]+$/i.test(key.slice(prefix.length))
+  );
+}
+
 async function collectAllAthleteIds(){
   const ids = new Set();
   try{
@@ -6617,12 +6658,16 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
     return;
   }
 
-  if(!parsed || typeof parsed !== 'object' || !parsed.data || typeof parsed.data !== 'object'){
+  if(!parsed || typeof parsed !== 'object' || parsed.app !== BACKUP_APP_ID ||
+     parsed.formatVersion !== BACKUP_FORMAT_VERSION || !parsed.data || typeof parsed.data !== 'object' ||
+     Array.isArray(parsed.data)){
     showToast('Bu dosya geçerli bir yedek dosyası değil');
     return;
   }
 
-  const entries = Object.entries(parsed.data);
+  const entries = Object.entries(parsed.data).filter(([key, value]) =>
+    isAllowedBackupKey(key) && (typeof value === 'string' || (value && typeof value === 'object'))
+  );
   if(!entries.length){
     showToast('Yedek dosyası boş görünüyor');
     return;
@@ -6921,9 +6966,39 @@ async function initSezonplanMode(){
   await spSelectSheet(spCurrentSheet);
 }
 
+/* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
+function getFocusableElements(root){
+  return Array.from(root.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    .filter(el => el.offsetParent !== null);
+}
+
+document.addEventListener('keydown', event => {
+  const modal = document.querySelector('.modal-overlay.show');
+  if(!modal) return;
+  if(event.key === 'Escape'){
+    event.preventDefault();
+    modal.querySelector('.modal-close')?.click();
+    return;
+  }
+  if(event.key !== 'Tab') return;
+  const focusable = getFocusableElements(modal);
+  if(!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if(event.shiftKey && document.activeElement === first){ event.preventDefault(); last.focus(); }
+  else if(!event.shiftKey && document.activeElement === last){ event.preventDefault(); first.focus(); }
+});
+
+new MutationObserver(mutations => {
+  for(const mutation of mutations){
+    const modal = mutation.target;
+    if(modal.classList.contains('show')){
+      requestAnimationFrame(() => getFocusableElements(modal)[0]?.focus());
+    }
+  }
+}).observe(document.body, {subtree:true, attributes:true, attributeFilter:['class']});
+
 </script>
 
 </body>
 
 </html>
-
