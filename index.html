@@ -6855,6 +6855,7 @@ function spLuminance(hex){
 }
 
 function spIsMeso(key){ return key.trim().toUpperCase().startsWith('MESO'); }
+function spCanExportPdf(key){ const s = SP_DATA[key]; return !!(s && Array.isArray(s.grid) && s.grid.length); }
 
 function spLabelFor(key){
   const meta = SP_NAV.flatMap(g=>g.items).find(i=>i.key===key);
@@ -6894,7 +6895,7 @@ async function spSelectSheet(key){
   spCurrentSheet = key;
   spRefreshNavActive();
   document.getElementById('spSheetTitle').textContent = spLabelFor(key);
-  document.getElementById('spPdfBtn').style.display = spIsMeso(key) ? '' : 'none';
+  document.getElementById('spPdfBtn').style.display = spCanExportPdf(key) ? '' : 'none';
   await spRenderSheet(key);
   const wrap = document.querySelector('.sp-tablewrap');
   if(wrap){ wrap.scrollTop = 0; wrap.scrollLeft = 0; }
@@ -7017,7 +7018,7 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
     spNavBuilt = true;
     spRemotePlanLoaded = true;
     document.getElementById('spSheetTitle').textContent = spLabelFor(spCurrentSheet);
-    document.getElementById('spPdfBtn').style.display = spIsMeso(spCurrentSheet) ? '' : 'none';
+    document.getElementById('spPdfBtn').style.display = spCanExportPdf(spCurrentSheet) ? '' : 'none';
     await spRenderSheet(spCurrentSheet);
     showToast('Sezon planı Excel’den güncellendi (' + SP_ORDER.length + ' sayfa yüklendi)');
   }catch(error){
@@ -7046,6 +7047,13 @@ function spFindBlockRanges(grid){
     if(block2===null && title0 && val === title0){ block2 = i; }
     if(val && val.toUpperCase().indexOf('ANTRENMAN KOD') !== -1){ block3 = i; break; }
   }
+  /* MESO sayfalarina ozgu 3'lu blok deseni (baslik tekrari + ANTRENMAN
+     KODLARI satiri) bulunamazsa -- ornegin MF 1.GUN gibi farkli yapidaki
+     sayfalarda -- yapay bir yarilama YAPILMAZ; tum sayfa tek blok halinde,
+     kendi satir/sutun yapisina sadik kalarak yazdirilir. */
+  if(block2===null && block3===null){
+    return [{start:0, end:grid.length, headRows: Math.min(3, grid.length), label:'Program'}];
+  }
   if(block2===null) block2 = Math.ceil(grid.length/2);
   if(block3===null) block3 = grid.length;
   return [
@@ -7057,6 +7065,13 @@ function spFindBlockRanges(grid){
 
 function spBuildBlockTableHtml(grid, merges, range, edits){
   const {start, end, headRows} = range;
+  /* Cok sutunlu sayfalar (ornegin MF gunleri, 40+ sutun) sabit genislikli
+     tabloda kucuk kalir; sutun sayisina gore yazi/aralik otomatik daralir
+     ki tum sutunlar tek sayfaya sigsin. */
+  const totalCols = (grid[start] || grid[0] || []).length;
+  const fontPx = totalCols > 34 ? 6.5 : totalCols > 24 ? 8 : 9.5;
+  const padCss = totalCols > 34 ? '2px 2px' : totalCols > 24 ? '2px 3px' : '3px 4px';
+  const cellStyleBase = 'font-size:'+fontPx+'px;padding:'+padCss+';';
   const skip = new Set();
   const spanMap = {};
   merges.forEach(([r1,c1,r2,c2])=>{
@@ -7085,16 +7100,16 @@ function spBuildBlockTableHtml(grid, merges, range, edits){
       const span = spanMap[k2];
       const rs = span && span.rowspan>1 ? ' rowspan="'+span.rowspan+'"' : '';
       const cs = span && span.colspan>1 ? ' colspan="'+span.colspan+'"' : '';
-      let style = '';
-      if(bg){ style = ' style="background:'+bg+';color:'+(spLuminance(bg)<0.55?'#fff':'#000')+';"'; }
-      rowHtml += '<td'+rs+cs+style+'>'+escapeHtml(String(shown))+'</td>';
+      let cellStyle = cellStyleBase;
+      if(bg){ cellStyle += 'background:'+bg+';color:'+(spLuminance(bg)<0.55?'#fff':'#000')+';'; }
+      rowHtml += '<td'+rs+cs+' style="'+cellStyle+'">'+escapeHtml(String(shown))+'</td>';
     });
     rowHtml += '</tr>';
     if(rr < headRows) theadHtml += rowHtml; else tbodyHtml += rowHtml;
   }
   theadHtml += '</thead>';
   tbodyHtml += '</tbody>';
-  return '<table class="pdf-table-season">'+theadHtml+tbodyHtml+'</table>';
+  return '<table class="pdf-table-season" style="font-size:'+fontPx+'px;">'+theadHtml+tbodyHtml+'</table>';
 }
 
 function spBuildPrintPagesHtml(key){
