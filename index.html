@@ -504,6 +504,10 @@
   /* MODE TABS */
 
   .mode-tabs{display:flex; gap:0; margin-bottom:22px; border-bottom:2px solid rgba(26,46,53,0.12); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin;}
+  @media (max-width:720px){
+    .mode-tabs{flex-wrap:wrap; overflow-x:visible;}
+    .mode-tabs .mode-tab{flex:1 1 auto; text-align:center;}
+  }
 
   .mode-tab{
 
