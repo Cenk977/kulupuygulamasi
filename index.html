@@ -504,6 +504,10 @@
   /* MODE TABS */
 
   .mode-tabs{display:flex; gap:0; margin-bottom:22px; border-bottom:2px solid rgba(26,46,53,0.12); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin;}
+  @media (max-width:720px){
+    .mode-tabs{flex-wrap:wrap; overflow-x:visible;}
+    .mode-tabs .mode-tab{flex:1 1 auto; text-align:center;}
+  }
 
   .mode-tab{
 
@@ -1077,6 +1081,7 @@ td.sp-empty{color:#c3ccd1;}
 
     <button class="mode-tab" data-mode="sezonplan">Sezon Planı</button>
 
+    <button class="mode-tab" data-mode="swim">SwimAnalyzer</button>
   </div>
 
 
@@ -1973,6 +1978,12 @@ td.sp-empty{color:#c3ccd1;}
       <button type="button" class="btn btn-primary" id="rosterModalDoneBtn">Tamam</button>
     </div>
   </div>
+</div>
+
+<div id="modeSwimAnalyzer" style="display:none;">
+  <iframe id="swimAnalyzerFrame" title="SwimAnalyzer"
+    style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
+  </iframe>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -3273,6 +3284,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
 
     document.getElementById('modeSezonplan').style.display = (mode==='sezonplan') ? '' : 'none';
 
+    document.getElementById('modeSwimAnalyzer').style.display = (mode==='swim') ? '' : 'none';
+
     if(mode==='attendance') initAttendanceMode();
 
     if(mode==='bulkAtt') initBulkAttMode();
@@ -3282,6 +3295,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
     if(mode==='teknik') initTeknikMode();
 
     if(mode==='sezonplan') initSezonplanMode();
+
+    if(mode==='swim') initSwimAnalyzerMode();
 
   });
 
@@ -7143,6 +7158,17 @@ async function initSezonplanMode(){
   spBuildNav();
   spNavBuilt = true;
   await spSelectSheet(spCurrentSheet);
+}
+
+/* SwimAnalyzer sekmesi: ayri swimanalyzer.html dosyasini iframe icinde
+   lazy-load ile acar (sekmeye ilk tiklandiginda yuklenir, boylece ana
+   uygulama acilisinda gereksiz yuk binmez). swimanalyzer.html'in bu
+   index.html ile AYNI klasorde (ayni repo kokunde) olmasi gerekir. */
+let swimAnalyzerLoaded = false;
+function initSwimAnalyzerMode(){
+  if(swimAnalyzerLoaded) return;
+  const frame = document.getElementById('swimAnalyzerFrame');
+  if(frame){ frame.src = 'swimanalyzer.html'; swimAnalyzerLoaded = true; }
 }
 
 /* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
