@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SwimAnalyzer – Antrenman Tempo Tablosu</title>
+<style>
+  :root {
+    --print-scale: 1;
+    --blue-dark:  #0d2b45;
+    --blue-mid:   #1565c0;
+    --blue-light: #e3f2fd;
+    --aero1:      #b3e5fc;
+    --aero1-h:    #0277bd;
+    --aero2:      #b2dfdb;
+    --aero2-h:    #00695c;
+    --at:         #fff9c4;
+    --at-h:       #f9a825;
+    --vo2m:       #ffe0b2;
+    --vo2m-h:     #e65100;
+    --vo2ba:      #ffccbc;
+    --vo2ba-h:    #bf360c;
+    --lact:       #ef9a9a;
+    --lact-h:     #b71c1c;
+    --spd:        #e1bee7;
+    --spd-h:      #6a1b9a;
+    --warm:       #f5f5f5;
+    --warm-h:     #616161;
+    --font: 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:var(--font); background:#f0f4f8; color:#1a1a2e; min-height:100vh; }
+
+  header {
+    background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-mid) 100%);
+    color:#fff; padding:18px 24px; display:flex; align-items:center; gap:14px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+  }
+  header svg { flex-shrink:0; }
+  header h1 { font-size:1.3rem; font-weight:700; letter-spacing:.5px; }
+  header p  { font-size:.78rem; opacity:.8; margin-top:2px; }
+
+  .container { max-width:1200px; margin:0 auto; padding:20px 16px 40px; }
+
+  /* ---- CONFIG CARD ---- */
+  .config-card {
+    background:#fff; border-radius:14px; padding:22px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08); margin-bottom:24px;
+  }
+  .config-card h2 { font-size:.9rem; color:var(--blue-mid); text-transform:uppercase;
+    letter-spacing:.8px; margin-bottom:16px; }
+
+  .row { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+
+  .field { display:flex; flex-direction:column; gap:5px; }
+  .field label { font-size:.75rem; font-weight:600; color:#555; text-transform:uppercase; letter-spacing:.5px; }
+  .field input, .field select {
+    border:1.5px solid #d0d7e2; border-radius:8px; padding:9px 12px;
+    font-size:.93rem; font-family:var(--font); outline:none; background:#fafbff;
+    transition: border-color .2s;
+  }
+  .field input:focus, .field select:focus { border-color:var(--blue-mid); }
+
+  .stroke-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+  @media(max-width:520px){ .stroke-grid { grid-template-columns:repeat(2,1fr); } }
+
+  .stroke-btn {
+    border:2px solid #d0d7e2; background:#fafbff; border-radius:10px;
+    padding:10px 6px; cursor:pointer; text-align:center; transition:.2s;
+    font-size:.8rem; font-weight:600; color:#444;
+  }
+  .stroke-btn:hover { border-color:var(--blue-mid); background:var(--blue-light); }
+  .stroke-btn.active { border-color:var(--blue-mid); background:var(--blue-mid); color:#fff; }
+  .stroke-btn .icon { font-size:1.4rem; display:block; margin-bottom:4px; }
+
+  .dist-grid { display:flex; gap:8px; flex-wrap:wrap; }
+  .dist-btn {
+    border:2px solid #d0d7e2; background:#fafbff; border-radius:8px;
+    padding:8px 16px; cursor:pointer; font-size:.85rem; font-weight:700; color:#444; transition:.2s;
+  }
+  .dist-btn:hover { border-color:var(--blue-mid); background:var(--blue-light); }
+  .dist-btn.active { border-color:var(--blue-mid); background:var(--blue-mid); color:#fff; }
+
+  .pool-toggle { display:flex; border:2px solid #d0d7e2; border-radius:8px; overflow:hidden; width:fit-content; }
+  .pool-toggle button {
+    border:none; padding:8px 18px; font-size:.83rem; font-weight:700; cursor:pointer;
+    background:#fafbff; color:#555; transition:.2s; font-family:var(--font);
+  }
+  .pool-toggle button.active { background:var(--blue-mid); color:#fff; }
+
+  .generate-btn {
+    background: linear-gradient(135deg, var(--blue-mid), #0d47a1);
+    color:#fff; border:none; border-radius:10px; padding:12px 32px;
+    font-size:1rem; font-weight:700; cursor:pointer; font-family:var(--font);
+    box-shadow:0 3px 10px rgba(21,101,192,.4); transition:.2s; letter-spacing:.3px;
+  }
+  .generate-btn:hover { transform:translateY(-1px); box-shadow:0 5px 15px rgba(21,101,192,.5); }
+  .generate-btn:active { transform:translateY(0); }
+
+  /* ---- OUTPUT ---- */
+  .output-card {
+    background:#fff; border-radius:14px;
+    box-shadow:0 2px 10px rgba(0,0,0,.08); overflow:hidden;
+    display:none;
+  }
+  .output-card.visible { display:block; }
+
+  .output-header {
+    background: linear-gradient(135deg, var(--blue-dark), var(--blue-mid));
+    color:#fff; padding:16px 22px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;
+  }
+  .output-header h3 { font-size:1.05rem; }
+  .output-header .meta { font-size:.78rem; opacity:.8; }
+
+  .print-btn {
+    background:rgba(255,255,255,.2); border:1px solid rgba(255,255,255,.5);
+    color:#fff; border-radius:7px; padding:6px 14px; cursor:pointer;
+    font-size:.8rem; font-family:var(--font); font-weight:600; transition:.2s;
+  }
+  .print-btn:hover { background:rgba(255,255,255,.35); }
+
+  .table-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  thead th {
+    background:var(--blue-dark); color:#fff; padding:10px 8px;
+    text-align:center; font-weight:600; white-space:nowrap; font-size:.75rem;
+    text-transform:uppercase; letter-spacing:.5px;
+  }
+  thead th:first-child { text-align:left; padding-left:14px; }
+  thead th.anchor { background:var(--blue-mid); }
+
+  tbody tr { border-bottom:1px solid #eee; }
+  tbody tr:last-child { border-bottom:none; }
+  td { padding:7px 8px; text-align:center; white-space:nowrap; }
+  td:first-child { text-align:left; padding-left:14px; font-weight:600; font-size:.75rem; }
+  td.time { font-family:'Courier New', monospace; font-size:.85rem; font-weight:600; }
+  td.time.anchor { background:rgba(21,101,192,.07); font-weight:700; color:var(--blue-mid); }
+  td.zone-lbl { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+  td.pct { font-size:.75rem; color:#666; }
+  td.lact { font-size:.75rem; color:#888; }
+
+  .zone-sep td { font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.8px;
+    padding:5px 8px 5px 14px; border-top:2px solid rgba(0,0,0,.1); }
+
+  /* zone row colors */
+  tr.z-warm   { background: var(--warm); }
+  tr.z-aero1  { background: var(--aero1); }
+  tr.z-aero2  { background: var(--aero2); }
+  tr.z-at     { background: var(--at); }
+  tr.z-vo2m   { background: var(--vo2m); }
+  tr.z-vo2ba  { background: var(--vo2ba); }
+  tr.z-lact   { background: var(--lact); }
+  tr.z-spd    { background: var(--spd); }
+
+  tr.zone-sep.z-warm  td { background:var(--warm-h);  color:#fff; }
+  tr.zone-sep.z-aero1 td { background:var(--aero1-h); color:#fff; }
+  tr.zone-sep.z-aero2 td { background:var(--aero2-h); color:#fff; }
+  tr.zone-sep.z-at    td { background:var(--at-h);    color:#fff; }
+  tr.zone-sep.z-vo2m  td { background:var(--vo2m-h);  color:#fff; }
+  tr.zone-sep.z-vo2ba td { background:var(--vo2ba-h); color:#fff; }
+  tr.zone-sep.z-lact  td { background:var(--lact-h);  color:#fff; }
+  tr.zone-sep.z-spd   td { background:var(--spd-h);   color:#fff; }
+
+  .legend { display:flex; flex-wrap:wrap; gap:8px; padding:14px 18px; border-top:1px solid #eee; }
+  .legend-item { display:flex; align-items:center; gap:5px; font-size:.72rem; color:#555; }
+  .legend-dot { width:12px; height:12px; border-radius:3px; }
+
+  @media print {
+    @page { size: A4 portrait; margin: 6mm; }
+    html, body { height:auto; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .config-card, header { display:none; }
+    .container { max-width:none; margin:0; padding:0; }
+    .output-card { box-shadow:none; border-radius:0; display:block; }
+    .print-btn { display:none; }
+
+    /* Taban degerler ~36 satirlik en yogun tabloya (100m/200m) gore
+       ayarlandi ve sayfayi tam doldurur. Daha az satirli tablolarda
+       (400m gibi) JS bu degeri --print-scale ile buyuterek bosluk
+       kalmamasini saglar. */
+    .output-header { padding:calc(9px * var(--print-scale)) calc(14px * var(--print-scale)); }
+    .output-header h3 { font-size:calc(1.35rem * var(--print-scale)); line-height:1.2; }
+    .output-header .meta { font-size:calc(.95rem * var(--print-scale)); line-height:1.3; margin-top:2px; }
+
+    .table-wrap { overflow:visible; }
+    table { font-size:calc(13.5px * var(--print-scale)); line-height:1.15; }
+    thead th { padding:calc(6px * var(--print-scale)) calc(6px * var(--print-scale)); font-size:calc(12px * var(--print-scale)); }
+    tbody tr { border-bottom:.5px solid #eee; }
+    td { padding:calc(6.5px * var(--print-scale)) calc(7px * var(--print-scale)); }
+    td:first-child { padding-left:calc(10px * var(--print-scale)); }
+    td.time { font-size:calc(14px * var(--print-scale)); }
+    td.zone-lbl, td.pct, td.lact { font-size:calc(11.5px * var(--print-scale)); }
+    .zone-sep td { padding:calc(5px * var(--print-scale)) calc(10px * var(--print-scale)); font-size:calc(11px * var(--print-scale)); border-top:1px solid rgba(0,0,0,.1); }
+
+    tr, .zone-sep { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+
+    .legend { padding:calc(10px * var(--print-scale)) calc(12px * var(--print-scale)); gap:calc(10px * var(--print-scale)); border-top:1px solid #eee; }
+    .legend-item { font-size:calc(11px * var(--print-scale)); gap:4px; }
+    .legend-dot { width:calc(10px * var(--print-scale)); height:calc(10px * var(--print-scale)); }
+  }
+  @media(max-width:600px) {
+    td, th { padding:6px 5px; font-size:.72rem; }
+    td:first-child { padding-left:8px; }
+    .generate-btn { width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+    <circle cx="18" cy="18" r="18" fill="rgba(255,255,255,0.15)"/>
+    <path d="M6 22 Q10 18 14 22 Q18 26 22 22 Q26 18 30 22" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M6 17 Q10 13 14 17 Q18 21 22 17 Q26 13 30 17" stroke="rgba(255,255,255,0.6)" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <circle cx="18" cy="10" r="3" fill="white" opacity="0.9"/>
+    <path d="M18 13 L16 20 L18 22 L20 20 Z" fill="white" opacity="0.9"/>
+  </svg>
+  <div>
+    <h1>SwimAnalyzer – Antrenman Tempo Tablosu</h1>
+    <p>Olbrecht / SwimAnalyzer 1.0 metodolojisi • Bursa Kolejliler Spor Kulübü</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- RACE DATA IMPORT -->
+  <div class="config-card" id="raceDataCard">
+    <h2>📁 Yarış Verisi (opsiyonel)</h2>
+    <div class="row" style="align-items:flex-end">
+      <div class="field" style="flex:1;min-width:220px">
+        <label>times.js Dosyası</label>
+        <input type="file" id="raceFileInput" accept=".js,.txt" onchange="handleRaceFile(event)" />
+      </div>
+      <div class="field" style="min-width:220px;display:none" id="athleteSelectWrap">
+        <label>Sporcu (Yarış Verisinden)</label>
+        <select id="athleteSelect" onchange="onAthleteSelect()">
+          <option value="">— Seç —</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" style="margin-top:10px;display:none" id="raceRecordWrap">
+      <label>Bu Branştaki Dereceler</label>
+      <select id="raceRecordSelect" onchange="onRecordSelect()"></select>
+    </div>
+    <div id="raceInfoBox" style="font-size:.78rem;color:#555;margin-top:8px;display:none"></div>
+  </div>
+
+  <!-- CONFIG -->
+  <div class="config-card">
+    <h2>Branş & Hedef Süre</h2>
+
+    <div class="row">
+      <div class="field" style="flex:1;min-width:180px">
+        <label>Sporcu Adı</label>
+        <input type="text" id="athleteName" placeholder="Ad Soyad" />
+      </div>
+      <div class="field" style="min-width:140px">
+        <label>Havuz</label>
+        <div class="pool-toggle">
+          <button class="active" onclick="setPool(50,this)">50 m</button>
+          <button onclick="setPool(25,this)">25 m</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:14px">
+      <label>Stil</label>
+      <div class="stroke-grid" id="strokeGrid">
+        <button class="stroke-btn active" onclick="setStroke('free',this)">
+          <span class="icon">🏊</span>Serbest
+        </button>
+        <button class="stroke-btn" onclick="setStroke('back',this)">
+          <span class="icon">🏊</span>Sırt
+        </button>
+        <button class="stroke-btn" onclick="setStroke('breast',this)">
+          <span class="icon">🤸</span>Kurbağa
+        </button>
+        <button class="stroke-btn" onclick="setStroke('fly',this)">
+          <span class="icon">🦋</span>Kelebek
+        </button>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:14px">
+      <label>Mesafe</label>
+      <div class="dist-grid" id="distGrid">
+        <button class="dist-btn active" onclick="setDist(100,this)">100 m</button>
+        <button class="dist-btn" onclick="setDist(200,this)">200 m</button>
+        <button class="dist-btn" id="dist400btn" onclick="setDist(400,this)">400 m</button>
+      </div>
+    </div>
+
+    <div class="row" style="align-items:flex-end">
+      <div class="field">
+        <label>Hedef Süre (D:SS.ss veya SS.ss)</label>
+        <input type="text" id="goalTime" placeholder="örn: 1:05.42 veya 65.42" style="width:200px" />
+      </div>
+      <button class="generate-btn" onclick="generate()">📊 Tabloyu Oluştur</button>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="output-card" id="outputCard">
+    <div class="output-header">
+      <div>
+        <h3 id="outTitle">–</h3>
+        <div class="meta" id="outMeta">–</div>
+      </div>
+      <button class="print-btn" onclick="window.print()">🖨 Yazdır</button>
+    </div>
+    <div class="table-wrap">
+      <table id="paceTable">
+        <thead id="paceHead"></thead>
+        <tbody id="paceBody"></tbody>
+      </table>
+    </div>
+    <div class="legend" id="legendBox"></div>
+  </div>
+
+</div>
+
+<script>
+// ─── State ─────────────────────────────────────────
+let stroke = 'free', dist = 100, pool = 50;
+
+function setPool(p, btn) {
+  pool = p;
+  btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateGoalFromRaceData();
+}
+function setStroke(s, btn) {
+  stroke = s;
+  document.querySelectorAll('.stroke-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  // 400m only for freestyle
+  const b400 = document.getElementById('dist400btn');
+  if (s !== 'free') {
+    b400.disabled = true; b400.style.opacity = '.4'; b400.style.cursor='default';
+    if (dist === 400) { dist=200; document.querySelectorAll('.dist-btn').forEach((b,i)=>{ b.classList.remove('active'); if(i===1)b.classList.add('active'); }); }
+  } else {
+    b400.disabled = false; b400.style.opacity='1'; b400.style.cursor='pointer';
+  }
+  updateGoalFromRaceData();
+}
+function setDist(d, btn) {
+  dist = d;
+  document.querySelectorAll('.dist-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateGoalFromRaceData();
+}
+
+// ─── Race data import (times.js / SPLASH2 export) ──
+let raceData = null; // { athleteName: [ {stroke,dist,pool,seconds,date,dateStr,location} ] }
+const STROKE_TR = { 'Serbest':'free', 'Sırtüstü':'back', 'Kelebek':'fly', 'Kurbağalama':'breast' };
+const STROKE_LABEL2 = { free:'Serbest', back:'Sırt', breast:'Kurbağa', fly:'Kelebek' };
+
+function parseRaceTime(s) {
+  s = s.trim().replace(',', '.');
+  const p = s.split(':');
+  if (p.length === 2) return parseFloat(p[0])*60 + parseFloat(p[1]);
+  return parseFloat(p[0]);
+}
+
+function parseRaceJS(text) {
+  const athletes = {};
+  const names = {};
+  const nameRe = /db\[(\d+)\]\[0\]="([^"]*)"/g;
+  let m;
+  while ((m = nameRe.exec(text))) names[m[1]] = m[2];
+
+  const blockRe = /db\[(\d+)\]\[1\]="([\s\S]*?)";/g;
+  const lineRe = /^(\d+)\s+(Serbest|Sırtüstü|Kelebek|Kurbağalama|Karışık)\s+(\S+)\s+(\d+)\s+(\d{1,2}\.\d{1,2}\.\d{4})\s+(\d+)m\s+(.*)$/;
+
+  while ((m = blockRe.exec(text))) {
+    const name = names[m[1]];
+    if (!name) continue;
+    const lines = m[2].split('\\n');
+    const records = [];
+    lines.forEach(raw => {
+      const line = raw.trim();
+      if (!line) return;
+      const lm = line.match(lineRe);
+      if (!lm) return;
+      const distNum = parseInt(lm[1], 10);
+      const strokeKey = STROKE_TR[lm[2]];
+      if (!strokeKey) return;              // Karışık (IM) desteklenmiyor
+      if (![100,200,400].includes(distNum)) return; // sadece anchor mesafeler
+      const [dd, mo, yy] = lm[5].split('.').map(x => parseInt(x,10));
+      records.push({
+        stroke: strokeKey,
+        dist: distNum,
+        pool: parseInt(lm[6], 10),
+        seconds: parseRaceTime(lm[3]),
+        date: new Date(yy, mo-1, dd),
+        dateStr: lm[5],
+        location: lm[7].trim(),
+      });
+    });
+    athletes[name] = records;
+  }
+  return athletes;
+}
+
+function handleRaceFile(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    let text;
+    try {
+      text = new TextDecoder('windows-1254').decode(new Uint8Array(e.target.result));
+    } catch (err) {
+      text = new TextDecoder('utf-8').decode(new Uint8Array(e.target.result));
+    }
+    raceData = parseRaceJS(text);
+    const names = Object.keys(raceData).sort((a,b)=>a.localeCompare(b,'tr'));
+    const sel = document.getElementById('athleteSelect');
+    sel.innerHTML = '<option value="">— Seç —</option>' +
+      names.map(n => `<option value="${n}">${n}</option>`).join('');
+    document.getElementById('athleteSelectWrap').style.display = '';
+    const box = document.getElementById('raceInfoBox');
+    box.style.display = '';
+    box.textContent = names.length
+      ? `${names.length} sporcu yüklendi. Yukarıdan seç, hedef süre otomatik gelsin.`
+      : 'Dosyada tanınan sporcu bulunamadı.';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function onAthleteSelect() {
+  const name = document.getElementById('athleteSelect').value;
+  document.getElementById('athleteName').value = name;
+  updateGoalFromRaceData();
+}
+
+function updateGoalFromRaceData() {
+  if (!raceData) return;
+  const sel = document.getElementById('athleteSelect');
+  const name = sel ? sel.value : '';
+  const box = document.getElementById('raceInfoBox');
+  const recWrap = document.getElementById('raceRecordWrap');
+  const recSel = document.getElementById('raceRecordSelect');
+  if (!name || !raceData[name]) { recWrap.style.display='none'; return; }
+
+  const matches = raceData[name].filter(r => r.stroke===stroke && r.dist===dist && r.pool===pool);
+  box.style.display = '';
+  if (!matches.length) {
+    recWrap.style.display = 'none';
+    box.textContent = `${name} için ${dist}m ${STROKE_LABEL2[stroke]} (${pool}m havuz) kaydı bulunamadı — süreyi elle gir.`;
+    return;
+  }
+  matches.sort((a,b) => b.date - a.date);
+  recSel.innerHTML = matches.map((r,i) =>
+    `<option value="${i}">${r.dateStr} — ${fmt(r.seconds)} — ${r.location}</option>`
+  ).join('');
+  recWrap.style.display = '';
+  recSel.dataset.matches = JSON.stringify(matches.map(r=>({seconds:r.seconds, dateStr:r.dateStr, location:r.location})));
+  recSel.selectedIndex = 0;
+  onRecordSelect();
+}
+
+function onRecordSelect() {
+  const recSel = document.getElementById('raceRecordSelect');
+  const matches = JSON.parse(recSel.dataset.matches || '[]');
+  const r = matches[recSel.selectedIndex];
+  if (!r) return;
+  document.getElementById('goalTime').value = fmt(r.seconds);
+  document.getElementById('raceInfoBox').textContent = `Seçilen: ${r.dateStr} · ${r.location} — ${fmt(r.seconds)}`;
+}
+
+// ─── Time helpers ───────────────────────────────────
+function parseTime(s) {
+  s = s.trim().replace(',','.');
+  const p = s.split(':');
+  if (p.length === 2) return parseFloat(p[0])*60 + parseFloat(p[1]);
+  return parseFloat(p[0]);
+}
+function fmt(sec, showMs=true) {
+  if (!isFinite(sec) || sec <= 0) return '–';
+  sec = Math.round(sec*100)/100; // hundredths'e yuvarlayip tasma hatasini onle
+  const m = Math.floor(sec/60 + 1e-9);
+  const s = sec - m*60;
+  if (m===0) return showMs ? s.toFixed(2) : String(Math.round(s));
+  let ss = Math.floor(s + 1e-9);
+  let ms = Math.round((s-ss)*100);
+  if (ms >= 100) { ms = 0; ss += 1; }
+  let mm = m;
+  if (ss >= 60) { ss -= 60; mm += 1; }
+  if (!showMs) return `${mm}:${String(ss).padStart(2,'0')}`;
+  return `${mm}:${String(ss).padStart(2,'0')}.${String(ms).padStart(2,'0')}`;
+}
+
+// ─── Event config ───────────────────────────────────
+const CFG = {
+  // 100m: [split50_factor, f200, f400, f800]   (split50 = anchor/2 × factor)
+  '100-free':   [0.971, 1.06, 1.08, 1.10],
+  '100-back':   [0.971, 1.06, 1.08, 1.10],
+  '100-breast': [0.971, 1.065,1.09, 1.12],
+  '100-fly':    [0.971, 1.07, 1.10, 1.15],
+  // 200m: [split50_factor, f100, f400, f800]   (split50 = anchor/4 × factor)
+  '200-free':   [0.9525, 1.03, 1.07, 1.09],
+  '200-back':   [0.9525, 1.03, 1.07, 1.09],
+  '200-breast': [0.9525, 1.03, 1.075,1.09],
+  '200-fly':    [0.9525, 1.03, 1.08, 1.12],
+  // 400m: [split50_factor, f100, f200, f800]   (split50 = anchor/8 × factor)
+  '400-free':   [0.9415, 1.03, 1.05, 1.08],
+};
+
+// Pct ladders (% above goal time)
+const PCT100 = (() => { const a=[]; for(let p=52;p>=4;p-=2) a.push(p); return a; })();
+// 52,50,48,...,4  → 25 values
+const PCT200 = (() => { const a=[]; for(let p=33;p>=3;p-=1.5) a.push(parseFloat(p.toFixed(1))); return a; })();
+// 33,31.5,...,3  → 21 values
+const PCT400 = (() => { const a=[]; for(let p=21;p>=3;p-=1) a.push(p); return a; })();
+// 21,20,...,3  → 19 values
+
+// Zone classifier (returns zone key given pct value and dist)
+// Boundaries match the original spreadsheet exactly: each zone spans 4 ladder
+// steps and shares its lower boundary row with the next zone. There is NO
+// separate warm-up zone — the table starts directly in Aero 1.
+function getZone(pct, d) {
+  if (d===100) {
+    // ladder: 52..4 step2   |  zones span 8% each
+    if (pct>=44) return 'aero1';
+    if (pct>=36) return 'aero2';
+    if (pct>=28) return 'at';
+    if (pct>=20) return 'vo2m';
+    if (pct>=12) return 'vo2ba';
+    return 'lact';
+  }
+  if (d===200) {
+    // ladder: 33..3 step1.5  |  zones span 6% each (Lactate begins in cascade)
+    if (pct>=27) return 'aero1';
+    if (pct>=21) return 'aero2';
+    if (pct>=15) return 'at';
+    if (pct>=9)  return 'vo2m';
+    return 'vo2ba';
+  }
+  if (d===400) {
+    // ladder: 21..3 step1  |  zones span 4% each (Lactate begins in cascade)
+    if (pct>=17) return 'aero1';
+    if (pct>=13) return 'aero2';
+    if (pct>=9)  return 'at';
+    if (pct>=5)  return 'vo2m';
+    return 'vo2ba';
+  }
+}
+
+const ZONE_LABELS = {
+  aero1: 'Aero 1',
+  aero2: 'Aero 2',
+  at:    'Anaerobik Eşik',
+  vo2m:  'VO₂ (Karma)',
+  vo2ba: 'VO₂ (En İyi Ort.)',
+  lact:  'Laktat',
+  spd:   'Hız',
+};
+const ZONE_TR = { warm:'z-warm',aero1:'z-aero1',aero2:'z-aero2',at:'z-at',vo2m:'z-vo2m',vo2ba:'z-vo2ba',lact:'z-lact',spd:'z-spd' };
+const ZONE_COLORS = { warm:'#f5f5f5',aero1:'#b3e5fc',aero2:'#b2dfdb',at:'#fff9c4',vo2m:'#ffe0b2',vo2ba:'#ffccbc',lact:'#ef9a9a',spd:'#e1bee7' };
+
+// Lactate range per zone (start value at top of zone, end value at boundary
+// shared with next zone) — matches the source table's two-value-per-zone display.
+const ZONE_LACT_RANGE = {
+  aero1: [0.1, 2],
+  aero2: [2, 3.5],
+  at:    [3.5, 5.5],
+  vo2m:  [5.5, 7.5],
+  vo2ba: [7.5, 11],
+  lact:  [11, 16],
+  spd:   ['> 16', '> 16'],
+};
+
+// Row-index [start,end] bounds per zone — every zone owns exactly 4 new rows
+// (Aero1 owns 5, since it has no previous zone to share a boundary with).
+// Used to know which of a zone's two lactate values a given row falls under.
+function idxRangeForZone(zoneKey) {
+  const zi = ZONE_ORDER_G.indexOf(zoneKey);
+  if (zi <= 0) return [0,4];
+  const start = 5+(zi-1)*4;
+  return [start, start+3];
+}
+const ZONE_ORDER_G = ['aero1','aero2','at','vo2m','vo2ba','lact','spd'];
+
+function getLact(idx, zone) {
+  const range = idxRangeForZone(zone);
+  const lact = ZONE_LACT_RANGE[zone];
+  if (!range || !lact) return '';
+  const mid = (range[0] + range[1]) / 2;
+  return idx <= mid ? lact[0] : lact[1];
+}
+// ─── Main generator ─────────────────────────────────
+function generate() {
+  const gtStr = document.getElementById('goalTime').value;
+  if (!gtStr) { alert('Lütfen hedef süreyi girin.'); return; }
+  const goalSec = parseTime(gtStr);
+  if (isNaN(goalSec)||goalSec<=0) { alert('Geçersiz süre formatı. Örn: 1:05.42 veya 65.42'); return; }
+
+  const athlete = document.getElementById('athleteName').value || '–';
+  const key = `${dist}-${stroke}`;
+  const cfg = CFG[key];
+  if (!cfg) { alert('Bu branş desteklenmiyor.'); return; }
+
+  const strokeNames = { free:'Serbest', back:'Sırt', breast:'Kurbağa', fly:'Kelebek' };
+  const sName = strokeNames[stroke];
+
+  // Build pct array
+  let pcts = dist===100 ? PCT100 : dist===200 ? PCT200 : PCT400;
+
+  // Orijinal Excel'de yogunluk arttikca uzun mesafe hedefleri kaldiriliyor
+  // (asiri tempoda 400/800m yuzmek anlamli olmadigi icin). Asagidaki indeksler
+  // (0-tabanli, kapsayici ust sinir) formul varligina bakilarak cikarildi.
+  const CUTOFF = {
+    100: { r200: 20, r400: 16, r800: 12 },
+    200: { r400: 16, r800: 12 },
+    400: { r200: 20, r100: 24, r800: 15 },
+  };
+  const cut = CUTOFF[dist] || {};
+
+  // Zon sinirlari satir INDEKSINE gore belirlenir, yuzdeye gore degil.
+  // Orijinal tabloda her zon tam 4 YENI satir ekler (Aero1 5 satirla
+  // baslar, cunku ondan once paylasilacak bir sinir yoktur). %-tablosu
+  // tukendiginde (orn. 400m etkinliklerde VO2 En Iyi Ortalama bolgesinin
+  // ortasinda), kaynaktaki gibi ayni x97.96% kademeyle devam edilir --
+  // boylece her zon, formul bitmis olsa bile dogru satir sayisina ulasir.
+  const TOTAL_ROWS = 29;
+  const ZONE_ORDER = ['aero1','aero2','at','vo2m','vo2ba','lact','spd'];
+  function zoneForIndex(idx) {
+    if (idx < 5) return 'aero1';
+    const bi = 1 + Math.floor((idx-5)/4);
+    return ZONE_ORDER[Math.min(bi, ZONE_ORDER.length-1)];
+  }
+
+  // Build rows
+  const rows = [];
+  let lastL = null;
+
+  for (let idx = 0; idx < TOTAL_ROWS; idx++) {
+    const zone = zoneForIndex(idx);
+    const pct = idx < pcts.length ? pcts[idx] : null;
+    let r50, r100, r200, r400, r800, anchorVal = null;
+
+    if (pct !== null) {
+      anchorVal = goalSec*(1+pct/100);
+      if (dist===100) r50 = (anchorVal/2)*cfg[0];
+      if (dist===200) r50 = (anchorVal/4)*cfg[0];
+      if (dist===400) r50 = (anchorVal/8)*cfg[0];
+    } else {
+      r50 = lastL*0.9796;
+    }
+    lastL = r50;
+
+    if (dist===100) {
+      r100 = pct!==null ? anchorVal : null;
+      r200 = idx>cut.r200 ? null : r50*4*cfg[1];
+      r400 = idx>cut.r400 ? null : r50*8*cfg[2];
+      r800 = idx>cut.r800 ? null : r50*16*cfg[3];
+    }
+    if (dist===200) {
+      r100 = r50*2*cfg[1];
+      r200 = pct!==null ? anchorVal : null;
+      r400 = idx>cut.r400 ? null : r50*8*cfg[2];
+      r800 = idx>cut.r800 ? null : r50*16*cfg[3];
+    }
+    if (dist===400) {
+      r100 = idx>cut.r100 ? null : r50*2*cfg[1];
+      r200 = idx>cut.r200 ? null : r50*4*cfg[2];
+      r400 = pct!==null ? anchorVal : null;
+      r800 = idx>cut.r800 ? null : r50*16*cfg[3];
+    }
+
+    rows.push({ pct, zone, lact:getLact(idx,zone), r50, r100, r200, r400, r800, anchor:`r${dist}`, cascade: pct===null });
+  }
+
+  // ─── Render header ───
+  const anchorCol = `r${dist}`;
+  const thead = document.getElementById('paceHead');
+  thead.innerHTML = `<tr>
+    <th>Zon</th>
+    <th>mmol/L</th>
+    <th>%Hedef üstü</th>
+    <th>50 m</th>
+    <th class="${anchorCol==='r100'?'anchor':''}">100 m</th>
+    <th class="${anchorCol==='r200'?'anchor':''}">200 m</th>
+    <th class="${anchorCol==='r400'?'anchor':''}">400 m</th>
+    <th>800 m</th>
+  </tr>`;
+
+  // ─── Render body ───
+  const tbody = document.getElementById('paceBody');
+  tbody.innerHTML = '';
+  let currentZone = null;
+
+  rows.forEach(row => {
+    // Zone separator
+    if (row.zone !== currentZone) {
+      currentZone = row.zone;
+      const sep = document.createElement('tr');
+      sep.className = `zone-sep ${ZONE_TR[row.zone]}`;
+      sep.innerHTML = `<td colspan="8">${ZONE_LABELS[row.zone]}</td>`;
+      tbody.appendChild(sep);
+    }
+
+    const tr = document.createElement('tr');
+    tr.className = ZONE_TR[row.zone];
+    const pctLabel = row.pct !== null ? `+${row.pct}%` : '↘';
+
+    const td = (val, isAnchor) =>
+      `<td class="time${isAnchor?' anchor':''}">${val !== null ? fmt(val) : '–'}</td>`;
+
+    tr.innerHTML = `
+      <td></td>
+      <td class="lact">${row.lact??''}</td>
+      <td class="pct">${pctLabel}</td>
+      ${td(row.r50, false)}
+      ${td(row.r100, anchorCol==='r100')}
+      ${td(row.r200, anchorCol==='r200')}
+      ${td(row.r400, anchorCol==='r400')}
+      ${td(row.r800, false)}
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // ─── Print scale: buyuk tablolar icin kucult, kucuk tablolar icin
+  // buyuterek sayfayi tam doldur (yazdirirken bosluk kalmasin). ───
+  const totalPrintRows = tbody.children.length + 1; // +1 = thead
+  const BASELINE_ROWS = 37; // en yogun tablo (100m/200m) icin ayarlanan taban
+  let printScale = BASELINE_ROWS / totalPrintRows;
+  printScale = Math.max(0.82, Math.min(1.35, printScale));
+  document.documentElement.style.setProperty('--print-scale', printScale.toFixed(3));
+
+  // ─── Output header ───
+  document.getElementById('outTitle').textContent =
+    `${dist}m ${sName} (${pool}m Havuz)`;
+  document.getElementById('outMeta').textContent =
+    `${athlete} · Hedef: ${fmt(goalSec)} · Oluşturuldu: ${new Date().toLocaleDateString('tr-TR')}`;
+
+  // ─── Legend ───
+  const legendBox = document.getElementById('legendBox');
+  legendBox.innerHTML = Object.entries(ZONE_LABELS).map(([k,v])=>
+    `<div class="legend-item">
+      <div class="legend-dot" style="background:${ZONE_COLORS[k]}"></div>
+      <span>${v}</span>
+    </div>`
+  ).join('');
+
+  document.getElementById('outputCard').classList.add('visible');
+  document.getElementById('outputCard').scrollIntoView({behavior:'smooth', block:'start'});
+}
+</script>
+</body>
+</html>
