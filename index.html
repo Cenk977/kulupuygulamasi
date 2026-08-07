@@ -8,7 +8,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Sezon Öncesi Değerlendirme Panosu</title>
+<title>Kulüp Performans Sistemi</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 
@@ -1036,11 +1036,11 @@ td.sp-empty{color:#c3ccd1;}
 
       <div>
 
-        <span class="lap-no">ADIM 01–02</span>
+        <span class="lap-no">BURSA KOLEJLİLER SPOR KULÜBÜ</span>
 
-        <h1>Sezon Öncesi<br>Değerlendirme Panosu</h1>
+        <h1>Kulüp<br>Performans Sistemi</h1>
 
-        <p class="sub">Makrosiklus periyodizasyonundan önce: antrenman geçmişi, mevcut performans düzeyi ve sezon hedeflerinin sporcu bazında kaydı.</p>
+        <p class="sub">Antrenman geçmişi, performans değerlendirmesi, yoklama ve sezon planlamasının sporcu bazında tek panoda takibi.</p>
 
       </div>
 
@@ -1082,6 +1082,8 @@ td.sp-empty{color:#c3ccd1;}
     <button class="mode-tab" data-mode="sezonplan">Sezon Planı</button>
 
     <button class="mode-tab" data-mode="swim">SwimAnalyzer</button>
+
+    <button class="mode-tab" data-mode="hedefderece">Hedef Derece</button>
   </div>
 
 
@@ -1982,6 +1984,12 @@ td.sp-empty{color:#c3ccd1;}
 
 <div id="modeSwimAnalyzer" style="display:none;">
   <iframe id="swimAnalyzerFrame" title="SwimAnalyzer"
+    style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
+  </iframe>
+</div>
+
+<div id="modeHedefDerece" style="display:none;">
+  <iframe id="hedefDereceFrame" title="Hedef Derece Hesaplayıcı"
     style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
   </iframe>
 </div>
@@ -3286,6 +3294,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
 
     document.getElementById('modeSwimAnalyzer').style.display = (mode==='swim') ? '' : 'none';
 
+    document.getElementById('modeHedefDerece').style.display = (mode==='hedefderece') ? '' : 'none';
+
     if(mode==='attendance') initAttendanceMode();
 
     if(mode==='bulkAtt') initBulkAttMode();
@@ -3297,6 +3307,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
     if(mode==='sezonplan') initSezonplanMode();
 
     if(mode==='swim') initSwimAnalyzerMode();
+
+    if(mode==='hedefderece') initHedefDereceMode();
 
   });
 
@@ -7169,6 +7181,15 @@ function initSwimAnalyzerMode(){
   if(swimAnalyzerLoaded) return;
   const frame = document.getElementById('swimAnalyzerFrame');
   if(frame){ frame.src = 'swimanalyzer.html'; swimAnalyzerLoaded = true; }
+}
+
+/* Hedef Derece Hesaplayıcı sekmesi: SwimAnalyzer ile aynı lazy-load iframe
+   deseni. hedefderece.html bu index.html ile AYNI klasorde olmasi gerekir. */
+let hedefDereceLoaded = false;
+function initHedefDereceMode(){
+  if(hedefDereceLoaded) return;
+  const frame = document.getElementById('hedefDereceFrame');
+  if(frame){ frame.src = 'hedefderece.html'; hedefDereceLoaded = true; }
 }
 
 /* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
