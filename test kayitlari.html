@@ -353,8 +353,13 @@ function $(sel){ return document.querySelector(sel); }
    0) FIREBASE (opsiyonel — boş bırakılırsa localStorage kullanılır)
    ========================================================= */
 const FIREBASE_CONFIG = {
-  // apiKey: "...", authDomain: "...", projectId: "...", ...
-  // index.html'deki firebaseConfig'i buraya yapıştır.
+  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
+  authDomain:        "bursa-kolejliler.firebaseapp.com",
+  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "bursa-kolejliler",
+  storageBucket:     "bursa-kolejliler.firebasestorage.app",
+  messagingSenderId: "905222390930",
+  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
 };
 const DOC_PATH = { collection: "kulup_verileri", doc: "antrenman_test_kayitlari_manuel" };
 
