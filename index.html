@@ -7225,6 +7225,19 @@ new MutationObserver(mutations => {
 
 </script>
 
+
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  const tabs=document.querySelector('.mode-tabs,.lanes');
+  if(!tabs) return;
+  const b=document.createElement('button');
+  b.className='mode-tab lane-btn';
+  b.innerHTML='🧪 Test Kayıtları';
+  b.onclick=function(){ window.location.href='testkayitlari.html'; };
+  tabs.appendChild(b);
+});
+</script>
+
 </body>
 
 </html>
