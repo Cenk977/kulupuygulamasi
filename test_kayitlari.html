@@ -87,22 +87,7 @@
   }
   .empty-side{padding:16px 12px; font-size:12.5px; color:#8a97a0; line-height:1.5;}
 
-  main{flex:1; padding:22px 26px; overflow-x:auto; min-width:0;}
-  .mobile-back-btn{display:none;}
-
-  /* ── Telefon / dar ekran: sidebar ile içerik aynı anda sıkışmasın.
-     Bir protokol seçilince menü kaybolur, içerik tam genişlik olur,
-     üstteki "← Geri" ile listeye dönülür. ────────────────────────── */
-  @media (max-width: 820px){
-    .layout{ flex-direction:column; min-height:auto; }
-    nav.sidebar{ width:100%; border-right:none; border-bottom:1px solid var(--line); max-height:none; }
-    main{ padding:14px; }
-    .layout.has-selection nav.sidebar{ display:none; }
-    .layout:not(.has-selection) main{ display:none; }
-    .mobile-back-btn{ display:inline-flex !important; }
-    header{ padding:12px 14px; }
-    header h1{ font-size:16px; }
-  }
+  main{flex:1; padding:22px 26px; overflow-x:auto;}
   .panel-head{
     display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap;
     gap:12px; margin-bottom:16px;
@@ -234,11 +219,10 @@
     <span class="meta" id="rosterStatus" style="display:none;"></span>
     <button class="btn btn-ghost" id="btnRosterMgmt">👥 Sporcu Ekle / Çıkar</button>
     <button class="btn btn-ghost" id="btnCompareOpen">⚖ Karşılaştır</button>
-    <button class="btn btn-ghost" id="btnAthleteProgressOpen">📈 Sporcu Gelişimi</button>
   </div>
 </header>
 
-<div class="layout" id="mainLayout">
+<div class="layout">
   <nav class="sidebar">
     <div class="side-title">Protokoller</div>
     <button class="btn btn-line" id="btnAddReady" style="width:100%; margin-bottom:6px; justify-content:center;">＋ Hazır Protokol Ekle</button>
@@ -359,32 +343,6 @@
   </div>
 </div>
 
-<!-- Athlete progress / development modal -->
-<div class="overlay" id="athleteProgressOverlay">
-  <div class="modal" style="max-width:920px;">
-    <h3>Sporcu Gelişimi</h3>
-    <div style="font-size:12.5px; color:#647680; margin:-6px 0 12px;">
-      Bir sporcu seç, sonra belirli bir protokolünü ya da tüm testlerinin özetini incele.
-    </div>
-    <div class="field-row" style="align-items:flex-end;">
-      <div class="field" style="flex:1; min-width:200px;">
-        <label>Sporcu</label>
-        <select id="apAthlete" style="width:100%;"></select>
-      </div>
-      <div class="field" style="flex:1; min-width:200px;">
-        <label>Protokol</label>
-        <select id="apProto" style="width:100%;"></select>
-      </div>
-    </div>
-    <div id="apResultWrap" style="margin-top:14px;"></div>
-    <div class="modal-actions">
-      <button class="btn btn-ghost" id="btnPdfAthleteProgress" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);" disabled>⬇ PDF İndir</button>
-      <button class="btn btn-ghost" id="btnPrintAthleteProgress" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);" disabled>🖨 Yazdır</button>
-      <button class="btn btn-line" id="btnCloseAthleteProgress">Kapat</button>
-    </div>
-  </div>
-</div>
-
 <!-- Printable area (populated on demand, shown only via print CSS) -->
 <div class="print-only" id="printArea"></div>
 
@@ -395,13 +353,8 @@ function $(sel){ return document.querySelector(sel); }
    0) FIREBASE (opsiyonel — boş bırakılırsa localStorage kullanılır)
    ========================================================= */
 const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
-  authDomain:        "bursa-kolejliler.firebaseapp.com",
-  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:         "bursa-kolejliler",
-  storageBucket:     "bursa-kolejliler.firebasestorage.app",
-  messagingSenderId: "905222390930",
-  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
+  // apiKey: "...", authDomain: "...", projectId: "...", ...
+  // index.html'deki firebaseConfig'i buraya yapıştır.
 };
 const DOC_PATH = { collection: "kulup_verileri", doc: "antrenman_test_kayitlari_manuel" };
 
@@ -413,25 +366,8 @@ try{
   }
 }catch(e){ console.warn("Firebase başlatılamadı, localStorage kullanılacak.", e); }
 
-// Bu araç index.html içine <iframe> olarak yerleştirildiğinde, verilerini
-// index.html'in KENDİ, Google girişiyle kimliklenmiş veritabanı köprüsü
-// (window.parent.storage — Realtime Database, aynı UID) üzerinden saklar.
-// Bu, sporcu listesinin (roster_v1) zaten kullandığı ve güvenilir şekilde
-// çalıştığı KANITLANMIŞ kanaldır. Yalnızca bu dosya bağımsız (index.html
-// dışında) açılırsa, ayrı Firebase/localStorage yedeğine düşer.
-function parentStorageAvailable(){
-  try{ return !!(window.parent && window.parent !== window && window.parent.storage); }catch(e){ return false; }
-}
-const MANUAL_KEY = 'test_kayitlari_manuel_v1';
-
 const Storage = {
   async load(){
-    if (parentStorageAvailable()){
-      try{
-        const res = await window.parent.storage.get(MANUAL_KEY);
-        return res && res.value ? JSON.parse(res.value) : null;
-      }catch(e){ console.warn('Ana uygulama deposundan okunamadı, yedeğe geçiliyor:', e); }
-    }
     if (db){
       const snap = await db.collection(DOC_PATH.collection).doc(DOC_PATH.doc).get();
       return snap.exists ? snap.data() : null;
@@ -441,12 +377,6 @@ const Storage = {
   },
   async save(payload){
     const record = { payload, updatedAt: new Date().toISOString() };
-    if (parentStorageAvailable()){
-      try{
-        await window.parent.storage.set(MANUAL_KEY, JSON.stringify(record));
-        return;
-      }catch(e){ console.warn('Ana uygulama deposuna yazılamadı, yedeğe geçiliyor:', e); }
-    }
     if (db){
       await db.collection(DOC_PATH.collection).doc(DOC_PATH.doc).set(record);
       return;
@@ -860,9 +790,7 @@ function descLineFor(t){
 
 function renderManualMain(){
   const main = $('#manualMain');
-  const layoutEl = $('#mainLayout');
   if(!ACTIVE_PROTO){
-    if(layoutEl) layoutEl.classList.remove('has-selection');
     main.innerHTML = `<div class="empty-main">
       <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#0f7c8c" stroke-width="1.4"><path d="M4 4h16v16H4z" stroke-opacity=".4"/><path d="M8 10l2 2 4-5"/></svg>
       <h3 style="color:var(--navy); margin:10px 0 4px;">Bir protokol seç ya da yeni ekle</h3>
@@ -870,10 +798,8 @@ function renderManualMain(){
     </div>`;
     return;
   }
-  if(layoutEl) layoutEl.classList.add('has-selection');
   const t = ACTIVE_PROTO;
-  let html = `<button class="btn btn-line mobile-back-btn" id="btnBackToList" style="margin-bottom:12px;">← Protokol Listesi</button>
-  <div class="panel-head">
+  let html = `<div class="panel-head">
     <div><h2>${t.name}</h2><div class="sub">${descLineFor(t)}</div></div>
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
@@ -888,7 +814,6 @@ function renderManualMain(){
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
 
-  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; renderProtoList(); renderManualMain(); };
   $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
@@ -1402,14 +1327,7 @@ function computeAvg(t, row, steps){
     });
     return { text: parts.length ? parts.join(' · ') : '–', sec:null };
   }
-  return computeAyakAvg(row); // ayak
-}
-function computeAyakAvg(row){
-  // Ayak testinde tek bir "ortalama" anlamlı değil (4 farklı mesafe);
-  // gelişim takibi için en uzun mesafeyi (400m) temsili metrik alıyoruz.
-  const sec = parseTimeStr(row.d400);
-  if(sec===null) return { text:'–', sec:null };
-  return { text: `${fmtTime(sec)} (400m)`, sec };
+  return { text:'–', sec:null }; // ayak
 }
 
 function updateRowAvg(rowId){
@@ -1725,218 +1643,17 @@ $('#btnPdfCompare').onclick = ()=>{
 };
 
 /* =========================================================
-   SPORCU GELİŞİMİ — bir sporcuyu seçip, belirli bir protokolde
-   ya da tüm testlerinde zaman içindeki gelişimini gösterir.
-   ========================================================= */
-function protocolsForAthlete(athlete){
-  const ids = new Set();
-  MANUAL.sessions.forEach(s=>{ if((s.athletes||[]).some(a=>a.athlete===athlete)) ids.add(s.templateId); });
-  return MANUAL.templates.filter(t=> ids.has(t.id));
-}
-function athleteEntriesForProto(athlete, protoId){
-  return MANUAL.sessions
-    .filter(s=> s.templateId===protoId && (s.athletes||[]).some(a=>a.athlete===athlete))
-    .sort((a,b)=> a.date.localeCompare(b.date))
-    .map(s=> ({ session:s, row: s.athletes.find(a=>a.athlete===athlete) }));
-}
-function apDisableButtons(){ $('#btnPrintAthleteProgress').disabled = true; $('#btnPdfAthleteProgress').disabled = true; }
-function apEnableButtons(){ $('#btnPrintAthleteProgress').disabled = false; $('#btnPdfAthleteProgress').disabled = false; }
-
-function populateApAthletes(){
-  const sel = $('#apAthlete');
-  const names = knownAthletes();
-  sel.innerHTML = names.length ? names.map(n=>`<option value="${n}">${n}</option>`).join('') : `<option value="">Kayıt yok</option>`;
-}
-function populateApProtos(){
-  const athlete = $('#apAthlete').value;
-  const sel = $('#apProto');
-  const protos = protocolsForAthlete(athlete);
-  if(!protos.length){ sel.innerHTML = `<option value="">Bu sporcu için kayıt yok</option>`; return; }
-  sel.innerHTML = `<option value="__all__">Tüm Protokoller (özet)</option>` +
-    protos.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
-}
-
-// Basit, kütüphanesiz SVG çizgi grafiği: zaman içindeki temsili
-// ortalamayı gösterir. Süre düştükçe (hızlandıkça) çizgi yukarı çıkar.
-function renderTrendSvg(points, paceMode){
-  const w = 720, h = 170, padL=46, padR=16, padT=14, padB=28;
-  const secs = points.map(p=>p.sec);
-  let min = Math.min(...secs), max = Math.max(...secs);
-  if(min===max){ min -= 1; max += 1; }
-  const xPos = i => padL + (points.length===1 ? 0 : (i/(points.length-1)) * (w-padL-padR));
-  const yPos = sec => padT + (1 - (sec-min)/(max-min)) * (h-padT-padB);
-  const pathD = points.map((p,i)=> `${i===0?'M':'L'} ${xPos(i).toFixed(1)} ${yPos(p.sec).toFixed(1)}`).join(' ');
-  const first = points[0].sec, last = points[points.length-1].sec;
-  const improved = last < first;
-  const worse = last > first;
-  const dotColor = improved ? '#1a8a4a' : (worse ? '#c0392b' : '#7a8a94');
-
-  const step = Math.max(1, Math.ceil(points.length/8));
-  const dots = points.map((p,i)=> `<circle cx="${xPos(i).toFixed(1)}" cy="${yPos(p.sec).toFixed(1)}" r="3.4" fill="${i===points.length-1?dotColor:'#0f7c8c'}"/>`).join('');
-  const labels = points.map((p,i)=>{
-    if(i%step!==0 && i!==points.length-1) return '';
-    return `<text x="${xPos(i).toFixed(1)}" y="${h-9}" font-size="9" fill="#7a8a94" text-anchor="middle">${new Date(p.date).toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'})}</text>`;
-  }).join('');
-
-  const deltaTxt = fmtDelta(last-first);
-  const deltaColor = improved ? '#1a8a4a' : (worse ? '#c0392b' : '#7a8a94');
-  const deltaLabel = improved ? '(hızlandı)' : (worse ? '(yavaşladı)' : '(değişim yok)');
-
-  return `<div style="border:1px solid var(--line); border-radius:8px; padding:10px 8px 4px; background:#fff;">
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:0 6px 6px; flex-wrap:wrap; gap:6px;">
-      <span style="font-size:11.5px; color:#647680; font-weight:600;">${paceMode ? 'Ortalama Pace/100 Trendi' : 'Temsili Süre Trendi'}</span>
-      <span style="font-size:12px; font-weight:700; color:${deltaColor};">İlk → Son: ${deltaTxt} ${deltaLabel}</span>
-    </div>
-    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
-      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="var(--line)"/>
-      <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="var(--line)"/>
-      <path d="${pathD}" fill="none" stroke="#0f7c8c" stroke-width="2"/>
-      ${dots}
-      ${labels}
-      <text x="${(padL-6).toFixed(1)}" y="${(yPos(max)+4).toFixed(1)}" font-size="9" fill="#7a8a94" text-anchor="end">${fmtTime(max)}</text>
-      <text x="${(padL-6).toFixed(1)}" y="${(yPos(min)+4).toFixed(1)}" font-size="9" fill="#7a8a94" text-anchor="end">${fmtTime(min)}</text>
-    </svg>
-  </div>`;
-}
-
-function renderAthleteAllProtocolsSummary(athlete, wrap){
-  const protos = protocolsForAthlete(athlete);
-  if(!protos.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için henüz hiç test kaydı yok.</div>`; apDisableButtons(); return; }
-  let html = `<h4 style="color:var(--navy); margin:0 0 10px;">${athlete} — Tüm Testler</h4>
-  <div style="overflow-x:auto;"><table class="detail-table"><tr><th>Protokol</th><th>Kayıt Sayısı</th><th>İlk Tarih</th><th>Son Tarih</th><th>Son Sonuç</th></tr>`;
-  protos.forEach(t=>{
-    const entries = athleteEntriesForProto(athlete, t.id);
-    if(!entries.length) return;
-    const first = entries[0], last = entries[entries.length-1];
-    const steps = t.family==='rpset' ? (last.session.steps||[]) : undefined;
-    const lastAvg = computeAvg(t, last.row, steps).text;
-    html += `<tr>
-      <td class="who" style="cursor:pointer; color:var(--pool); text-decoration:underline;" data-goto-proto="${t.id}">${t.name}</td>
-      <td>${entries.length}</td>
-      <td>${new Date(first.session.date).toLocaleDateString('tr-TR')}</td>
-      <td>${new Date(last.session.date).toLocaleDateString('tr-TR')}</td>
-      <td style="font-weight:700; color:var(--navy-2);">${lastAvg}</td>
-    </tr>`;
-  });
-  html += `</table></div>
-  <div style="font-size:11px; color:#8a97a0; margin-top:8px;">Protokol adına tıklayarak o testteki tam gelişim geçmişini ve grafiğini görebilirsin.</div>`;
-  wrap.innerHTML = html;
-  wrap.querySelectorAll('[data-goto-proto]').forEach(el=>{
-    el.onclick = ()=>{ $('#apProto').value = el.dataset.gotoProto; renderAthleteProgress(); };
-  });
-  $('#apResultWrap').dataset.title = `${athlete} — Tüm Testler Özeti`;
-  apEnableButtons();
-}
-
-function renderAthleteProtocolDetail(athlete, protoId, wrap){
-  const t = MANUAL.templates.find(x=>x.id===protoId);
-  if(!t){ wrap.innerHTML = ''; apDisableButtons(); return; }
-  const entries = athleteEntriesForProto(athlete, protoId);
-  if(!entries.length){ wrap.innerHTML = `<div class="empty-side">Bu protokolde bu sporcu için kayıt yok.</div>`; apDisableButtons(); return; }
-
-  let html = `<h4 style="color:var(--navy); margin:0 0 4px;">${athlete} — ${t.name}</h4>
-  <div style="font-size:12px; color:#647680; margin-bottom:10px;">${entries.length} kayıt · ${new Date(entries[0].session.date).toLocaleDateString('tr-TR')} → ${new Date(entries[entries.length-1].session.date).toLocaleDateString('tr-TR')}</div>`;
-
-  const trendPoints = [];
-  entries.forEach(e=>{
-    const steps = t.family==='rpset' ? (e.session.steps||[]) : undefined;
-    const avg = computeAvg(t, e.row, steps);
-    if(avg.sec!==null) trendPoints.push({ date:e.session.date, sec:avg.sec });
-  });
-  if(trendPoints.length>=2) html += renderTrendSvg(trendPoints, t.family==='kumulatif');
-
-  html += `<div style="overflow-x:auto; margin-top:10px;"><table class="detail-table"><tr><th>Tarih</th>`;
-  if(t.family==='rpset'){
-    html += `<th>Set Özeti</th><th>Basamak Ortalamaları</th></tr>`;
-    entries.forEach(e=>{
-      const steps = e.session.steps || [];
-      const summary = steps.map((s,si)=> `B${si+1}: ${s.reps}x${s.dist}m ${s.branch||s.desc||'Serbest'}`).join('<br>');
-      html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>
-        <td style="font-size:11px; text-align:left;">${summary}</td>
-        <td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, steps).text}</td></tr>`;
-    });
-  } else {
-    const cols = buildColumns(t);
-    cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-    html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
-    entries.forEach(e=>{
-      html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>`;
-      cols.forEach(c=>{
-        let v = e.row[c.key];
-        if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-        else if(v===undefined || v===''){ v = '—'; }
-        html += `<td>${v}</td>`;
-      });
-      html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row).text}</td></tr>`;
-    });
-  }
-  html += `</table></div>`;
-
-  wrap.innerHTML = html;
-  $('#apResultWrap').dataset.title = `${athlete} — ${t.name} Gelişimi`;
-  apEnableButtons();
-}
-
-function renderAthleteProgress(){
-  const athlete = $('#apAthlete').value;
-  const protoSel = $('#apProto').value;
-  const wrap = $('#apResultWrap');
-  if(!athlete){ wrap.innerHTML = ''; apDisableButtons(); return; }
-  if(!protoSel || protoSel === '__all__') renderAthleteAllProtocolsSummary(athlete, wrap);
-  else renderAthleteProtocolDetail(athlete, protoSel, wrap);
-}
-
-$('#btnAthleteProgressOpen').onclick = ()=>{
-  populateApAthletes();
-  const names = knownAthletes();
-  if(!names.length){
-    $('#apResultWrap').innerHTML = `<div class="empty-side">Henüz sporcu/kayıt yok.</div>`;
-    apDisableButtons();
-  } else {
-    populateApProtos();
-    renderAthleteProgress();
-  }
-  $('#athleteProgressOverlay').classList.add('show');
-};
-$('#btnCloseAthleteProgress').onclick = ()=> $('#athleteProgressOverlay').classList.remove('show');
-$('#apAthlete').addEventListener('change', ()=>{ populateApProtos(); renderAthleteProgress(); });
-$('#apProto').addEventListener('change', renderAthleteProgress);
-$('#btnPrintAthleteProgress').onclick = ()=> printNow($('#apResultWrap').dataset.title || 'Sporcu Gelişimi', $('#apResultWrap').innerHTML);
-$('#btnPdfAthleteProgress').onclick = ()=>{
-  const title = $('#apResultWrap').dataset.title || 'Sporcu Gelişimi';
-  downloadPdf(title, $('#apResultWrap'), 'sporcu_gelisimi');
-};
-
-/* =========================================================
    BAŞLANGIÇ
    ========================================================= */
 (async function init(){
   await loadRoster();
   updateRosterStatus();
-  let saved = null;
-  try{ saved = await Storage.load(); }catch(e){ console.warn('Kayıtlar okunurken hata oluştu:', e); }
+  const saved = await Storage.load();
   if(saved && saved.payload){
     MANUAL = saved.payload;
     MANUAL.templates = MANUAL.templates || [];
     MANUAL.sessions = MANUAL.sessions || [];
     $('#lastUpdated').textContent = `Son güncelleme: ${new Date(saved.updatedAt).toLocaleString('tr-TR')}`;
-  } else if (parentStorageAvailable() || db) {
-    // Ana depoda hiç kayıt yok — bu tarayıcıda daha önce yerel
-    // (localStorage) olarak birikmiş veri varsa, onu bir kereliğine
-    // asıl depoya taşı ki diğer cihazlarda da görünsün.
-    try{
-      const localRaw = localStorage.getItem('atk_manual_data');
-      if(localRaw){
-        const localRecord = JSON.parse(localRaw);
-        if(localRecord && localRecord.payload && (localRecord.payload.templates||[]).length){
-          MANUAL = localRecord.payload;
-          MANUAL.templates = MANUAL.templates || [];
-          MANUAL.sessions = MANUAL.sessions || [];
-          await Storage.save(MANUAL);
-          $('#lastUpdated').textContent = `Yerel veriler taşındı — ${new Date().toLocaleString('tr-TR')}`;
-        }
-      }
-    }catch(e){ console.warn('Yerel veri taşınamadı:', e); }
   }
   renderProtoList();
   renderManualMain();
