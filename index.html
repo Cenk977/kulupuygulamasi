@@ -1084,6 +1084,8 @@ td.sp-empty{color:#c3ccd1;}
     <button class="mode-tab" data-mode="swim">SwimAnalyzer</button>
 
     <button class="mode-tab" data-mode="hedefderece">Hedef Derece</button>
+
+    <button class="mode-tab" data-mode="testkayit">Test Kayıtları</button>
   </div>
 
 
@@ -1990,6 +1992,12 @@ td.sp-empty{color:#c3ccd1;}
 
 <div id="modeHedefDerece" style="display:none;">
   <iframe id="hedefDereceFrame" title="Hedef Derece Hesaplayıcı"
+    style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
+  </iframe>
+</div>
+
+<div id="modeTestKayit" style="display:none;">
+  <iframe id="testKayitFrame" title="Antrenman Test Kayıtları"
     style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
   </iframe>
 </div>
@@ -3296,6 +3304,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
 
     document.getElementById('modeHedefDerece').style.display = (mode==='hedefderece') ? '' : 'none';
 
+    document.getElementById('modeTestKayit').style.display = (mode==='testkayit') ? '' : 'none';
+
     if(mode==='attendance') initAttendanceMode();
 
     if(mode==='bulkAtt') initBulkAttMode();
@@ -3309,6 +3319,8 @@ document.querySelectorAll('.mode-tab').forEach(tab=>{
     if(mode==='swim') initSwimAnalyzerMode();
 
     if(mode==='hedefderece') initHedefDereceMode();
+
+    if(mode==='testkayit') initTestKayitMode();
 
   });
 
@@ -7190,6 +7202,18 @@ function initHedefDereceMode(){
   if(hedefDereceLoaded) return;
   const frame = document.getElementById('hedefDereceFrame');
   if(frame){ frame.src = 'hedefderece.html'; hedefDereceLoaded = true; }
+}
+
+/* Antrenman Test Kayıtları sekmesi: aynı lazy-load iframe deseni.
+   test_kayitlari.html bu index.html ile AYNI klasörde olmalı. Sporcu
+   listesini (roster_v1) ve ölçüm kayıtlarını bu ana uygulamanın
+   window.storage'ı üzerinden PAYLAŞIR (test_kayitlari.html içindeki
+   window.parent.storage köprüsü sayesinde). */
+let testKayitLoaded = false;
+function initTestKayitMode(){
+  if(testKayitLoaded) return;
+  const frame = document.getElementById('testKayitFrame');
+  if(frame){ frame.src = 'test_kayitlari.html'; testKayitLoaded = true; }
 }
 
 /* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
