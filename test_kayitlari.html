@@ -87,7 +87,22 @@
   }
   .empty-side{padding:16px 12px; font-size:12.5px; color:#8a97a0; line-height:1.5;}
 
-  main{flex:1; padding:22px 26px; overflow-x:auto;}
+  main{flex:1; padding:22px 26px; overflow-x:auto; min-width:0;}
+  .mobile-back-btn{display:none;}
+
+  /* ── Telefon / dar ekran: sidebar ile içerik aynı anda sıkışmasın.
+     Bir protokol seçilince menü kaybolur, içerik tam genişlik olur,
+     üstteki "← Geri" ile listeye dönülür. ────────────────────────── */
+  @media (max-width: 820px){
+    .layout{ flex-direction:column; min-height:auto; }
+    nav.sidebar{ width:100%; border-right:none; border-bottom:1px solid var(--line); max-height:none; }
+    main{ padding:14px; }
+    .layout.has-selection nav.sidebar{ display:none; }
+    .layout:not(.has-selection) main{ display:none; }
+    .mobile-back-btn{ display:inline-flex !important; }
+    header{ padding:12px 14px; }
+    header h1{ font-size:16px; }
+  }
   .panel-head{
     display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap;
     gap:12px; margin-bottom:16px;
@@ -222,7 +237,7 @@
   </div>
 </header>
 
-<div class="layout">
+<div class="layout" id="mainLayout">
   <nav class="sidebar">
     <div class="side-title">Protokoller</div>
     <button class="btn btn-line" id="btnAddReady" style="width:100%; margin-bottom:6px; justify-content:center;">＋ Hazır Protokol Ekle</button>
@@ -353,8 +368,13 @@ function $(sel){ return document.querySelector(sel); }
    0) FIREBASE (opsiyonel — boş bırakılırsa localStorage kullanılır)
    ========================================================= */
 const FIREBASE_CONFIG = {
-  // apiKey: "...", authDomain: "...", projectId: "...", ...
-  // index.html'deki firebaseConfig'i buraya yapıştır.
+  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
+  authDomain:        "bursa-kolejliler.firebaseapp.com",
+  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "bursa-kolejliler",
+  storageBucket:     "bursa-kolejliler.firebasestorage.app",
+  messagingSenderId: "905222390930",
+  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
 };
 const DOC_PATH = { collection: "kulup_verileri", doc: "antrenman_test_kayitlari_manuel" };
 
@@ -790,7 +810,9 @@ function descLineFor(t){
 
 function renderManualMain(){
   const main = $('#manualMain');
+  const layoutEl = $('#mainLayout');
   if(!ACTIVE_PROTO){
+    if(layoutEl) layoutEl.classList.remove('has-selection');
     main.innerHTML = `<div class="empty-main">
       <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#0f7c8c" stroke-width="1.4"><path d="M4 4h16v16H4z" stroke-opacity=".4"/><path d="M8 10l2 2 4-5"/></svg>
       <h3 style="color:var(--navy); margin:10px 0 4px;">Bir protokol seç ya da yeni ekle</h3>
@@ -798,8 +820,10 @@ function renderManualMain(){
     </div>`;
     return;
   }
+  if(layoutEl) layoutEl.classList.add('has-selection');
   const t = ACTIVE_PROTO;
-  let html = `<div class="panel-head">
+  let html = `<button class="btn btn-line mobile-back-btn" id="btnBackToList" style="margin-bottom:12px;">← Protokol Listesi</button>
+  <div class="panel-head">
     <div><h2>${t.name}</h2><div class="sub">${descLineFor(t)}</div></div>
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
@@ -814,6 +838,7 @@ function renderManualMain(){
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
 
+  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; renderProtoList(); renderManualMain(); };
   $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
@@ -1654,6 +1679,23 @@ $('#btnPdfCompare').onclick = ()=>{
     MANUAL.templates = MANUAL.templates || [];
     MANUAL.sessions = MANUAL.sessions || [];
     $('#lastUpdated').textContent = `Son güncelleme: ${new Date(saved.updatedAt).toLocaleString('tr-TR')}`;
+  } else if (db) {
+    // Bulutta hiç kayıt yok — Firebase daha yeni açıldığı için bu
+    // tarayıcıda daha önce yerel (localStorage) olarak birikmiş veri
+    // varsa, onu bir kereliğine buluta taşı ki diğer cihazlarda da görünsün.
+    try{
+      const localRaw = localStorage.getItem('atk_manual_data');
+      if(localRaw){
+        const localRecord = JSON.parse(localRaw);
+        if(localRecord && localRecord.payload && (localRecord.payload.templates||[]).length){
+          MANUAL = localRecord.payload;
+          MANUAL.templates = MANUAL.templates || [];
+          MANUAL.sessions = MANUAL.sessions || [];
+          await Storage.save(MANUAL);
+          $('#lastUpdated').textContent = `Yerel veriler buluta taşındı — ${new Date().toLocaleString('tr-TR')}`;
+        }
+      }
+    }catch(e){ console.warn('Yerel veri taşınamadı:', e); }
   }
   renderProtoList();
   renderManualMain();
