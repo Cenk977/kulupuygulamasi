@@ -559,14 +559,16 @@ const READY_PROTOCOLS = [
   { name:"1500 Seri (100'lük Split)", family:"kumulatif", config:{ checkpoints:[100,200,300,400,500,600,700,800,900,1000,1100,1200,1300,1400,1500], perCpKol:false, perCpNabiz:false, branch:false, extraBranch:false } },
   { name:"400 Karışık Test", family:"kumulatif", config:{ checkpoints:[100,200,300,400], perCpKol:false, perCpNabiz:false, branch:true, extraBranch:true } },
   { name:"ICS Test (100-200-300-400 Kümülatif)", family:"kumulatif", config:{ checkpoints:[100,200,300,400], perCpKol:true, perCpNabiz:true, branch:true, extraBranch:false } },
-  { name:"RP SET — Sırt 200 RP (4x50)", family:"tekrarli", config:{ reps:4, dist:50, interval:"", perRepNabiz:false, setNabiz:false, kolMode:"none", branch:false } },
-  { name:"RP SET — Kür 200 RP (4x50)", family:"tekrarli", config:{ reps:4, dist:50, interval:"", perRepNabiz:false, setNabiz:false, kolMode:"none", branch:false } },
-  { name:"RP SET — Serbest 400 RP (8x50, 1' içi)", family:"tekrarli", config:{ reps:8, dist:50, interval:"1:00 içi", perRepNabiz:false, setNabiz:true, kolMode:"none", branch:false } },
-  { name:"RP SET — Serbest 200 RP (8x50, 1' içi)", family:"tekrarli", config:{ reps:8, dist:50, interval:"1:00 içi", perRepNabiz:false, setNabiz:true, kolMode:"none", branch:false } },
 ];
 
-const FAMILY_LABEL = { ayak:"Ayak Testi", tekrarli:"Tekrarlı Set", kumulatif:"Kümülatif Split" };
+const FAMILY_LABEL = { ayak:"Ayak Testi", tekrarli:"Tekrarlı Set", kumulatif:"Kümülatif Split", rpset:"Basamaklı Set (RP Set)" };
 const KOL_LABEL = { none:"—", tek:"Kulaç Sayısı (tek alan)", iki:"2 Kulaç Bölgesi", dort:"Stroke Bazlı (4 alan)" };
+const DIST_OPTIONS = [25,50,75,100,150,200];
+const REP_OPTIONS = Array.from({length:40}, (_,i)=>i+1);
+const RP_REF_OPTIONS = ['Yok','50 RP','100 RP','200 RP','400 RP','800 RP','1500 RP'];
+const BRANCH_OPTIONS = ['Serbest','Sırt','Kurbağalama','Kelebek','Karışık'];
+function newStep(){ return { reps:4, dist:50, interval:'', rpRef:'Yok', branch:'Serbest' }; }
+let draftSteps = []; // rpset ailesi: o günün basamak yapısı (geçici)
 
 let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
@@ -655,6 +657,7 @@ function renderCustomForm(existing){
           <option value="ayak" ${t.family==='ayak'?'selected':''}>Ayak Testi (400/200/100/50)</option>
           <option value="tekrarli" ${t.family==='tekrarli'?'selected':''}>Tekrarlı Set (NxM)</option>
           <option value="kumulatif" ${t.family==='kumulatif'?'selected':''}>Kümülatif Split</option>
+          <option value="rpset" ${t.family==='rpset'?'selected':''}>Basamaklı Özel Set (RP Set)</option>
         </select>
       </div>
     </div>
@@ -686,6 +689,13 @@ function renderCustomForm(existing){
             <option value="dort" ${t.config.kolMode==='dort'?'selected':''}>Stroke bazlı 4 alan (Kel/Sırt/Kur/Ser)</option>
           </select>
         </div>`;
+    } else if(fam==='rpset'){
+      box.innerHTML = `<div style="font-size:12.5px; color:#647680; line-height:1.5;">
+        Bu protokolde sabit bir tekrar/mesafe yapısı yoktur. Her yeni kayıt eklediğinde
+        (RP SET, HPE SET gibi günden güne değişen setlerde), o günün setini
+        <b>basamak basamak</b> (tekrar sayısı, mesafe, gönderme, RP referansı, not)
+        kendin oluşturursun — en fazla 6 basamak.
+      </div>`;
     } else {
       box.innerHTML = `
         <div class="field">
@@ -714,6 +724,7 @@ $('#btnSaveCustom').onclick = async ()=>{
   const fam = $('#cfFamily').value;
   let config = {};
   if(fam==='ayak'){ config = {}; }
+  else if(fam==='rpset'){ config = {}; }
   else if(fam==='tekrarli'){
     config = {
       reps: Math.max(1, parseInt($('#cfReps').value)||1),
@@ -766,6 +777,7 @@ function newEntryRow(){ return { id: uid(), athlete:'' }; }
 
 function descLineFor(t){
   if(t.family==='ayak') return '400m · 200m · 100m · 50m ayak süreleri';
+  if(t.family==='rpset') return 'Basamaklı özel set — her kayıtta o günün yapısı yeniden tanımlanır';
   if(t.family==='tekrarli'){
     let d = `${t.config.reps} x ${t.config.dist}m`;
     if(t.config.interval) d += ` · ${t.config.interval} dinlenme`;
@@ -792,11 +804,9 @@ function renderManualMain(){
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
       <button class="btn btn-danger" id="btnDelProto">🗑 Sil</button>
-      <button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>
-      <button class="btn btn-ghost" id="btnExcelImport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬆ Excel Yükle (bu şablon)</button>
-      <button class="btn btn-ghost" id="btnOldExcelImport" style="background:#fff7e8; color:#8a5a00; border:1px solid #f0dca8;">⬆ Eski Excel Yükle</button>
-      <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none;">
-      <input type="file" id="oldExcelImportInput" accept=".xlsx,.xls" style="display:none;">
+      ${t.family!=='rpset' ? `<button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>
+      <button class="btn btn-ghost" id="btnExcelImport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬆ Excel Yükle</button>
+      <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none;">` : ''}
       <button class="btn btn-primary" id="btnNewSession">＋ Yeni Kayıt Ekle</button>
     </div>
   </div>
@@ -808,20 +818,23 @@ function renderManualMain(){
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
     const today = new Date().toISOString().slice(0,10);
-    entryRows = loadRowsForDate(t, today);
-    renderEntryBox();
+    if(t.family==='rpset'){
+      const loaded = loadStepsAndRowsForDate(t, today);
+      draftSteps = loaded.steps; entryRows = loaded.rows;
+      renderRpSetEntryBox();
+    } else {
+      entryRows = loadRowsForDate(t, today);
+      renderEntryBox();
+    }
   };
-  $('#btnExcelExport').onclick = ()=> exportProtocolToExcel(t);
-  $('#btnExcelImport').onclick = ()=> $('#excelImportInput').click();
-  $('#excelImportInput').onchange = (e)=>{
+  const excelExportBtn = $('#btnExcelExport');
+  if(excelExportBtn) excelExportBtn.onclick = ()=> exportProtocolToExcel(t);
+  const excelImportBtn = $('#btnExcelImport');
+  if(excelImportBtn) excelImportBtn.onclick = ()=> $('#excelImportInput').click();
+  const excelImportInput = $('#excelImportInput');
+  if(excelImportInput) excelImportInput.onchange = (e)=>{
     const file = e.target.files[0];
     if(file) importExcelForProtocol(t, file);
-    e.target.value = '';
-  };
-  $('#btnOldExcelImport').onclick = ()=> $('#oldExcelImportInput').click();
-  $('#oldExcelImportInput').onchange = (e)=>{
-    const file = e.target.files[0];
-    if(file) importOldExcelForProtocol(t, file);
     e.target.value = '';
   };
   renderSessionList();
@@ -877,239 +890,6 @@ function excelCellToDateStr(v){
     if(m) return `${m[3]}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
   }
   return null;
-}
-
-/* =========================================================
-   ESKİ FORMAT EXCEL İÇE AKTARMA
-   ---------------------------------------------------------
-   Kulübün eskiden kullandığı, bu araçtan farklı yerleşimli Excel
-   dosyalarını (yan yana bloklar, üst-alt satır çiftleri, iç içe
-   kümülatif sütunlar) okur. Kulübün "DERECE" yazım biçimini çözer:
-   tam sayı kısmı 100 ve üzeriyse son iki hane saniye, öncesi
-   dakikadır (ör. 649 → 6:49); 100'ün altındaysa doğrudan saniyedir
-   (ör. 33 → 33.00); ondalık kısım salise olarak eklenir
-   (ör. 110.95 → 1:10.95).
-   ========================================================= */
-function normTR(v){
-  if(v===null || v===undefined || v==='') return '';
-  return v.toString().trim().replace(/İ/g,'I').replace(/ı/g,'i').toLocaleUpperCase('en');
-}
-function isDateCell(v){ return v instanceof Date && !isNaN(v); }
-function decodeDerece(raw){
-  if(raw===null || raw===undefined || raw==='') return null;
-  const v = parseFloat(raw.toString().replace(',','.'));
-  if(!isFinite(v) || v<=0) return null;
-  const intPart = Math.floor(v);
-  const frac = v - intPart;
-  let minutes, seconds;
-  if(intPart >= 100){ minutes = Math.floor(intPart/100); seconds = intPart % 100; }
-  else { minutes = 0; seconds = intPart; }
-  return minutes*60 + seconds + frac;
-}
-function findHeaderRow(rows){
-  for(let r=0; r<Math.min(6,rows.length); r++){
-    if(rows[r][0] && normTR(rows[r][0])==='AD-SOYAD') return r;
-  }
-  return -1;
-}
-
-// AYAK TEST: yan yana bloklar, her blok başlığı "400" hücresiyle bulunur
-function parseOldAyak(rows){
-  const maxCols = rows.reduce((m,r)=>Math.max(m,r.length),0);
-  const starts = [];
-  for(let r=0; r<Math.min(6,rows.length); r++){
-    for(let c=0; c<maxCols; c++){ if(rows[r][c]===400) starts.push(c); }
-  }
-  const out = [];
-  starts.forEach(c400=>{
-    const nameCol=c400-2, dateCol=c400-1;
-    const cols = {400:c400, 200:c400+1, 100:c400+2, 50:c400+3};
-    if(nameCol<0) return;
-    for(let r=0; r<rows.length; r++){
-      const name = rows[r][nameCol], date = rows[r][dateCol];
-      if(!name || !isDateCell(date)) continue;
-      const rec = { athlete: name.toString().trim(), date: date.toISOString().slice(0,10) };
-      Object.keys(cols).forEach(d=> rec['d'+d] = decodeDerece(rows[r][cols[d]]));
-      out.push(rec);
-    }
-  });
-  return out;
-}
-
-// TEKRARLI — alt satırlı (ör. eski HPE tipi): süre satırı + hemen altında kulaç satırı
-function parseOldTekrarliSubrow(rows, reps){
-  const hdr = findHeaderRow(rows);
-  if(hdr<0) return [];
-  const out = [];
-  let r = hdr+1;
-  while(r < rows.length){
-    const name = rows[r][0], date = rows[r][1];
-    if(!name || !isDateCell(date)){ r++; continue; }
-    const rec = { athlete: name.toString().trim(), date: date.toISOString().slice(0,10) };
-    for(let i=0;i<reps;i++) rec['rep'+(i+1)] = decodeDerece(rows[r][2+i]);
-    if(r+1<rows.length && !rows[r+1][0] && !rows[r+1][1]){
-      for(let i=0;i<reps;i++){ const v = rows[r+1][2+i]; if(v!==null && v!==undefined && v!=='') rec['kol'+(i+1)] = v; }
-      r += 2;
-    } else r += 1;
-    out.push(rec);
-  }
-  return out;
-}
-
-// TEKRARLI — düz/gruplu (ör. eski PACE / KAR EFF tipi): her tekrar sabit genişlikte
-// bir sütun grubu (DERECE + varsa kulaç alanları + varsa nabız)
-function parseOldTekrarliFlat(rows, t){
-  const hdr = findHeaderRow(rows);
-  if(hdr<0) return [];
-  let groupWidth = 1;
-  if(t.config.kolMode==='tek') groupWidth += 1;
-  else if(t.config.kolMode==='iki') groupWidth += 2;
-  else if(t.config.kolMode==='dort') groupWidth += 4;
-  if(t.config.perRepNabiz) groupWidth += 1;
-  const reps = t.config.reps;
-  const out = [];
-  for(let r=hdr+2; r<rows.length; r++){
-    const name = rows[r][0], date = rows[r][1];
-    if(!name || !isDateCell(date)) continue;
-    const rec = { athlete: name.toString().trim(), date: date.toISOString().slice(0,10) };
-    for(let i=0;i<reps;i++){
-      const base = 2 + i*groupWidth;
-      rec['rep'+(i+1)] = decodeDerece(rows[r][base]);
-      let off = 1;
-      if(t.config.kolMode==='tek'){ const v=rows[r][base+off]; if(v!=null && v!=='') rec['kol'+(i+1)]=v; off+=1; }
-      else if(t.config.kolMode==='iki'){
-        const vA=rows[r][base+off]; if(vA!=null && vA!=='') rec['kolA'+(i+1)]=vA; off+=1;
-        const vB=rows[r][base+off]; if(vB!=null && vB!=='') rec['kolB'+(i+1)]=vB; off+=1;
-      } else if(t.config.kolMode==='dort'){
-        for(let k=0;k<4;k++){ const v=rows[r][base+off]; if(v!=null && v!=='') rec['kol'+k+'_'+(i+1)]=v; off+=1; }
-      }
-      if(t.config.perRepNabiz){ const v=rows[r][base+off]; if(v!=null && v!=='') rec['nb'+(i+1)]=v; }
-    }
-    out.push(rec);
-  }
-  return out;
-}
-
-// KÜMÜLATİF — basit (ör. eski 1500 SER / 400 KARIŞIK tipi): her sporcu 1 ana satır +
-// altında adı-tarihi boş, türetilmiş (kümülatif saniye/split) yardımcı satırlar — bunlar atlanır
-function parseOldKumulatifSimple(rows, t){
-  const hdr = findHeaderRow(rows);
-  if(hdr<0) return [];
-  const cps = t.config.checkpoints;
-  const cpCol = {}; cps.forEach((cp,i)=> cpCol[cp] = 2+i);
-  const branchCol = 2+cps.length+2, b50Col = branchCol+1, b100Col = branchCol+2;
-  const out = [];
-  for(let r=hdr+2; r<rows.length; r++){
-    const name = rows[r][0], date = rows[r][1];
-    if(!name || !isDateCell(date)) continue;
-    const rec = { athlete: name.toString().trim(), date: date.toISOString().slice(0,10) };
-    cps.forEach(cp=> rec['cp'+cp] = decodeDerece(rows[r][cpCol[cp]]));
-    if(t.config.branch){
-      if(rows[r][branchCol]) rec.branch = rows[r][branchCol].toString().trim();
-      if(t.config.extraBranch){ rec.b50 = decodeDerece(rows[r][b50Col]); rec.b100 = decodeDerece(rows[r][b100Col]); }
-    }
-    out.push(rec);
-  }
-  return out;
-}
-
-// KÜMÜLATİF — iç içe geçmiş (ör. eski ICS tipi): her kontrol noktasının kümülatif
-// derecesi, o noktanın "KOL S." etiketinden hemen önceki sütundadır
-function parseOldKumulatifICS(rows, t){
-  const hdr = findHeaderRow(rows);
-  if(hdr<0) return [];
-  const sub = rows[hdr+1] || [];
-  let dateCol = -1, branchCol = -1;
-  (rows[hdr]||[]).forEach((v,c)=>{
-    if(v && normTR(v)==='TARIH') dateCol = c;
-    if(v && normTR(v)==='BRANŞ') branchCol = c;
-  });
-  if(dateCol<0) return [];
-  const ksCols = [];
-  sub.forEach((v,c)=>{ if(v && normTR(v)==='KOL S.') ksCols.push(c); });
-  const cps = t.config.checkpoints;
-  const out = [];
-  for(let r=hdr+2; r<rows.length; r++){
-    const name = rows[r][0], date = rows[r][dateCol];
-    if(!name || !isDateCell(date)) continue;
-    const rec = { athlete: name.toString().trim(), date: date.toISOString().slice(0,10) };
-    if(branchCol>=0 && rows[r][branchCol]) rec.branch = rows[r][branchCol].toString().trim();
-    cps.forEach((cp,i)=>{
-      const ksCol = ksCols[i];
-      if(ksCol===undefined) return;
-      rec['cp'+cp] = decodeDerece(rows[r][ksCol-1]);
-      if(t.config.perCpKol && rows[r][ksCol]!=null && rows[r][ksCol]!=='') rec['kol'+cp] = rows[r][ksCol];
-      if(t.config.perCpNabiz && sub[ksCol+1] && normTR(sub[ksCol+1])==='NABIZ' && rows[r][ksCol+1]!=null) rec['nb'+cp] = rows[r][ksCol+1];
-    });
-    out.push(rec);
-  }
-  return out;
-}
-
-// Kararlı bir eşik: bir denemenin gerçekten anlamlı veri bulup bulmadığını kontrol eder
-// (subrow / flat / basit-kümülatif / ICS varyantları arasında otomatik seçim için).
-function scoreRecords(recs){
-  if(!recs.length) return 0;
-  let filled = 0, total = 0;
-  recs.forEach(r=> Object.keys(r).forEach(k=>{
-    if(k==='athlete' || k==='date') return;
-    total++; if(r[k]!==null && r[k]!==undefined && r[k]!=='') filled++;
-  }));
-  return total ? recs.length * (filled/total) : 0;
-}
-
-function mergeRecordsIntoSessions(t, records){
-  let addedSessions=0, touchedAthletes=0;
-  records.forEach(rec=>{
-    if(!rec.date || !rec.athlete) return;
-    let session = MANUAL.sessions.find(s=>s.templateId===t.id && s.date===rec.date && (s.note||'')==='');
-    if(!session){ session = { id: uid(), templateId: t.id, date: rec.date, note:'', athletes: [] }; MANUAL.sessions.push(session); addedSessions++; }
-    const row = { athlete: rec.athlete };
-    Object.keys(rec).forEach(k=>{ if(k!=='athlete' && k!=='date' && rec[k]!==null && rec[k]!==undefined && rec[k]!=='') row[k]=rec[k]; });
-    const idx = session.athletes.findIndex(a=>a.athlete.toLocaleLowerCase('tr')===rec.athlete.toLocaleLowerCase('tr'));
-    if(idx>=0) session.athletes[idx] = row; else session.athletes.push(row);
-    touchedAthletes++;
-  });
-  return { addedSessions, touchedAthletes };
-}
-
-function importOldExcelForProtocol(t, file){
-  const reader = new FileReader();
-  reader.onload = async (e)=>{
-    try{
-      const data = new Uint8Array(e.target.result);
-      const wb2 = XLSX.read(data, {type:'array', cellDates:true});
-      const ws = wb2.Sheets[wb2.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
-      if(!rows.length){ alert('Excel dosyası boş görünüyor.'); return; }
-
-      let records = [];
-      if(t.family==='ayak'){
-        records = parseOldAyak(rows);
-      } else if(t.family==='tekrarli'){
-        const subrow = parseOldTekrarliSubrow(rows, t.config.reps);
-        const flat = parseOldTekrarliFlat(rows, t);
-        records = scoreRecords(subrow) >= scoreRecords(flat) ? subrow : flat;
-      } else {
-        const simple = parseOldKumulatifSimple(rows, t);
-        const ics = parseOldKumulatifICS(rows, t);
-        records = scoreRecords(ics) >= scoreRecords(simple) ? ics : simple;
-      }
-      records = records.filter(r=>r.date && r.athlete);
-      if(!records.length){
-        alert('Bu dosyadan veri okunamadı. Sayfa yapısı beklenenden farklı olabilir — dosyayı bana gösterirsen protokole özel bir okuyucu ekleyebilirim.');
-        return;
-      }
-      const { addedSessions, touchedAthletes } = mergeRecordsIntoSessions(t, records);
-      await saveManual();
-      renderProtoList(); renderManualMain();
-      alert(`Eski format içe aktarma tamamlandı: ${addedSessions} yeni tarih, ${touchedAthletes} sporcu satırı işlendi. Sonuçları kontrol etmeni öneririm.`);
-    }catch(err){
-      console.error(err);
-      alert('Excel dosyası okunurken bir hata oluştu. Dosyanın .xlsx formatında ve bozulmamış olduğundan emin ol.');
-    }
-  };
-  reader.readAsArrayBuffer(file);
 }
 
 function importExcelForProtocol(t, file){
@@ -1221,6 +1001,13 @@ function renderEntryBox(){
     let tds = `<td class="name-cell">${athleteCellHtml(r)}</td>`;
     cols.forEach(c=>{
       const val = r[c.key] !== undefined ? r[c.key] : '';
+      if(c.type==='select'){
+        tds += `<td><select data-row="${r.id}" data-field="${c.key}" data-type="select">
+          <option value="">—</option>
+          ${BRANCH_OPTIONS.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}
+        </select></td>`;
+        return;
+      }
       const cls = c.type==='time' ? '' : 'mini';
       const inputmode = c.type==='time' ? 'text' : 'numeric';
       tds += `<td><input class="${cls}" inputmode="${inputmode}" data-row="${r.id}" data-field="${c.key}" data-type="${c.type}" placeholder="${c.ph||''}" value="${val}"></td>`;
@@ -1284,6 +1071,164 @@ function renderEntryBox(){
   entryRows.forEach(r=>updateRowAvg(r.id));
 }
 
+/* ---------- RP SET / basamaklı özel set giriş formu ---------- */
+function loadStepsAndRowsForDate(t, date){
+  const existing = findSessionFor(t.id, date);
+  if(existing){
+    return {
+      steps: (existing.steps && existing.steps.length) ? JSON.parse(JSON.stringify(existing.steps)) : [newStep()],
+      rows: existing.athletes.length ? existing.athletes.map(a=>({ id: uid(), ...a })) : [newEntryRow()]
+    };
+  }
+  return { steps:[newStep()], rows:[newEntryRow()] };
+}
+
+function renderRpSetEntryBox(){
+  const t = ACTIVE_PROTO;
+  refreshAthleteDatalist();
+  const wrap = $('#entryBoxWrap');
+  const currentDate = $('#entryDate') ? $('#entryDate').value : new Date().toISOString().slice(0,10);
+  const existingSession = findSessionFor(t.id, currentDate);
+  const cols = buildColumns(t, draftSteps);
+
+  const stepRows = draftSteps.map((s,i)=>`
+    <tr>
+      <td style="font-weight:700; text-align:center;">${i+1}</td>
+      <td><select data-step="${i}" data-sf="reps">${REP_OPTIONS.map(n=>`<option value="${n}" ${n===s.reps?'selected':''}>${n}</option>`).join('')}</select></td>
+      <td style="text-align:center;">x</td>
+      <td><select data-step="${i}" data-sf="dist">${DIST_OPTIONS.map(d=>`<option value="${d}" ${d===s.dist?'selected':''}>${d}m</option>`).join('')}</select></td>
+      <td><input type="text" data-step="${i}" data-sf="interval" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 1'15&quot;" style="width:92px;"></td>
+      <td><select data-step="${i}" data-sf="rpRef">${RP_REF_OPTIONS.map(r=>`<option ${r===s.rpRef?'selected':''}>${r}</option>`).join('')}</select></td>
+      <td><select data-step="${i}" data-sf="branch">${BRANCH_OPTIONS.map(b=>`<option value="${b}" ${(s.branch||s.desc||'Serbest')===b?'selected':''}>${b}</option>`).join('')}</select></td>
+      <td><button class="rm-row-btn" data-rmstep="${i}" title="Basamağı sil">✕</button></td>
+    </tr>`).join('');
+
+  let head = `<tr><th>Sporcu</th>`;
+  cols.forEach(c=> head += `<th>${c.label}${c.sub?`<span class="col-sub">${c.sub}</span>`:''}</th>`);
+  head += `<th>Basamak Ortalamaları</th><th></th></tr>`;
+
+  let bodyRows = entryRows.map(r=>{
+    let tds = `<td class="name-cell">${athleteCellHtml(r)}</td>`;
+    cols.forEach(c=>{
+      const val = r[c.key] !== undefined ? r[c.key] : '';
+      tds += `<td><input inputmode="text" data-row="${r.id}" data-field="${c.key}" data-type="time" placeholder="${c.ph||''}" value="${val}"></td>`;
+    });
+    tds += `<td class="avg-cell" data-avgfor="${r.id}" style="white-space:nowrap; font-size:11px; font-weight:600;">–</td>`;
+    tds += `<td><button class="rm-row-btn" data-rm="${r.id}" title="Satırı sil">✕</button></td>`;
+    return `<tr>${tds}</tr>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="entry-box">
+    <h4>Kayıt — ${t.name}</h4>
+    ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
+    <div class="field-row">
+      <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
+      <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. sabah antrenmanı" value="${existingSession && existingSession.note ? existingSession.note.replace(/"/g,'&quot;') : ''}"></div>
+    </div>
+
+    <div style="font-weight:700; color:var(--navy); font-size:13px; margin:14px 0 6px;">Set Yapısı (Basamaklar)</div>
+    <div style="overflow-x:auto; margin-bottom:6px;">
+    <table class="grid" style="min-width:660px;">
+      <thead><tr><th>#</th><th>Tekrar</th><th></th><th>Mesafe</th><th>Gönderme</th><th>RP Referans</th><th>Branş</th><th></th></tr></thead>
+      <tbody id="stepBuilderTbody">${stepRows || '<tr><td colspan="8" style="text-align:center; color:#8a97a0; padding:10px;">Henüz basamak yok, aşağıdan ekle</td></tr>'}</tbody>
+    </table>
+    </div>
+    <button class="btn btn-line" id="btnAddStep" style="margin-bottom:16px;" ${draftSteps.length>=6?'disabled':''}>＋ Basamak Ekle (${draftSteps.length}/6)</button>
+
+    <div style="font-weight:700; color:var(--navy); font-size:13px; margin-bottom:6px;">Sporcu Verileri</div>
+    <div style="overflow-x:auto;">
+      <table class="grid">
+        <thead>${head}</thead>
+        <tbody id="entryTbody">${bodyRows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+      ${ROSTER.length ? '<button class="btn btn-line" id="btnQuickAdd">👥 Listeden Sporcu Seç</button>' : ''}
+      <button class="btn btn-line" id="btnAddRow">＋ Boş Satır Ekle</button>
+      <button class="btn btn-primary" id="btnSaveSession">Kaydet</button>
+      <button class="btn btn-ghost" id="btnCancelEntry" style="background:#f1f1f1; color:var(--ink);">İptal</button>
+    </div>
+  </div>`;
+
+  $('#entryDate').addEventListener('change', ()=>{
+    const loaded = loadStepsAndRowsForDate(t, $('#entryDate').value);
+    draftSteps = loaded.steps; entryRows = loaded.rows;
+    renderRpSetEntryBox();
+  });
+
+  wrap.querySelectorAll('#stepBuilderTbody [data-step]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const si = parseInt(inp.dataset.step);
+      const field = inp.dataset.sf;
+      let val = inp.value;
+      if(field==='reps' || field==='dist') val = parseInt(val);
+      draftSteps[si][field] = val;
+      renderRpSetEntryBox();
+    });
+  });
+  const addStepBtn = $('#btnAddStep');
+  if(addStepBtn) addStepBtn.onclick = ()=>{ if(draftSteps.length<6){ draftSteps.push(newStep()); renderRpSetEntryBox(); } };
+  wrap.querySelectorAll('button[data-rmstep]').forEach(b=>{
+    b.onclick = ()=>{ draftSteps.splice(parseInt(b.dataset.rmstep),1); renderRpSetEntryBox(); };
+  });
+
+  wrap.querySelectorAll('#entryTbody [data-row]').forEach(inp=>{
+    const handler = ()=>{
+      const row = entryRows.find(r=>r.id===inp.dataset.row);
+      row[inp.dataset.field] = inp.value;
+      updateRowAvg(row.id);
+    };
+    inp.addEventListener('input', handler);
+    inp.addEventListener('change', handler);
+    inp.onblur = ()=>{
+      const sec = parseTimeStr(inp.value);
+      inp.classList.toggle('bad', inp.value.trim()!=='' && sec===null);
+      if(sec!==null) inp.value = fmtTime(sec);
+      updateRowAvg(inp.dataset.row);
+    };
+  });
+  wrap.querySelectorAll('button[data-rm]').forEach(b=>{
+    b.onclick = ()=>{ entryRows = entryRows.filter(r=>r.id!==b.dataset.rm); renderRpSetEntryBox(); };
+  });
+  $('#btnAddRow').onclick = ()=>{ entryRows.push(newEntryRow()); renderRpSetEntryBox(); };
+  $('#btnCancelEntry').onclick = ()=>{ entryRows=[]; draftSteps=[]; $('#entryBoxWrap').innerHTML=''; };
+  $('#btnSaveSession').onclick = saveRpSetSession;
+  const quickBtn = $('#btnQuickAdd');
+  if(quickBtn) quickBtn.onclick = openQuickAdd;
+  entryRows.forEach(r=>updateRowAvg(r.id));
+}
+
+async function saveRpSetSession(){
+  const date = $('#entryDate').value;
+  const note = $('#entryNote').value.trim();
+  if(!date){ alert('Tarih gerekli.'); return; }
+  if(!draftSteps.length){ alert('En az bir basamak ekle.'); return; }
+  const athletes = entryRows.filter(r=> (r.athlete||'').trim() !== '');
+  if(!athletes.length){ alert('En az bir sporcu seç.'); return; }
+  const clean = athletes.map(r=>{
+    const o = { athlete: r.athlete.trim() };
+    Object.keys(r).forEach(k=>{ if(k!=='id' && k!=='athlete') o[k] = r[k]; });
+    return o;
+  });
+  const stepsToSave = JSON.parse(JSON.stringify(draftSteps));
+  const existing = findSessionFor(ACTIVE_PROTO.id, date);
+  if(existing){
+    clean.forEach(newA=>{
+      const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
+      if(idx>-1) existing.athletes[idx] = newA; else existing.athletes.push(newA);
+    });
+    if(note) existing.note = note;
+    existing.steps = stepsToSave;
+  } else {
+    MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, steps: stepsToSave, athletes: clean });
+  }
+  await saveManual();
+  entryRows = []; draftSteps = [];
+  $('#entryBoxWrap').innerHTML = '';
+  renderProtoList();
+  renderSessionList();
+}
+
 /* ---------- Listeden sporcu seç (toplu ekleme) ---------- */
 function openQuickAdd(){
   const used = new Set(entryRows.map(r=>r.athlete).filter(Boolean));
@@ -1307,14 +1252,23 @@ $('#btnQuickAddConfirm').onclick = ()=>{
     entryRows.push(row);
   });
   $('#quickAddOverlay').classList.remove('show');
-  renderEntryBox();
+  if(ACTIVE_PROTO && ACTIVE_PROTO.family==='rpset') renderRpSetEntryBox(); else renderEntryBox();
 };
 
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
-function buildColumns(t){
+function buildColumns(t, steps){
   const cols = [];
   if(t.family==='ayak'){
     [400,200,100,50].forEach(d=> cols.push({ key:`d${d}`, label:`${d}m`, type:'time', ph:'ör. 1:17' }));
+  } else if(t.family==='rpset'){
+    (steps||[]).forEach((s,si)=>{
+      const branchName = s.branch || s.desc || 'Serbest';
+      let subParts = [`${s.dist}m`];
+      if(s.rpRef && s.rpRef!=='Yok') subParts.push(s.rpRef);
+      for(let i=1;i<=s.reps;i++){
+        cols.push({ key:`s${si}_r${i}`, label:`${branchName} ${i}`, sub: subParts.join(' · '), type:'time', ph:'ör. 38.60' });
+      }
+    });
   } else if(t.family==='tekrarli'){
     for(let i=1;i<=t.config.reps;i++){
       cols.push({ key:`rep${i}`, label:`${i}`, sub:`${t.config.dist}m`, type:'time', ph:'ör. 38.60' });
@@ -1329,12 +1283,12 @@ function buildColumns(t){
       if(t.config.perRepNabiz) cols.push({ key:`nb${i}`, label:'Nabız', type:'num', ph:'#' });
     }
     if(t.config.setNabiz) cols.push({ key:'setNabiz', label:'Toparlanma Nb.', type:'txt', ph:'ör. 28' });
-    if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'txt', ph:'ör. SERBEST' });
+    if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
   } else { // kumulatif
     t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub:'kümülatif', type:'time', ph:'ör. 5:16' }));
     if(t.config.perCpKol) t.config.checkpoints.forEach(d=> cols.push({ key:`kol${d}`, label:`KS ${d}m`, type:'num', ph:'#' }));
     if(t.config.perCpNabiz) t.config.checkpoints.forEach(d=> cols.push({ key:`nb${d}`, label:`Nb ${d}m`, type:'num', ph:'#' }));
-    if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'txt', ph:'ör. SERBEST' });
+    if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
     if(t.config.extraBranch){
       cols.push({ key:'b50', label:'Branş 50m', type:'time', ph:'ör. 32.10' });
       cols.push({ key:'b100', label:'Branş 100m', type:'time', ph:'ör. 1:09' });
@@ -1346,7 +1300,7 @@ function buildColumns(t){
 // Bir satırın ortalama/pace değerini hesaplar — hem DOM güncellemesinde
 // hem de karşılaştırma tablosunda ortak kullanılır (yalnızca gerçekten
 // girilmiş tekrarlar sayılır, boş tekrarlar ortalamayı bozmaz).
-function computeAvg(t, row){
+function computeAvg(t, row, steps){
   if(t.family==='tekrarli'){
     let vals = [];
     for(let i=1;i<=t.config.reps;i++){ const sec = parseTimeStr(row[`rep${i}`]); if(sec!==null) vals.push(sec); }
@@ -1362,6 +1316,17 @@ function computeAvg(t, row){
     const pace = lastSec/(lastCp/100);
     return { text: fmtTime(pace)+' /100', sec: pace };
   }
+  if(t.family==='rpset'){
+    // Farklı mesafeler karıştığı için tek bir ortalama yerine, her
+    // basamağın kendi ortalamasını ayrı ayrı gösteriyoruz.
+    const parts = [];
+    (steps||[]).forEach((s,si)=>{
+      let vals = [];
+      for(let i=1;i<=s.reps;i++){ const sec = parseTimeStr(row[`s${si}_r${i}`]); if(sec!==null) vals.push(sec); }
+      if(vals.length){ const avg = vals.reduce((a,b)=>a+b,0)/vals.length; parts.push(`B${si+1}: ${fmtTime(avg)}`); }
+    });
+    return { text: parts.length ? parts.join(' · ') : '–', sec:null };
+  }
   return { text:'–', sec:null }; // ayak
 }
 
@@ -1370,7 +1335,8 @@ function updateRowAvg(rowId){
   if(!cell) return;
   const row = entryRows.find(r=>r.id===rowId) || (currentSessionAthletes||[]).find(r=>r.id===rowId);
   if(!row){ cell.textContent='–'; return; }
-  cell.textContent = computeAvg(ACTIVE_PROTO, row).text;
+  const steps = ACTIVE_PROTO.family==='rpset' ? draftSteps : undefined;
+  cell.textContent = computeAvg(ACTIVE_PROTO, row, steps).text;
 }
 
 async function saveSession(){
@@ -1429,16 +1395,34 @@ function renderSessionList(){
 }
 
 let currentSessionAthletes = null;
+
+// RP Set (basamaklı) protokollerde "Gönderme" (interval) bilgisi hiçbir
+// sütunda görünmediği için — set-seviyesinde bir bilgi olduğu için —
+// detay/PDF/yazdırma çıktısının en üstüne kısa bir basamak özeti ekliyoruz.
+function stepSummaryHtml(steps){
+  if(!steps || !steps.length) return '';
+  const lines = steps.map((s,si)=>{
+    const branchName = s.branch || s.desc || 'Serbest';
+    let bits = [`<b>B${si+1}:</b> ${s.reps}x${s.dist}m ${branchName}`];
+    if(s.interval) bits.push(`Gönderme: ${s.interval}`);
+    if(s.rpRef && s.rpRef!=='Yok') bits.push(s.rpRef);
+    return bits.join(' · ');
+  });
+  return `<div style="font-size:12px; color:#647680; background:var(--pool-light); border-radius:6px; padding:8px 10px; margin-bottom:10px; line-height:1.7;">${lines.join('<br>')}</div>`;
+}
+
 function openManualDetail(sessionId){
   const s = MANUAL.sessions.find(x=>x.id===sessionId);
   const t = MANUAL.templates.find(x=>x.id===s.templateId);
-  const cols = buildColumns(t);
+  const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
+  const cols = buildColumns(t, steps);
   currentSessionAthletes = s.athletes.map((a,i)=>({...a, id:'v'+i}));
 
   $('#manualDetailTitle').textContent = `${t.name} — ${new Date(s.date).toLocaleDateString('tr-TR')}${s.note ? ' · '+s.note : ''}`;
-  let html = `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
+  let html = stepSummaryHtml(steps);
+  html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
+  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   currentSessionAthletes.forEach(a=>{
     html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
     cols.forEach(c=>{
@@ -1447,7 +1431,7 @@ function openManualDetail(sessionId){
       else if(v===undefined || v===''){ v = '—'; }
       html += `<td>${v}</td>`;
     });
-    html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a).text}</td>`;
+    html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps).text}</td>`;
     html += `</tr>`;
   });
   html += `</table></div>`;
@@ -1468,25 +1452,31 @@ function printNow(title, bodyHtml){
   $('#printArea').innerHTML = buildPrintHtml(title, bodyHtml);
   window.print();
 }
-function downloadPdf(title, bodyHtml, filenameBase){
-  const container = document.createElement('div');
-  container.style.cssText = 'position:fixed; left:-9999px; top:0; width:1000px; background:#fff;';
-  container.innerHTML = buildPrintHtml(title, bodyHtml);
-  document.body.appendChild(container);
+function downloadPdf(title, bodyEl, filenameBase){
+  // Not: html2canvas, ekran dışına (ör. left:-9999px) yerleştirilmiş
+  // gizli kopyaları güvenilir şekilde yakalayamıyor (boş/şeffaf çıktı
+  // üretebiliyor). Bu yüzden gerçekten EKRANDA GÖRÜNEN öğeyi
+  // kullanıyoruz — geçici bir başlık ekleyip PDF sonrası kaldırıyoruz.
+  const header = document.createElement('div');
+  header.style.cssText = 'font-family:Segoe UI,Arial,sans-serif; padding:0 0 10px;';
+  header.innerHTML = `<h2 style="color:#0b2942; margin:0 0 2px; font-size:17px;">${title}</h2>
+    <div style="color:#647680; font-size:11px;">Bursa Kolejliler Spor Kulübü</div>`;
+  bodyEl.insertBefore(header, bodyEl.firstChild);
+  const cleanup = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
   html2pdf().set({
     margin: 8,
     filename: `${filenameBase}.pdf`,
     image: { type:'jpeg', quality:0.98 },
-    html2canvas: { scale:2 },
+    html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
     jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-  }).from(container).save().then(()=> document.body.removeChild(container));
+  }).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
 }
 
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
 $('#btnPrintManualDetail').onclick = ()=> printNow($('#manualDetailTitle').textContent, $('#manualDetailBody').innerHTML);
 $('#btnPdfManualDetail').onclick = ()=>{
   const t = ACTIVE_PROTO ? ACTIVE_PROTO.name.replace(/[^\wğüşıöçĞÜŞİÖÇ]+/g,'_') : 'test';
-  downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody').innerHTML, `${t}`);
+  downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody'), `${t}`);
 };
 
 /* =========================================================
@@ -1529,11 +1519,12 @@ function populateCmpAthletes(side){
   athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${a.athlete}</option>`).join('');
 }
 
-function renderSingleRowTable(t, row, label){
-  const cols = buildColumns(t);
-  let html = `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
+function renderSingleRowTable(t, row, label, steps){
+  const cols = buildColumns(t, steps);
+  let html = stepSummaryHtml(steps);
+  html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
+  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   html += `<tr><td class="who">${label}</td>`;
   cols.forEach(c=>{
     let v = row[c.key];
@@ -1541,7 +1532,7 @@ function renderSingleRowTable(t, row, label){
     else if(v===undefined || v===''){ v = '—'; }
     html += `<td>${v}</td>`;
   });
-  html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row).text}</td></tr></table></div>`;
+  html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps).text}</td></tr></table></div>`;
   return html;
 }
 
@@ -1561,9 +1552,16 @@ function renderCompareResult(){
 
   const labelA = `${rowA.athlete} — ${tA.name} — ${sessionLabel(sA)}`;
   const labelB = `${rowB.athlete} — ${tB.name} — ${sessionLabel(sB)}`;
+  const stepsA = tA.family==='rpset' ? (sA.steps||[]) : undefined;
+  const stepsB = tB.family==='rpset' ? (sB.steps||[]) : undefined;
   let html;
 
-  if(tA.id === tB.id){
+  // RP Set ailesinde yapı her kayıtta değişebildiği için (aynı protokol
+  // olsa bile) satır bazlı fark tablosu güvenilir değildir — her zaman
+  // iki ayrı tablo gösteriyoruz.
+  const canDiff = tA.id === tB.id && tA.family !== 'rpset';
+
+  if(canDiff){
     const t = tA;
     const cols = buildColumns(t);
     html = `<div style="overflow-x:auto;"><table class="detail-table" id="cmpTable"><tr><th>Kayıt</th>`;
@@ -1604,10 +1602,10 @@ function renderCompareResult(){
     html += `</tr></table></div>
     <div style="font-size:11px; color:#8a97a0; margin-top:6px;">Yeşil: B daha hızlı/erken. Kırmızı: B daha yavaş.</div>`;
   } else {
-    html = renderSingleRowTable(tA, rowA, labelA) +
+    html = renderSingleRowTable(tA, rowA, labelA, stepsA) +
       '<div style="height:14px;"></div>' +
-      renderSingleRowTable(tB, rowB, labelB) +
-      `<div style="font-size:11px; color:#8a97a0; margin-top:6px;">A ve B farklı test protokolleri olduğu için satır bazlı fark gösterilmiyor.</div>`;
+      renderSingleRowTable(tB, rowB, labelB, stepsB) +
+      `<div style="font-size:11px; color:#8a97a0; margin-top:6px;">${tA.family==='rpset'||tB.family==='rpset' ? 'RP Set tipi protokollerde set yapısı her kayıtta değişebildiği için satır bazlı fark gösterilmiyor.' : 'A ve B farklı test protokolleri olduğu için satır bazlı fark gösterilmiyor.'}</div>`;
   }
 
   wrap.innerHTML = html;
@@ -1641,7 +1639,7 @@ $('#cmpAthleteB').addEventListener('change', renderCompareResult);
 $('#btnPrintCompare').onclick = ()=> printNow($('#cmpResultWrap').dataset.title || 'Test Karşılaştırma', $('#cmpResultWrap').innerHTML);
 $('#btnPdfCompare').onclick = ()=>{
   const title = $('#cmpResultWrap').dataset.title || 'Test Karşılaştırma';
-  downloadPdf(title, $('#cmpResultWrap').innerHTML, 'karsilastirma');
+  downloadPdf(title, $('#cmpResultWrap'), 'karsilastirma');
 };
 
 /* =========================================================
