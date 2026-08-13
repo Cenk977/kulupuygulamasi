@@ -24,7 +24,7 @@
 ============================================================= -->
 
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -396,16 +396,21 @@ function $(sel){ return document.querySelector(sel); }
    0) FIREBASE (opsiyonel — boş bırakılırsa localStorage kullanılır)
    ========================================================= */
 const FIREBASE_CONFIG = {
-  // apiKey: "...", authDomain: "...", projectId: "...", ...
-  // index.html'deki firebaseConfig'i buraya yapıştır.
+  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
+  authDomain:        "bursa-kolejliler.firebaseapp.com",
+  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "bursa-kolejliler",
+  storageBucket:     "bursa-kolejliler.firebasestorage.app",
+  messagingSenderId: "905222390930",
+  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
 };
-const DOC_PATH = { collection: "kulup_verileri", doc: "antrenman_test_kayitlari_manuel" };
+const DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel"; // Realtime Database yolu
 
 let db = null;
 try{
   if (FIREBASE_CONFIG && FIREBASE_CONFIG.apiKey) {
     firebase.initializeApp(FIREBASE_CONFIG);
-    db = firebase.firestore();
+    db = firebase.database();
   }
 }catch(e){ console.warn("Firebase başlatılamadı, localStorage kullanılacak.", e); }
 
@@ -415,7 +420,7 @@ function markCloudFailure(e){
   if(!el) return;
   const code = (e && e.code) ? e.code : '';
   el.style.display = 'inline';
-  el.textContent = code === 'permission-denied'
+  el.textContent = code === 'PERMISSION_DENIED'
     ? '⚠ Buluta yazma izni yok — veriler bu cihazda (yerel) kaydediliyor'
     : '⚠ Buluta bağlanılamadı — veriler bu cihazda (yerel) kaydediliyor';
   el.title = e ? String(e.message || e) : '';
@@ -425,9 +430,9 @@ const Storage = {
   async load(){
     if (db){
       try{
-        const snap = await db.collection(DOC_PATH.collection).doc(DOC_PATH.doc).get();
+        const snap = await db.ref(DB_PATH).once('value');
         cloudOk = true;
-        return snap.exists ? snap.data() : null;
+        return snap.exists() ? snap.val() : null;
       }catch(e){
         console.warn("Buluttan okuma başarısız, yerel veriye (localStorage) dönülüyor:", e);
         cloudOk = false;
@@ -441,7 +446,7 @@ const Storage = {
     const record = { payload, updatedAt: new Date().toISOString() };
     if (db){
       try{
-        await db.collection(DOC_PATH.collection).doc(DOC_PATH.doc).set(record);
+        await db.ref(DB_PATH).set(record);
         cloudOk = true;
         localStorage.setItem('atk_manual_data', JSON.stringify(record)); // yerelde de yedekle
         return;
@@ -469,20 +474,29 @@ const Storage = {
    uygulanmaya çalışılır (başarısız olursa sessizce yok sayılır —
    bağımsız kullanım hiçbir zaman bozulmaz).
    ========================================================= */
-const DOC_PATH_ROSTER = { collection: "kulup_verileri", doc: "antrenman_test_kayitlari_roster" };
+const ROSTER_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_roster";
 const RosterStorage = {
   async load(){
     if (db){
-      const snap = await db.collection(DOC_PATH_ROSTER.collection).doc(DOC_PATH_ROSTER.doc).get();
-      return snap.exists ? (snap.data().list || []) : [];
+      try{
+        const snap = await db.ref(ROSTER_DB_PATH).once('value');
+        return snap.exists() ? (snap.val().list || []) : [];
+      }catch(e){
+        console.warn("Sporcu listesi buluttan okunamadı, yerel listeye dönülüyor:", e);
+      }
     }
     const raw = localStorage.getItem('atk_roster_local');
     return raw ? JSON.parse(raw) : [];
   },
   async save(list){
     if (db){
-      await db.collection(DOC_PATH_ROSTER.collection).doc(DOC_PATH_ROSTER.doc).set({ list, updatedAt: new Date().toISOString() });
-      return;
+      try{
+        await db.ref(ROSTER_DB_PATH).set({ list, updatedAt: new Date().toISOString() });
+        localStorage.setItem('atk_roster_local', JSON.stringify(list));
+        return;
+      }catch(e){
+        console.warn("Sporcu listesi buluta kaydedilemedi, yerel olarak kaydedildi:", e);
+      }
     }
     localStorage.setItem('atk_roster_local', JSON.stringify(list));
   }
