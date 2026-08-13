@@ -963,23 +963,33 @@ function buildExportHeaders(t){
 }
 
 function exportProtocolToExcel(t){
-  const { cols, headers } = buildExportHeaders(t);
-  const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
-  if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
-  const aoa = [headers];
-  sessions.forEach(s=>{
-    s.athletes.forEach(a=>{
-      const row = [s.date, s.note||'', a.athlete];
-      cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
-      row.push(computeAvg(t,a).text);
-      aoa.push(row);
+  try{
+    const { cols, headers } = buildExportHeaders(t);
+    const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
+    if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
+    const aoa = [headers];
+    sessions.forEach(s=>{
+      s.athletes.forEach(a=>{
+        const row = [s.date, s.note||'', a.athlete];
+        cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
+        row.push(computeAvg(t,a).text);
+        aoa.push(row);
+      });
     });
-  });
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, t.name.slice(0,31) || 'Test');
-  const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
-  XLSX.writeFile(wb, `${safeName}.xlsx`);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    // Excel sayfa adları : \ / ? * [ ] karakterlerini kabul etmiyor
+    // (ör. "Ayak Test (400/200/100/50)" adındaki "/" işaretleri hataya
+    // sebep oluyordu) — dosya adından bağımsız olarak sayfa adını da
+    // ayrıca temizliyoruz.
+    const sheetName = (t.name || 'Test').replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g,' ').trim().slice(0,31) || 'Test';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
+    XLSX.writeFile(wb, `${safeName}.xlsx`);
+  }catch(err){
+    console.error('Excel indirme hatası:', err);
+    alert('Excel dosyası oluşturulurken bir hata oluştu: ' + (err && err.message ? err.message : err));
+  }
 }
 
 function excelCellToDateStr(v){
