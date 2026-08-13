@@ -962,6 +962,33 @@ function buildExportHeaders(t){
   return { cols, headers };
 }
 
+// Mobil tarayıcılarda iframe içinden tetiklenen indirmeler bazen
+// sessizce engelleniyor (aynı domainde olsa bile). Bu yüzden indirme
+// bağlantısını mümkünse ÜST pencerenin (index.html) belgesinde
+// oluşturup tıklıyoruz — üst düzey pencereler mobilde çok daha
+// güvenilir şekilde indirme izni alıyor.
+function triggerDownload(blob, filename){
+  const url = URL.createObjectURL(blob);
+  let targetDoc = document, targetWin = window;
+  try{
+    if (window.top && window.top !== window && window.top.document) {
+      targetDoc = window.top.document;
+      targetWin = window.top;
+    }
+  }catch(e){ /* çapraz kaynak erişimi yoksa mevcut belgede kal */ }
+  const a = targetDoc.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  targetDoc.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+    try{ targetDoc.body.removeChild(a); }catch(e){}
+    URL.revokeObjectURL(url);
+  }, 1500);
+}
+
 function exportProtocolToExcel(t){
   try{
     const { cols, headers } = buildExportHeaders(t);
@@ -985,7 +1012,9 @@ function exportProtocolToExcel(t){
     const sheetName = (t.name || 'Test').replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g,' ').trim().slice(0,31) || 'Test';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
     const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
-    XLSX.writeFile(wb, `${safeName}.xlsx`);
+    const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+    const blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    triggerDownload(blob, `${safeName}.xlsx`);
   }catch(err){
     console.error('Excel indirme hatası:', err);
     alert('Excel dosyası oluşturulurken bir hata oluştu: ' + (err && err.message ? err.message : err));
@@ -1580,6 +1609,8 @@ function downloadPdf(title, bodyEl, filenameBase){
   // gizli kopyaları güvenilir şekilde yakalayamıyor (boş/şeffaf çıktı
   // üretebiliyor). Bu yüzden gerçekten EKRANDA GÖRÜNEN öğeyi
   // kullanıyoruz — geçici bir başlık ekleyip PDF sonrası kaldırıyoruz.
+  // İndirmeyi de (Excel'de olduğu gibi) mobilde daha güvenilir olan
+  // üst pencere üzerinden tetikliyoruz.
   const header = document.createElement('div');
   header.style.cssText = 'font-family:Segoe UI,Arial,sans-serif; padding:0 0 10px;';
   header.innerHTML = `<h2 style="color:#0b2942; margin:0 0 2px; font-size:17px;">${title}</h2>
@@ -1592,7 +1623,10 @@ function downloadPdf(title, bodyEl, filenameBase){
     image: { type:'jpeg', quality:0.98 },
     html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
     jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-  }).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
+  }).from(bodyEl).outputPdf('blob').then((blob)=>{
+    cleanup();
+    triggerDownload(blob, `${filenameBase}.pdf`);
+  }).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
 }
 
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
