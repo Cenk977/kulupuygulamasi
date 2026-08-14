@@ -1782,6 +1782,79 @@ function entryValueList(t, row, steps){
   return avg.sec!==null ? [avg.sec] : [];
 }
 
+// Bir protokolün "adımlarını" (ayak testinde 4 mesafe, tekrarlı sette
+// N tekrar, kümülatifte kontrol noktaları, RP Set'te basamak-tekrar
+// birleşimi) matris/ısı haritası sütunları olarak döndürür.
+// RP Set'te yapı her kayıtta değişebildiği için, karşılaştırılacak
+// TÜM session'ların basamaklarının BİRLEŞİMİ (union) alınır.
+function protocolMatrixColumns(t, sessionsForUnion){
+  if(t.family==='ayak'){
+    return [400,200,100,50].map(d=>({ key:`d${d}`, label:`${d}m` }));
+  }
+  if(t.family==='tekrarli'){
+    return Array.from({length:t.config.reps}, (_,i)=>({ key:`rep${i+1}`, label:`T${i+1}` }));
+  }
+  if(t.family==='kumulatif'){
+    // Piramit gibi mesafenin tekrar ettiği (100-200-300-400-300-200-100)
+    // protokollerde etiketi sıra numarasıyla da ayırt ediyoruz.
+    return t.config.checkpoints.map((d,i)=> ({ key:`cp${d}`, label:`${i+1}. (${d}m)` }));
+  }
+  if(t.family==='rpset'){
+    const map = new Map();
+    (sessionsForUnion||[]).forEach(s=>{
+      (s.steps||[]).forEach((st,si)=>{
+        const branchName = st.branch || st.desc || 'Serbest';
+        for(let i=1;i<=st.reps;i++){
+          const key = `s${si}_r${i}`;
+          if(!map.has(key)) map.set(key, `${branchName} ${i}`);
+        }
+      });
+    });
+    return Array.from(map.entries()).map(([key,label])=>({ key, label }));
+  }
+  return [];
+}
+function matrixRowValues(columns, row){
+  const out = {};
+  columns.forEach(c=>{ out[c.key] = parseTimeStr(row[c.key]); });
+  return out;
+}
+
+// Renk kodlu ısı haritası tablosu. Sütun bazında (o "adımın" kendi
+// geçmişi içinde) normalize edilir: en hızlı yeşile, en yavaş kırmızıya
+// yakın olur — böylece aynı tekrar/mesafe farklı satırlarda (tarih ya
+// da isim) kolayca karşılaştırılabilir.
+function renderMatrixHeatmap(columns, rows){
+  if(!columns.length || !rows.length) return '';
+  const colStats = columns.map(c=>{
+    const vals = rows.map(r=> r.values[c.key]).filter(v=> v!==null && v!==undefined && isFinite(v));
+    return vals.length ? { min: Math.min(...vals), max: Math.max(...vals) } : null;
+  });
+  function cellColor(v, stat){
+    if(v===null || v===undefined || !stat || stat.min===stat.max) return '#fff';
+    const frac = (v - stat.min) / (stat.max - stat.min); // 0=en hızlı, 1=en yavaş
+    const hue = 140 - frac*140; // 140=yeşil ... 0=kırmızı
+    return `hsl(${hue.toFixed(0)}, 65%, 87%)`;
+  }
+  let html = `<div style="overflow-x:auto; border:1px solid var(--line); border-radius:8px; margin-bottom:4px;">
+    <table class="detail-table" style="margin:0;"><tr><th style="position:sticky; left:0; background:var(--pool-light); z-index:1;"></th>`;
+  columns.forEach(c=> html += `<th>${c.label}</th>`);
+  html += `</tr>`;
+  rows.forEach(r=>{
+    html += `<tr><td style="font-weight:700; text-align:left; position:sticky; left:0; background:#fff; white-space:nowrap;">${r.label}</td>`;
+    columns.forEach((c,ci)=>{
+      const v = r.values[c.key];
+      const bg = cellColor(v, colStats[ci]);
+      const txt = (v===null || v===undefined) ? '—' : fmtTime(v);
+      html += `<td style="background:${bg};">${txt}</td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</table></div>
+  <div style="font-size:10.5px; color:#8a97a0; margin-bottom:14px;">🟩 o sütundaki en hızlı &nbsp; → &nbsp; 🟥 o sütundaki en yavaş (her sütun kendi içinde karşılaştırılır)</div>`;
+  return html;
+}
+
 function protocolsForAthlete(athlete){
   const ids = new Set();
   MANUAL.sessions.forEach(s=>{ if((s.athletes||[]).some(a=>a.athlete===athlete)) ids.add(s.templateId); });
@@ -1944,11 +2017,8 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
   let html = '';
   let any = false;
   const titleParts = [];
-  const multiTest = protoIds.length > 1;
-  const combinedSeries = [];
-  let anyPace = false, anyNonPace = false;
 
-  protoIds.forEach((pid, idx)=>{
+  protoIds.forEach((pid)=>{
     const t = MANUAL.templates.find(x=>x.id===pid);
     if(!t) return;
     const entries = athleteEntriesForProto(athlete, pid);
@@ -1959,18 +2029,32 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
     html += `<h4 style="color:var(--navy); margin:18px 0 4px;">${athlete} — ${t.name}</h4>
     <div style="font-size:12px; color:#647680; margin-bottom:10px;">${entries.length} kayıt · ${new Date(entries[0].session.date).toLocaleDateString('tr-TR')} → ${new Date(entries[entries.length-1].session.date).toLocaleDateString('tr-TR')}</div>`;
 
+    // Çizgi grafiği için HER TARİHTE TEK bir temsili değer (genel
+    // ortalama) kullanılır — tekrar tekrar değerler burada değil,
+    // aşağıdaki ısı haritası matrisinde gösterilir. Aksi halde aynı
+    // tarihe ait onlarca tekrar üst üste yığılıp çizgi yerine dikey
+    // nokta yığını gibi görünüyordu.
     const trendPoints = [];
     entries.forEach(e=>{
       const steps = t.family==='rpset' ? (e.session.steps||[]) : undefined;
-      entryValueList(t, e.row, steps).forEach(sec=> trendPoints.push({ date:e.session.date, sec }));
+      const avg = computeAvg(t, e.row, steps);
+      if(avg.sec!==null) trendPoints.push({ date:e.session.date, sec:avg.sec });
     });
-
-    if(t.family==='kumulatif') anyPace = true; else anyNonPace = true;
-
-    if(multiTest){
-      if(trendPoints.length) combinedSeries.push({ label:t.name, color: AP_COLOR_PALETTE[idx % AP_COLOR_PALETTE.length], points: trendPoints });
-    } else if(trendPoints.length>=2){
+    // Birden fazla test seçilmiş olsa bile HER protokol kendi ayrı
+    // grafiğini alır (birleştirilmiş tek grafik yerine).
+    if(trendPoints.length>=2){
       html += renderTrendSvg(trendPoints, t.family==='kumulatif');
+    }
+
+    // Isı haritası matrisi: sütunlar bu protokolün "adımları" (mesafe/
+    // tekrar/kontrol noktası), satırlar bu sporcunun tarihleri.
+    const matrixCols = protocolMatrixColumns(t, entries.map(e=>e.session));
+    if(matrixCols.length){
+      const matrixRows = entries.map(e=>{
+        const steps = t.family==='rpset' ? (e.session.steps||[]) : undefined;
+        return { label: new Date(e.session.date).toLocaleDateString('tr-TR'), values: matrixRowValues(matrixCols, e.row) };
+      });
+      html += renderMatrixHeatmap(matrixCols, matrixRows);
     }
 
     html += `<div style="overflow-x:auto; margin-top:10px;"><table class="detail-table"><tr><th>Tarih</th>`;
@@ -2001,12 +2085,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
     html += `</table></div>`;
   });
   if(!any){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için seçilen test(ler)de kayıt yok.</div>`; apDisableButtons(); return; }
-  let finalHtml = '';
-  if(multiTest && combinedSeries.length){
-    finalHtml += renderMultiTrendSvg(combinedSeries, anyPace && !anyNonPace);
-  }
-  finalHtml += html;
-  wrap.innerHTML = finalHtml;
+  wrap.innerHTML = html;
   $('#apResultWrap').dataset.title = `${athlete} — ${titleParts.join(' + ')}`;
   apEnableButtons();
 }
@@ -2030,14 +2109,19 @@ function renderBulkProtocols(protoIds, wrap){
     if(singleTest){
       // Tek test seçiliyse: bu teste giren HER sporcu için ayrı renkte
       // çizgi olarak tek bir toplu grafik üret (tarihler ortak eksende).
+      // Her (sporcu, tarih) için TEK temsili değer (genel ortalama)
+      // kullanılır — tekrar tekrar değerler yerine, aksi halde tek
+      // tarihte onlarca nokta üst üste yığılıp çizgi yerine dikey
+      // nokta yığını gibi görünüyordu (bkz. ısı haritası matrisi).
       const athleteMap = new Map();
       sessions.forEach(s=>{
         const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
         (s.athletes||[]).forEach(a=>{
-          entryValueList(t, a, steps).forEach(sec=>{
+          const avg = computeAvg(t, a, steps);
+          if(avg.sec!==null){
             if(!athleteMap.has(a.athlete)) athleteMap.set(a.athlete, []);
-            athleteMap.get(a.athlete).push({ date: s.date, sec });
-          });
+            athleteMap.get(a.athlete).push({ date: s.date, sec: avg.sec });
+          }
         });
       });
       const names = Array.from(athleteMap.keys()).sort((a,b)=> a.localeCompare(b,'tr'));
@@ -2051,6 +2135,17 @@ function renderBulkProtocols(protoIds, wrap){
       const cols = buildColumns(t, steps);
       html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')}${s.note ? ' · '+s.note : ''} — ${s.athletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);
+
+      if(singleTest){
+        // Isı haritası: sütunlar bu testin adımları, satırlar bu GÜNE
+        // ait sporcu isimleri (her tarih kendi ayrı matrisinde).
+        const matrixCols = t.family==='rpset' ? protocolMatrixColumns(t, [s]) : protocolMatrixColumns(t);
+        if(matrixCols.length){
+          const matrixRows = (s.athletes||[]).map(a=> ({ label:a.athlete, values: matrixRowValues(matrixCols, a) }));
+          html += renderMatrixHeatmap(matrixCols, matrixRows);
+        }
+      }
+
       html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
       cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
