@@ -360,19 +360,28 @@
 
 <!-- Athlete progress / development modal -->
 <div class="overlay" id="athleteProgressOverlay">
-  <div class="modal" style="max-width:920px;">
+  <div class="modal" style="max-width:960px;">
     <h3>Sporcu Gelişimi</h3>
     <div style="font-size:12.5px; color:#647680; margin:-6px 0 12px;">
-      Bir sporcu seç, sonra belirli bir protokolünü ya da tüm testlerinin özetini incele.
+      Sporcu bazlı: bir sporcunun seçtiğin testlerdeki gelişimini gör. Toplu: seçtiğin testlere katılan tüm sporcuları bir arada gör.
     </div>
-    <div class="field-row" style="align-items:flex-end;">
-      <div class="field" style="flex:1; min-width:200px;">
+    <div class="field-row" style="align-items:flex-end; gap:16px;">
+      <div class="field">
+        <label>Görünüm</label>
+        <div style="display:flex; gap:14px; padding-top:6px; font-size:13px;">
+          <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:400;"><input type="radio" name="apMode" id="apModeAthlete" value="athlete" checked> Sporcu Bazlı</label>
+          <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-weight:400;"><input type="radio" name="apMode" id="apModeBulk" value="bulk"> Toplu (Protokol Bazlı)</label>
+        </div>
+      </div>
+    </div>
+    <div class="field-row" style="align-items:flex-start; margin-top:10px;">
+      <div class="field" id="apAthleteField" style="flex:1; min-width:200px;">
         <label>Sporcu</label>
         <select id="apAthlete" style="width:100%;"></select>
       </div>
-      <div class="field" style="flex:1; min-width:200px;">
-        <label>Protokol</label>
-        <select id="apProto" style="width:100%;"></select>
+      <div class="field" style="flex:1; min-width:220px;">
+        <label>Test(ler) <span style="font-weight:400; color:#8a97a0;">(birden fazla seçilebilir)</span></label>
+        <div id="apProtoChecks" style="border:1px solid var(--line); border-radius:8px; max-height:140px; overflow-y:auto; padding:8px 10px; background:#fff;"></div>
       </div>
     </div>
     <div id="apResultWrap" style="margin-top:14px;"></div>
@@ -962,63 +971,24 @@ function buildExportHeaders(t){
   return { cols, headers };
 }
 
-// Mobil tarayıcılarda iframe içinden tetiklenen indirmeler bazen
-// sessizce engelleniyor (aynı domainde olsa bile). Bu yüzden indirme
-// bağlantısını mümkünse ÜST pencerenin (index.html) belgesinde
-// oluşturup tıklıyoruz — üst düzey pencereler mobilde çok daha
-// güvenilir şekilde indirme izni alıyor.
-function triggerDownload(blob, filename){
-  const url = URL.createObjectURL(blob);
-  let targetDoc = document, targetWin = window;
-  try{
-    if (window.top && window.top !== window && window.top.document) {
-      targetDoc = window.top.document;
-      targetWin = window.top;
-    }
-  }catch(e){ /* çapraz kaynak erişimi yoksa mevcut belgede kal */ }
-  const a = targetDoc.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  a.style.display = 'none';
-  targetDoc.body.appendChild(a);
-  a.click();
-  setTimeout(()=>{
-    try{ targetDoc.body.removeChild(a); }catch(e){}
-    URL.revokeObjectURL(url);
-  }, 1500);
-}
-
 function exportProtocolToExcel(t){
-  try{
-    const { cols, headers } = buildExportHeaders(t);
-    const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
-    if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
-    const aoa = [headers];
-    sessions.forEach(s=>{
-      s.athletes.forEach(a=>{
-        const row = [s.date, s.note||'', a.athlete];
-        cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
-        row.push(computeAvg(t,a).text);
-        aoa.push(row);
-      });
+  const { cols, headers } = buildExportHeaders(t);
+  const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
+  const aoa = [headers];
+  sessions.forEach(s=>{
+    s.athletes.forEach(a=>{
+      const row = [s.date, s.note||'', a.athlete];
+      cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
+      row.push(computeAvg(t,a).text);
+      aoa.push(row);
     });
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    // Excel sayfa adları : \ / ? * [ ] karakterlerini kabul etmiyor
-    // (ör. "Ayak Test (400/200/100/50)" adındaki "/" işaretleri hataya
-    // sebep oluyordu) — dosya adından bağımsız olarak sayfa adını da
-    // ayrıca temizliyoruz.
-    const sheetName = (t.name || 'Test').replace(/[:\\/?*\[\]]/g, ' ').replace(/\s+/g,' ').trim().slice(0,31) || 'Test';
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
-    const wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
-    const blob = new Blob([wbout], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    triggerDownload(blob, `${safeName}.xlsx`);
-  }catch(err){
-    console.error('Excel indirme hatası:', err);
-    alert('Excel dosyası oluşturulurken bir hata oluştu: ' + (err && err.message ? err.message : err));
-  }
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t.name.slice(0,31) || 'Test');
+  const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
+  XLSX.writeFile(wb, `${safeName}.xlsx`);
 }
 
 function excelCellToDateStr(v){
@@ -1609,8 +1579,6 @@ function downloadPdf(title, bodyEl, filenameBase){
   // gizli kopyaları güvenilir şekilde yakalayamıyor (boş/şeffaf çıktı
   // üretebiliyor). Bu yüzden gerçekten EKRANDA GÖRÜNEN öğeyi
   // kullanıyoruz — geçici bir başlık ekleyip PDF sonrası kaldırıyoruz.
-  // İndirmeyi de (Excel'de olduğu gibi) mobilde daha güvenilir olan
-  // üst pencere üzerinden tetikliyoruz.
   const header = document.createElement('div');
   header.style.cssText = 'font-family:Segoe UI,Arial,sans-serif; padding:0 0 10px;';
   header.innerHTML = `<h2 style="color:#0b2942; margin:0 0 2px; font-size:17px;">${title}</h2>
@@ -1623,10 +1591,7 @@ function downloadPdf(title, bodyEl, filenameBase){
     image: { type:'jpeg', quality:0.98 },
     html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
     jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-  }).from(bodyEl).outputPdf('blob').then((blob)=>{
-    cleanup();
-    triggerDownload(blob, `${filenameBase}.pdf`);
-  }).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
+  }).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
 }
 
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
@@ -1822,13 +1787,28 @@ function populateApAthletes(){
   const names = knownAthletes();
   sel.innerHTML = names.length ? names.map(n=>`<option value="${n}">${n}</option>`).join('') : `<option value="">Kayıt yok</option>`;
 }
-function populateApProtos(){
-  const athlete = $('#apAthlete').value;
-  const sel = $('#apProto');
-  const protos = protocolsForAthlete(athlete);
-  if(!protos.length){ sel.innerHTML = `<option value="">Bu sporcu için kayıt yok</option>`; return; }
-  sel.innerHTML = `<option value="__all__">Tüm Protokoller (özet)</option>` +
-    protos.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+function allProtocolsWithData(){
+  const ids = new Set(MANUAL.sessions.map(s=>s.templateId));
+  return MANUAL.templates.filter(t=> ids.has(t.id));
+}
+function populateApProtoChecks(){
+  const bulk = $('#apModeBulk').checked;
+  const box = $('#apProtoChecks');
+  const protos = bulk ? allProtocolsWithData() : protocolsForAthlete($('#apAthlete').value);
+  if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; return; }
+  box.innerHTML = protos.map(t=>`<label style="display:flex; align-items:center; gap:6px; padding:3px 0; font-size:13px; font-weight:400; cursor:pointer;">
+    <input type="checkbox" class="apProtoCheck" value="${t.id}" checked> ${t.name}
+  </label>`).join('');
+  box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', renderAthleteProgress));
+}
+function apSelectedProtoIds(){
+  return Array.from(document.querySelectorAll('.apProtoCheck:checked')).map(cb=>cb.value);
+}
+function updateApModeUI(){
+  const bulk = $('#apModeBulk').checked;
+  $('#apAthleteField').style.display = bulk ? 'none' : '';
+  populateApProtoChecks();
+  renderAthleteProgress();
 }
 
 // Basit, kütüphanesiz SVG çizgi grafiği: zaman içindeki temsili
@@ -1874,10 +1854,11 @@ function renderTrendSvg(points, paceMode){
   </div>`;
 }
 
-function renderAthleteAllProtocolsSummary(athlete, wrap){
-  const protos = protocolsForAthlete(athlete);
-  if(!protos.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için henüz hiç test kaydı yok.</div>`; apDisableButtons(); return; }
-  let html = `<h4 style="color:var(--navy); margin:0 0 10px;">${athlete} — Tüm Testler</h4>
+function renderAthleteFilteredSummary(athlete, protoIds, wrap){
+  const idSet = new Set(protoIds);
+  const protos = protocolsForAthlete(athlete).filter(t=> idSet.has(t.id));
+  if(!protos.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için bu testlerde kayıt yok.</div>`; apDisableButtons(); return; }
+  let html = `<h4 style="color:var(--navy); margin:0 0 10px;">${athlete} — Seçilen Testler</h4>
   <div style="overflow-x:auto;"><table class="detail-table"><tr><th>Protokol</th><th>Kayıt Sayısı</th><th>İlk Tarih</th><th>Son Tarih</th><th>Son Sonuç</th></tr>`;
   protos.forEach(t=>{
     const entries = athleteEntriesForProto(athlete, t.id);
@@ -1894,12 +1875,15 @@ function renderAthleteAllProtocolsSummary(athlete, wrap){
     </tr>`;
   });
   html += `</table></div>
-  <div style="font-size:11px; color:#8a97a0; margin-top:8px;">Protokol adına tıklayarak o testteki tam gelişim geçmişini ve grafiğini görebilirsin.</div>`;
+  <div style="font-size:11px; color:#8a97a0; margin-top:8px;">Protokol adına tıklayarak sadece o testin gelişim geçmişini ve grafiğini görebilirsin.</div>`;
   wrap.innerHTML = html;
   wrap.querySelectorAll('[data-goto-proto]').forEach(el=>{
-    el.onclick = ()=>{ $('#apProto').value = el.dataset.gotoProto; renderAthleteProgress(); };
+    el.onclick = ()=>{
+      document.querySelectorAll('.apProtoCheck').forEach(cb=> cb.checked = (cb.value===el.dataset.gotoProto));
+      renderAthleteProgress();
+    };
   });
-  $('#apResultWrap').dataset.title = `${athlete} — Tüm Testler Özeti`;
+  $('#apResultWrap').dataset.title = `${athlete} — Seçilen Testler Özeti`;
   apEnableButtons();
 }
 
@@ -1952,30 +1936,82 @@ function renderAthleteProtocolDetail(athlete, protoId, wrap){
   apEnableButtons();
 }
 
+// TOPLU (protokol bazlı): seçilen test(ler)e katılan TÜM sporcuları,
+// tüm tarihler boyunca, tek ekranda listeler.
+function renderBulkProtocols(protoIds, wrap){
+  let anyData = false;
+  let html = '';
+  const titleParts = [];
+  protoIds.forEach(pid=>{
+    const t = MANUAL.templates.find(x=>x.id===pid);
+    if(!t) return;
+    const sessions = MANUAL.sessions.filter(s=>s.templateId===pid).sort((a,b)=> a.date.localeCompare(b.date));
+    if(!sessions.length) return;
+    anyData = true;
+    titleParts.push(t.name);
+    html += `<h4 style="color:var(--navy); margin:16px 0 6px;">${t.name}</h4>`;
+    sessions.forEach(s=>{
+      const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
+      const cols = buildColumns(t, steps);
+      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')}${s.note ? ' · '+s.note : ''} — ${s.athletes.length} sporcu</div>`;
+      html += stepSummaryHtml(steps);
+      html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
+      cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
+      html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
+      s.athletes.forEach(a=>{
+        html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
+        cols.forEach(c=>{
+          let v = a[c.key];
+          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
+          else if(v===undefined || v===''){ v = '—'; }
+          html += `<td>${v}</td>`;
+        });
+        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps).text}</td></tr>`;
+      });
+      html += `</table></div>`;
+    });
+  });
+  if(!anyData){ wrap.innerHTML = `<div class="empty-side">Seçilen test(ler) için kayıt yok.</div>`; apDisableButtons(); return; }
+  wrap.innerHTML = html;
+  $('#apResultWrap').dataset.title = titleParts.join(' + ');
+  apEnableButtons();
+}
+
 function renderAthleteProgress(){
-  const athlete = $('#apAthlete').value;
-  const protoSel = $('#apProto').value;
   const wrap = $('#apResultWrap');
+  const bulk = $('#apModeBulk').checked;
+  const protoIds = apSelectedProtoIds();
+  if(bulk){
+    if(!protoIds.length){ wrap.innerHTML = `<div class="empty-side">En az bir test seç.</div>`; apDisableButtons(); return; }
+    renderBulkProtocols(protoIds, wrap);
+    return;
+  }
+  const athlete = $('#apAthlete').value;
   if(!athlete){ wrap.innerHTML = ''; apDisableButtons(); return; }
-  if(!protoSel || protoSel === '__all__') renderAthleteAllProtocolsSummary(athlete, wrap);
-  else renderAthleteProtocolDetail(athlete, protoSel, wrap);
+  if(!protoIds.length){ wrap.innerHTML = `<div class="empty-side">En az bir test seç.</div>`; apDisableButtons(); return; }
+  if(protoIds.length===1) renderAthleteProtocolDetail(athlete, protoIds[0], wrap);
+  else renderAthleteFilteredSummary(athlete, protoIds, wrap);
 }
 
 $('#btnAthleteProgressOpen').onclick = ()=>{
+  $('#apModeAthlete').checked = true;
+  $('#apAthleteField').style.display = '';
   populateApAthletes();
   const names = knownAthletes();
   if(!names.length){
     $('#apResultWrap').innerHTML = `<div class="empty-side">Henüz sporcu/kayıt yok.</div>`;
+    $('#apProtoChecks').innerHTML = '';
     apDisableButtons();
   } else {
-    populateApProtos();
+    populateApProtoChecks();
     renderAthleteProgress();
   }
   $('#athleteProgressOverlay').classList.add('show');
 };
 $('#btnCloseAthleteProgress').onclick = ()=> $('#athleteProgressOverlay').classList.remove('show');
-$('#apAthlete').addEventListener('change', ()=>{ populateApProtos(); renderAthleteProgress(); });
-$('#apProto').addEventListener('change', renderAthleteProgress);
+$('#apAthlete').addEventListener('change', ()=>{ populateApProtoChecks(); renderAthleteProgress(); });
+$('#apModeAthlete').addEventListener('change', updateApModeUI);
+$('#apModeBulk').addEventListener('change', updateApModeUI);
 $('#btnPrintAthleteProgress').onclick = ()=> printNow($('#apResultWrap').dataset.title || 'Sporcu Gelişimi', $('#apResultWrap').innerHTML);
 $('#btnPdfAthleteProgress').onclick = ()=>{
   const title = $('#apResultWrap').dataset.title || 'Sporcu Gelişimi';
