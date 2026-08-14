@@ -1854,14 +1854,85 @@ function renderTrendSvg(points, paceMode){
   </div>`;
 }
 
-// Sporcu bazlı: seçilen HER test için tam detay (grafik + tarih tablosu)
-// art arda gösterilir — özet satırına düşülmez, kaç test seçilirse
-// seçilsin hepsinin ayrıntısı görünür.
+// Renkli çoklu-seri grafik: her seri (test ya da sporcu) farklı renkte
+// bir çizgi olarak aynı eksende çizilir. Bir serinin verisi olmayan
+// tarihlerde çizgi o noktayı atlayıp bir sonraki mevcut noktaya gider.
+// Altına, her serinin ilk→son değişimini gösteren küçük bir lejant konur.
+const AP_COLOR_PALETTE = ['#0f7c8c','#c0392b','#8e44ad','#e67e22','#16a085','#2c3e50','#d35400','#27ae60','#2980b9','#c2185b','#7f8c8d','#f39c12'];
+
+function renderMultiTrendSvg(series, paceMode){
+  series = series.filter(s=> s.points && s.points.length);
+  if(!series.length) return '';
+
+  const w = 720, h = 190, padL=46, padR=16, padT=14, padB=28;
+
+  // Ortak tarih ekseni: tüm serilerdeki tarihlerin birleşimi, sıralı.
+  const dateSet = new Map(); // dateStr -> time (sıralama için)
+  series.forEach(s=> s.points.forEach(p=> dateSet.set(p.date, new Date(p.date).getTime())));
+  const masterDates = Array.from(dateSet.keys()).sort((a,b)=> dateSet.get(a)-dateSet.get(b));
+  const dateIndex = new Map(masterDates.map((d,i)=>[d,i]));
+
+  const allSecs = series.flatMap(s=> s.points.map(p=>p.sec));
+  let min = Math.min(...allSecs), max = Math.max(...allSecs);
+  if(min===max){ min -= 1; max += 1; }
+
+  const xPos = i => padL + (masterDates.length===1 ? 0 : (i/(masterDates.length-1)) * (w-padL-padR));
+  const yPos = sec => padT + (1 - (sec-min)/(max-min)) * (h-padT-padB);
+
+  const step = Math.max(1, Math.ceil(masterDates.length/8));
+  const xLabels = masterDates.map((d,i)=>{
+    if(i%step!==0 && i!==masterDates.length-1) return '';
+    return `<text x="${xPos(i).toFixed(1)}" y="${h-9}" font-size="9" fill="#7a8a94" text-anchor="middle">${new Date(d).toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'})}</text>`;
+  }).join('');
+
+  let seriesSvg = '';
+  let legendHtml = '';
+  series.forEach(s=>{
+    const pts = s.points.slice().sort((a,b)=> dateSet.get(a.date)-dateSet.get(b.date));
+    const idxs = pts.map(p=> dateIndex.get(p.date));
+    const pathD = pts.map((p,i)=> `${i===0?'M':'L'} ${xPos(idxs[i]).toFixed(1)} ${yPos(p.sec).toFixed(1)}`).join(' ');
+    const dots = pts.map((p,i)=> `<circle cx="${xPos(idxs[i]).toFixed(1)}" cy="${yPos(p.sec).toFixed(1)}" r="3.2" fill="${s.color}"/>`).join('');
+    seriesSvg += `<path d="${pathD}" fill="none" stroke="${s.color}" stroke-width="2"/>${dots}`;
+
+    const first = pts[0].sec, last = pts[pts.length-1].sec;
+    const improved = last < first, worse = last > first;
+    const deltaColor = pts.length<2 ? '#8a97a0' : (improved ? '#1a8a4a' : (worse ? '#c0392b' : '#7a8a94'));
+    const deltaTxt = pts.length<2 ? '—' : fmtDelta(last-first);
+    legendHtml += `<div style="display:flex; align-items:center; gap:6px; font-size:12px; padding:3px 0;">
+      <span style="width:10px; height:10px; border-radius:2px; background:${s.color}; flex:none;"></span>
+      <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.label}</span>
+      <span style="font-weight:700; color:${deltaColor}; flex:none;">${deltaTxt}</span>
+    </div>`;
+  });
+
+  return `<div style="border:1px solid var(--line); border-radius:8px; padding:10px 8px 4px; background:#fff;">
+    <div style="font-size:11.5px; color:#647680; font-weight:600; padding:0 6px 6px;">${paceMode ? 'Ortalama Pace/100 Trendi' : 'Temsili Süre Trendi'}</div>
+    <svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; display:block;">
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="var(--line)"/>
+      <line x1="${padL}" y1="${h-padB}" x2="${w-padR}" y2="${h-padB}" stroke="var(--line)"/>
+      ${seriesSvg}
+      ${xLabels}
+      <text x="${(padL-6).toFixed(1)}" y="${(yPos(max)+4).toFixed(1)}" font-size="9" fill="#7a8a94" text-anchor="end">${fmtTime(max)}</text>
+      <text x="${(padL-6).toFixed(1)}" y="${(yPos(min)+4).toFixed(1)}" font-size="9" fill="#7a8a94" text-anchor="end">${fmtTime(min)}</text>
+    </svg>
+    <div style="max-height:150px; overflow-y:auto; border-top:1px solid var(--line); margin-top:4px; padding:4px 6px 2px;">
+      ${legendHtml}
+    </div>
+  </div>`;
+}
+
+// Sporcu bazlı: seçilen HER test için tarih tablosu art arda gösterilir.
+// Tek test seçiliyse o testin kendi grafiği; birden fazla test seçiliyse
+// tüm testler TEK grafikte farklı renklerde çizilir (tablolar yine ayrı ayrı).
 function renderAthleteMultiDetail(athlete, protoIds, wrap){
   let html = '';
   let any = false;
   const titleParts = [];
-  protoIds.forEach(pid=>{
+  const multiTest = protoIds.length > 1;
+  const combinedSeries = [];
+  let anyPace = false, anyNonPace = false;
+
+  protoIds.forEach((pid, idx)=>{
     const t = MANUAL.templates.find(x=>x.id===pid);
     if(!t) return;
     const entries = athleteEntriesForProto(athlete, pid);
@@ -1878,7 +1949,14 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
       const avg = computeAvg(t, e.row, steps);
       if(avg.sec!==null) trendPoints.push({ date:e.session.date, sec:avg.sec });
     });
-    if(trendPoints.length>=2) html += renderTrendSvg(trendPoints, t.family==='kumulatif');
+
+    if(t.family==='kumulatif') anyPace = true; else anyNonPace = true;
+
+    if(multiTest){
+      if(trendPoints.length) combinedSeries.push({ label:t.name, color: AP_COLOR_PALETTE[idx % AP_COLOR_PALETTE.length], points: trendPoints });
+    } else if(trendPoints.length>=2){
+      html += renderTrendSvg(trendPoints, t.family==='kumulatif');
+    }
 
     html += `<div style="overflow-x:auto; margin-top:10px;"><table class="detail-table"><tr><th>Tarih</th>`;
     if(t.family==='rpset'){
@@ -1908,7 +1986,12 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
     html += `</table></div>`;
   });
   if(!any){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için seçilen test(ler)de kayıt yok.</div>`; apDisableButtons(); return; }
-  wrap.innerHTML = html;
+  let finalHtml = '';
+  if(multiTest && combinedSeries.length){
+    finalHtml += renderMultiTrendSvg(combinedSeries, anyPace && !anyNonPace);
+  }
+  finalHtml += html;
+  wrap.innerHTML = finalHtml;
   $('#apResultWrap').dataset.title = `${athlete} — ${titleParts.join(' + ')}`;
   apEnableButtons();
 }
@@ -1919,6 +2002,8 @@ function renderBulkProtocols(protoIds, wrap){
   let anyData = false;
   let html = '';
   const titleParts = [];
+  const singleTest = protoIds.length === 1;
+  let chartHtml = '';
   protoIds.forEach(pid=>{
     const t = MANUAL.templates.find(x=>x.id===pid);
     if(!t) return;
@@ -1926,6 +2011,26 @@ function renderBulkProtocols(protoIds, wrap){
     if(!sessions.length) return;
     anyData = true;
     titleParts.push(t.name);
+
+    if(singleTest){
+      // Tek test seçiliyse: bu teste giren HER sporcu için ayrı renkte
+      // çizgi olarak tek bir toplu grafik üret (tarihler ortak eksende).
+      const athleteMap = new Map();
+      sessions.forEach(s=>{
+        const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
+        (s.athletes||[]).forEach(a=>{
+          const avg = computeAvg(t, a, steps);
+          if(avg.sec!==null){
+            if(!athleteMap.has(a.athlete)) athleteMap.set(a.athlete, []);
+            athleteMap.get(a.athlete).push({ date: s.date, sec: avg.sec });
+          }
+        });
+      });
+      const names = Array.from(athleteMap.keys()).sort((a,b)=> a.localeCompare(b,'tr'));
+      const series = names.map((name, idx)=> ({ label:name, color: AP_COLOR_PALETTE[idx % AP_COLOR_PALETTE.length], points: athleteMap.get(name) }));
+      if(series.length) chartHtml = renderMultiTrendSvg(series, t.family==='kumulatif');
+    }
+
     html += `<h4 style="color:var(--navy); margin:16px 0 6px;">${t.name}</h4>`;
     sessions.forEach(s=>{
       const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
@@ -1949,7 +2054,7 @@ function renderBulkProtocols(protoIds, wrap){
     });
   });
   if(!anyData){ wrap.innerHTML = `<div class="empty-side">Seçilen test(ler) için kayıt yok.</div>`; apDisableButtons(); return; }
-  wrap.innerHTML = html;
+  wrap.innerHTML = chartHtml + html;
   $('#apResultWrap').dataset.title = titleParts.join(' + ');
   apEnableButtons();
 }
