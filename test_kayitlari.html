@@ -1854,85 +1854,62 @@ function renderTrendSvg(points, paceMode){
   </div>`;
 }
 
-function renderAthleteFilteredSummary(athlete, protoIds, wrap){
-  const idSet = new Set(protoIds);
-  const protos = protocolsForAthlete(athlete).filter(t=> idSet.has(t.id));
-  if(!protos.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için bu testlerde kayıt yok.</div>`; apDisableButtons(); return; }
-  let html = `<h4 style="color:var(--navy); margin:0 0 10px;">${athlete} — Seçilen Testler</h4>
-  <div style="overflow-x:auto;"><table class="detail-table"><tr><th>Protokol</th><th>Kayıt Sayısı</th><th>İlk Tarih</th><th>Son Tarih</th><th>Son Sonuç</th></tr>`;
-  protos.forEach(t=>{
-    const entries = athleteEntriesForProto(athlete, t.id);
+// Sporcu bazlı: seçilen HER test için tam detay (grafik + tarih tablosu)
+// art arda gösterilir — özet satırına düşülmez, kaç test seçilirse
+// seçilsin hepsinin ayrıntısı görünür.
+function renderAthleteMultiDetail(athlete, protoIds, wrap){
+  let html = '';
+  let any = false;
+  const titleParts = [];
+  protoIds.forEach(pid=>{
+    const t = MANUAL.templates.find(x=>x.id===pid);
+    if(!t) return;
+    const entries = athleteEntriesForProto(athlete, pid);
     if(!entries.length) return;
-    const first = entries[0], last = entries[entries.length-1];
-    const steps = t.family==='rpset' ? (last.session.steps||[]) : undefined;
-    const lastAvg = computeAvg(t, last.row, steps).text;
-    html += `<tr>
-      <td class="who" style="cursor:pointer; color:var(--pool); text-decoration:underline;" data-goto-proto="${t.id}">${t.name}</td>
-      <td>${entries.length}</td>
-      <td>${new Date(first.session.date).toLocaleDateString('tr-TR')}</td>
-      <td>${new Date(last.session.date).toLocaleDateString('tr-TR')}</td>
-      <td style="font-weight:700; color:var(--navy-2);">${lastAvg}</td>
-    </tr>`;
-  });
-  html += `</table></div>
-  <div style="font-size:11px; color:#8a97a0; margin-top:8px;">Protokol adına tıklayarak sadece o testin gelişim geçmişini ve grafiğini görebilirsin.</div>`;
-  wrap.innerHTML = html;
-  wrap.querySelectorAll('[data-goto-proto]').forEach(el=>{
-    el.onclick = ()=>{
-      document.querySelectorAll('.apProtoCheck').forEach(cb=> cb.checked = (cb.value===el.dataset.gotoProto));
-      renderAthleteProgress();
-    };
-  });
-  $('#apResultWrap').dataset.title = `${athlete} — Seçilen Testler Özeti`;
-  apEnableButtons();
-}
+    any = true;
+    titleParts.push(t.name);
 
-function renderAthleteProtocolDetail(athlete, protoId, wrap){
-  const t = MANUAL.templates.find(x=>x.id===protoId);
-  if(!t){ wrap.innerHTML = ''; apDisableButtons(); return; }
-  const entries = athleteEntriesForProto(athlete, protoId);
-  if(!entries.length){ wrap.innerHTML = `<div class="empty-side">Bu protokolde bu sporcu için kayıt yok.</div>`; apDisableButtons(); return; }
+    html += `<h4 style="color:var(--navy); margin:18px 0 4px;">${athlete} — ${t.name}</h4>
+    <div style="font-size:12px; color:#647680; margin-bottom:10px;">${entries.length} kayıt · ${new Date(entries[0].session.date).toLocaleDateString('tr-TR')} → ${new Date(entries[entries.length-1].session.date).toLocaleDateString('tr-TR')}</div>`;
 
-  let html = `<h4 style="color:var(--navy); margin:0 0 4px;">${athlete} — ${t.name}</h4>
-  <div style="font-size:12px; color:#647680; margin-bottom:10px;">${entries.length} kayıt · ${new Date(entries[0].session.date).toLocaleDateString('tr-TR')} → ${new Date(entries[entries.length-1].session.date).toLocaleDateString('tr-TR')}</div>`;
-
-  const trendPoints = [];
-  entries.forEach(e=>{
-    const steps = t.family==='rpset' ? (e.session.steps||[]) : undefined;
-    const avg = computeAvg(t, e.row, steps);
-    if(avg.sec!==null) trendPoints.push({ date:e.session.date, sec:avg.sec });
-  });
-  if(trendPoints.length>=2) html += renderTrendSvg(trendPoints, t.family==='kumulatif');
-
-  html += `<div style="overflow-x:auto; margin-top:10px;"><table class="detail-table"><tr><th>Tarih</th>`;
-  if(t.family==='rpset'){
-    html += `<th>Set Özeti</th><th>Basamak Ortalamaları</th></tr>`;
+    const trendPoints = [];
     entries.forEach(e=>{
-      const steps = e.session.steps || [];
-      const summary = steps.map((s,si)=> `B${si+1}: ${s.reps}x${s.dist}m ${s.branch||s.desc||'Serbest'}`).join('<br>');
-      html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>
-        <td style="font-size:11px; text-align:left;">${summary}</td>
-        <td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, steps).text}</td></tr>`;
+      const steps = t.family==='rpset' ? (e.session.steps||[]) : undefined;
+      const avg = computeAvg(t, e.row, steps);
+      if(avg.sec!==null) trendPoints.push({ date:e.session.date, sec:avg.sec });
     });
-  } else {
-    const cols = buildColumns(t);
-    cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-    html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
-    entries.forEach(e=>{
-      html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>`;
-      cols.forEach(c=>{
-        let v = e.row[c.key];
-        if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-        else if(v===undefined || v===''){ v = '—'; }
-        html += `<td>${v}</td>`;
+    if(trendPoints.length>=2) html += renderTrendSvg(trendPoints, t.family==='kumulatif');
+
+    html += `<div style="overflow-x:auto; margin-top:10px;"><table class="detail-table"><tr><th>Tarih</th>`;
+    if(t.family==='rpset'){
+      html += `<th>Set Özeti</th><th>Basamak Ortalamaları</th></tr>`;
+      entries.forEach(e=>{
+        const steps = e.session.steps || [];
+        const summary = steps.map((s,si)=> `B${si+1}: ${s.reps}x${s.dist}m ${s.branch||s.desc||'Serbest'}`).join('<br>');
+        html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>
+          <td style="font-size:11px; text-align:left;">${summary}</td>
+          <td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, steps).text}</td></tr>`;
       });
-      html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row).text}</td></tr>`;
-    });
-  }
-  html += `</table></div>`;
-
+    } else {
+      const cols = buildColumns(t);
+      cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
+      html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
+      entries.forEach(e=>{
+        html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>`;
+        cols.forEach(c=>{
+          let v = e.row[c.key];
+          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
+          else if(v===undefined || v===''){ v = '—'; }
+          html += `<td>${v}</td>`;
+        });
+        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row).text}</td></tr>`;
+      });
+    }
+    html += `</table></div>`;
+  });
+  if(!any){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için seçilen test(ler)de kayıt yok.</div>`; apDisableButtons(); return; }
   wrap.innerHTML = html;
-  $('#apResultWrap').dataset.title = `${athlete} — ${t.name} Gelişimi`;
+  $('#apResultWrap').dataset.title = `${athlete} — ${titleParts.join(' + ')}`;
   apEnableButtons();
 }
 
@@ -1989,8 +1966,7 @@ function renderAthleteProgress(){
   const athlete = $('#apAthlete').value;
   if(!athlete){ wrap.innerHTML = ''; apDisableButtons(); return; }
   if(!protoIds.length){ wrap.innerHTML = `<div class="empty-side">En az bir test seç.</div>`; apDisableButtons(); return; }
-  if(protoIds.length===1) renderAthleteProtocolDetail(athlete, protoIds[0], wrap);
-  else renderAthleteFilteredSummary(athlete, protoIds, wrap);
+  renderAthleteMultiDetail(athlete, protoIds, wrap);
 }
 
 $('#btnAthleteProgressOpen').onclick = ()=>{
