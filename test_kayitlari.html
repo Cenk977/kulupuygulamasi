@@ -192,6 +192,7 @@
     gap:12px; flex-wrap:wrap;
   }
   .session-card .s-date{font-weight:700; color:var(--navy); font-size:13.5px;}
+  .session-card .s-interval{font-size:12px; color:var(--pool); font-weight:700; margin:2px 0;}
   .session-card .s-note{font-size:12px; color:var(--navy-2); font-weight:600; margin:2px 0;}
   .session-card .s-meta{font-size:11.5px; color:#647680;}
   .session-card .s-actions{display:flex; gap:8px;}
@@ -283,6 +284,7 @@
 <div class="overlay" id="manualDetailOverlay">
   <div class="modal" style="max-width:820px;">
     <h3 id="manualDetailTitle"></h3>
+    <div id="manualDetailIntervalBar" style="margin:-6px 0 14px;"></div>
     <div id="manualDetailBody"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btnPdfManualDetail" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ PDF İndir</button>
@@ -784,8 +786,8 @@ function renderCustomForm(existing){
         <div class="field-row">
           <div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="cfReps" min="1" value="${t.config.reps||8}"></div>
           <div class="field"><label>Mesafe (m)</label><input type="number" id="cfDist" min="1" value="${t.config.dist||100}"></div>
-          <div class="field"><label>Dinlenme (interval)</label><input type="text" id="cfInterval" value="${t.config.interval||''}" placeholder="ör. 1:30" style="min-width:100px;"></div>
         </div>
+        <div style="font-size:11.5px; color:#8a97a0; margin:-8px 0 12px;">Dinlenme (interval) günden güne değişebildiği için artık her kayıtta ayrı ayrı, "Detaylar" ekranından girilir.</div>
         <div class="field-row">
           <label class="checkfield"><input type="checkbox" id="cfPerRepNabiz" ${t.config.perRepNabiz?'checked':''}> Her tekrarda nabız</label>
           <label class="checkfield"><input type="checkbox" id="cfSetNabiz" ${t.config.setNabiz?'checked':''}> Set sonunda tek (toparlanma) nabız</label>
@@ -840,7 +842,6 @@ $('#btnSaveCustom').onclick = async ()=>{
     config = {
       reps: Math.max(1, parseInt($('#cfReps').value)||1),
       dist: Math.max(1, parseInt($('#cfDist').value)||100),
-      interval: $('#cfInterval').value.trim(),
       perRepNabiz: $('#cfPerRepNabiz').checked,
       setNabiz: $('#cfSetNabiz').checked,
       branch: $('#cfBranchT').checked,
@@ -1503,9 +1504,11 @@ function renderSessionList(){
   const sessions = MANUAL.sessions.filter(s=>s.templateId===ACTIVE_PROTO.id).sort((a,b)=> b.date.localeCompare(a.date));
   if(!sessions.length){ wrap.innerHTML = `<div class="empty-side" style="padding:10px 0;">Bu protokol için henüz kayıt yok.</div>`; return; }
   wrap.innerHTML = sessions.map(s=>{
+    const intervalLine = s.interval ? `<div class="s-interval">İnterval: ${s.interval}</div>` : '';
     const noteLine = s.note ? `<div class="s-note">${s.note}</div>` : '';
     return `<div class="session-card">
       <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
+      ${intervalLine}
       ${noteLine}
       <div class="s-meta">${s.athletes.length} sporcu</div></div>
       <div class="s-actions">
@@ -1540,6 +1543,13 @@ function stepSummaryHtml(steps){
   return `<div style="font-size:12px; color:#647680; background:var(--pool-light); border-radius:6px; padding:8px 10px; margin-bottom:10px; line-height:1.7;">${lines.join('<br>')}</div>`;
 }
 
+function detailTitleFor(t, s){
+  const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
+  const intervalStr = s.interval ? ` · İnterval: ${s.interval}` : '';
+  const noteStr = s.note ? ` · ${s.note}` : '';
+  return `${t.name} — ${dateStr}${intervalStr}${noteStr}`;
+}
+
 function openManualDetail(sessionId){
   const s = MANUAL.sessions.find(x=>x.id===sessionId);
   const t = MANUAL.templates.find(x=>x.id===s.templateId);
@@ -1547,11 +1557,40 @@ function openManualDetail(sessionId){
   const cols = buildColumns(t, steps);
   currentSessionAthletes = s.athletes.map((a,i)=>({...a, id:'v'+i}));
 
-  $('#manualDetailTitle').textContent = `${t.name} — ${new Date(s.date).toLocaleDateString('tr-TR')}${s.note ? ' · '+s.note : ''}`;
+  $('#manualDetailTitle').textContent = detailTitleFor(t, s);
+
+  // İnterval düzenleme + sporcu ekleme çubuğu (modalın en üstünde)
+  $('#manualDetailIntervalBar').innerHTML = `
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">İnterval</label>
+      <input type="text" id="mdIntervalInput" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 1'30&quot;" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:110px;">
+      <button class="btn btn-line" id="btnSaveMdInterval" style="padding:6px 12px; font-size:12px;">Kaydet</button>
+      <button class="btn btn-primary" id="btnAddAthleteToSession" style="padding:6px 12px; font-size:12px; margin-left:auto;">＋ Sporcu Ekle</button>
+    </div>`;
+  $('#btnSaveMdInterval').onclick = async ()=>{
+    s.interval = $('#mdIntervalInput').value.trim();
+    await saveManual();
+    renderSessionList();
+    $('#manualDetailTitle').textContent = detailTitleFor(t, s);
+  };
+  $('#btnAddAthleteToSession').onclick = ()=>{
+    $('#manualDetailOverlay').classList.remove('show');
+    if(t.family==='rpset'){
+      const loaded = loadStepsAndRowsForDate(t, s.date);
+      draftSteps = loaded.steps; entryRows = loaded.rows;
+      renderRpSetEntryBox();
+    } else {
+      entryRows = loadRowsForDate(t, s.date);
+      renderEntryBox();
+    }
+    const box = document.getElementById('entryBoxWrap');
+    if(box) box.scrollIntoView({behavior:'smooth', block:'start'});
+  };
+
   let html = stepSummaryHtml(steps);
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
+  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th><th class="detail-action-col"></th></tr>`;
   currentSessionAthletes.forEach(a=>{
     html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
     cols.forEach(c=>{
@@ -1561,10 +1600,29 @@ function openManualDetail(sessionId){
       html += `<td>${v}</td>`;
     });
     html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps).text}</td>`;
+    html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${a.athlete.replace(/"/g,'&quot;')}" title="Sporcuyu çıkar">✕</button></td>`;
     html += `</tr>`;
   });
   html += `</table></div>`;
   $('#manualDetailBody').innerHTML = html;
+  $('#manualDetailBody').querySelectorAll('button[data-rmath]').forEach(b=>{
+    b.onclick = async ()=>{
+      const name = b.dataset.rmath;
+      if(!confirm(`${name} adlı sporcuyu bu kayıttan çıkarmak istediğine emin misin?`)) return;
+      s.athletes = s.athletes.filter(a=>a.athlete!==name);
+      if(!s.athletes.length){
+        // Kayıtta hiç sporcu kalmadıysa, kaydın kendisi de kaldırılır
+        MANUAL.sessions = MANUAL.sessions.filter(x=>x.id!==s.id);
+        await saveManual();
+        renderSessionList();
+        $('#manualDetailOverlay').classList.remove('show');
+        return;
+      }
+      await saveManual();
+      renderSessionList();
+      openManualDetail(sessionId);
+    };
+  });
   $('#manualDetailOverlay').classList.add('show');
 }
 // Yazdırma alanını doldurup tarayıcının yazdırma diyaloğunu açar
@@ -1592,7 +1650,7 @@ function downloadPdf(title, bodyEl, filenameBase){
     <div style="color:#647680; font-size:11px;">Bursa Kolejliler Spor Kulübü</div>`;
   bodyEl.insertBefore(header, bodyEl.firstChild);
   const cleanup = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
-  html2pdf().set({
+  return html2pdf().set({
     margin: 8,
     filename: `${filenameBase}.pdf`,
     image: { type:'jpeg', quality:0.98 },
@@ -1602,10 +1660,20 @@ function downloadPdf(title, bodyEl, filenameBase){
 }
 
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
-$('#btnPrintManualDetail').onclick = ()=> printNow($('#manualDetailTitle').textContent, $('#manualDetailBody').innerHTML);
+$('#btnPrintManualDetail').onclick = ()=>{
+  const actionEls = $('#manualDetailBody').querySelectorAll('.detail-action-col');
+  actionEls.forEach(el=> el.style.display='none');
+  printNow($('#manualDetailTitle').textContent, $('#manualDetailBody').innerHTML);
+  actionEls.forEach(el=> el.style.display='');
+};
 $('#btnPdfManualDetail').onclick = ()=>{
   const t = ACTIVE_PROTO ? ACTIVE_PROTO.name.replace(/[^\wğüşıöçĞÜŞİÖÇ]+/g,'_') : 'test';
-  downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody'), `${t}`);
+  const actionEls = $('#manualDetailBody').querySelectorAll('.detail-action-col');
+  actionEls.forEach(el=> el.style.display='none');
+  const restore = ()=> actionEls.forEach(el=> el.style.display='');
+  const result = downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody'), `${t}`);
+  if(result && typeof result.then === 'function') result.then(restore).catch(restore);
+  else restore();
 };
 
 /* =========================================================
@@ -2090,8 +2158,10 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
     protoEntries.forEach(pe=>{
       pe.entries.forEach(e=>{
         const steps = family==='rpset' ? (e.session.steps||[]) : undefined;
+        const dateStr = new Date(e.session.date).toLocaleDateString('tr-TR');
+        const intervalSuffix = e.session.interval ? ` · ${e.session.interval}` : '';
         dateSeries.push({
-          label: multiProto ? `${pe.t.name} — ${new Date(e.session.date).toLocaleDateString('tr-TR')}` : new Date(e.session.date).toLocaleDateString('tr-TR'),
+          label: (multiProto ? `${pe.t.name} — ${dateStr}` : dateStr) + intervalSuffix,
           color: AP_COLOR_PALETTE[dateSeries.length % AP_COLOR_PALETTE.length],
           values: stepRowValues(stepCols, e.row)
         });
