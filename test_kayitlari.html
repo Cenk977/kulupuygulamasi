@@ -192,6 +192,7 @@
     gap:12px; flex-wrap:wrap;
   }
   .session-card .s-date{font-weight:700; color:var(--navy); font-size:13.5px;}
+  .session-card .s-note{font-size:12px; color:var(--navy-2); font-weight:600; margin:2px 0;}
   .session-card .s-meta{font-size:11.5px; color:#647680;}
   .session-card .s-actions{display:flex; gap:8px;}
   .session-card .s-actions .btn{padding:6px 12px; font-size:12px;}
@@ -992,7 +993,12 @@ function exportProtocolToExcel(t){
 }
 
 function excelCellToDateStr(v){
-  if(v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  // NOT: SheetJS, cellDates:true ile tarih hücrelerini "yerel gece yarısı"nı
+  // temsil eden bir Date nesnesine çeviriyor. toISOString() bunu UTC'ye
+  // çevirdiği için, UTC'nin ilerisindeki saat dilimlerinde (ör. Türkiye,
+  // UTC+3) tarih 1 gün geriye kayıyordu. Bunun yerine Date nesnesinin
+  // YEREL (local) yıl/ay/gün değerlerini okuyoruz — saat dilimi kayması olmaz.
+  if(v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
   if(typeof v === 'number' && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code){
     const d = XLSX.SSF.parse_date_code(v);
     if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
@@ -1497,9 +1503,10 @@ function renderSessionList(){
   const sessions = MANUAL.sessions.filter(s=>s.templateId===ACTIVE_PROTO.id).sort((a,b)=> b.date.localeCompare(a.date));
   if(!sessions.length){ wrap.innerHTML = `<div class="empty-side" style="padding:10px 0;">Bu protokol için henüz kayıt yok.</div>`; return; }
   wrap.innerHTML = sessions.map(s=>{
-    const noteStr = s.note ? ` <span style="color:#8a97a0;">— ${s.note}</span>` : '';
+    const noteLine = s.note ? `<div class="s-note">${s.note}</div>` : '';
     return `<div class="session-card">
-      <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}${noteStr}</div>
+      <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
+      ${noteLine}
       <div class="s-meta">${s.athletes.length} sporcu</div></div>
       <div class="s-actions">
         <button class="btn btn-line" data-view="${s.id}">Detaylar</button>
