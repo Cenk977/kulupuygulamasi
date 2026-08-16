@@ -1822,6 +1822,7 @@ td.sp-empty{color:#c3ccd1;}
       <div class="sp-title" id="spSheetTitle">Sezon Takvimi</div>
       <div class="sp-toolbar-actions">
         <button type="button" class="btn btn-ghost" id="spImportBtn">Excel'den Güncelle</button>
+        <button type="button" class="btn btn-ghost" id="spExportBtn">⬇ Excel'e Kaydet</button>
         <button type="button" class="btn btn-ghost" id="spPdfBtn" style="display:none;">&#8991; PDF olustur</button>
         <button type="button" class="btn btn-ghost" id="spResetBtn">Sayfayi sifirla</button>
       </div>
@@ -7068,6 +7069,52 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
     button.textContent = "Excel'den Güncelle";
   }
 });
+
+/* ---- Excel'e Kaydet: mevcut plani (hucre duzenlemeleri dahil) -----
+   SP_ORDER sirasiyla, her sayfayi ayri bir Excel sekmesi olarak
+   yazar. Once bu sayfada yapilmis tum hucre duzenlemelerini (spEditsCache
+   / Firebase'deki sp_edits_*) orijinal grid uzerine uygular, sonra
+   birlesik hucreleri (!merges) korur. Renk/stil disa aktarilmiyor,
+   sadece metin degerleri ve birlesimler -- SheetJS'in ucretsiz surumu
+   yazarken hucre stilini desteklemiyor. */
+async function spExportPlanToExcel(){
+  const button = document.getElementById('spExportBtn');
+  if(button){ button.disabled = true; button.textContent = 'Hazırlanıyor…'; }
+  try{
+    if(!window.XLSX) throw new Error('Excel kütüphanesi yüklenemedi');
+    const wb = XLSX.utils.book_new();
+    const usedNames = new Set();
+    for(const key of SP_ORDER){
+      const sheet = SP_DATA[key];
+      if(!sheet || !Array.isArray(sheet.grid) || !sheet.grid.length) continue;
+      const edits = spEditsCache[key] !== undefined ? spEditsCache[key] : await spLoadEdits(key);
+      const aoa = sheet.grid.map((row, r) => row.map((cell, c) => {
+        const editKey = r + '_' + c;
+        if(Object.prototype.hasOwnProperty.call(edits, editKey)) return edits[editKey];
+        return Array.isArray(cell) ? cell[0] : cell;
+      }));
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      if(Array.isArray(sheet.merges) && sheet.merges.length){
+        ws['!merges'] = sheet.merges.map(([r1,c1,r2,c2]) => ({s:{r:r1,c:c1}, e:{r:r2,c:c2}}));
+      }
+      let sheetName = (key || 'Sayfa').trim().slice(0,31) || 'Sayfa';
+      let base = sheetName, n = 2;
+      while(usedNames.has(sheetName)){ sheetName = (base.slice(0,28) + '_' + n).slice(0,31); n++; }
+      usedNames.add(sheetName);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+    if(!wb.SheetNames.length) throw new Error('Aktarilacak sayfa bulunamadi');
+    const stamp = new Date().toISOString().slice(0,10);
+    XLSX.writeFile(wb, `sezon_plani_${stamp}.xlsx`);
+    showToast('Sezon planı Excel olarak indirildi');
+  }catch(error){
+    console.error('Sezon planı Excel dışa aktarma hatası:', error);
+    showToast(error && error.message ? 'Dışa aktarılamadı: ' + error.message : 'Excele aktarılamadı, tekrar dene');
+  }finally{
+    if(button){ button.disabled = false; button.textContent = "⬇ Excel'e Kaydet"; }
+  }
+}
+document.getElementById('spExportBtn').addEventListener('click', spExportPlanToExcel);
 
 /* ---- PDF export: her Meso sayfasi 3 mantiksal bloga ayrilir -----
    1) Ana program (3 mikrosiklus, gunluk icerik) -- basliktan bir
