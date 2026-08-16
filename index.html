@@ -6593,13 +6593,15 @@ const BACKUP_APP_ID = 'bursa-kolejliler-sezon-panosu';
 const BACKUP_FORMAT_VERSION = 1;
 
 // Sabit (içeriği önceden bilinen) tekil anahtarlar.
-const BACKUP_FIXED_KEYS = ['athletes_index', 'roster_v1', 'attendance_tags', 'teknik_branslar_v2'];
+// 'sezon_plani_v1' = Sezon Planı sekmesine Excel'den içe aktarılan plan verisi.
+const BACKUP_FIXED_KEYS = ['athletes_index', 'roster_v1', 'attendance_tags', 'teknik_branslar_v2', 'sezon_plani_v1'];
 // Sporcu id'sine göre türeyen anahtar önekleri.
 const BACKUP_PER_ATHLETE_PREFIXES = ['athlete_', 'attendance_', 'measurements_', 'teknik_records_', 'teknik_'];
 
 function isAllowedBackupKey(key){
   if(typeof key !== 'string' || key.length > 160) return false;
-  if(BACKUP_FIXED_KEYS.includes(key) || /^sp_edits_s\d+$/.test(key)) return true;
+  // sp_edits_h<hash> = Sezon Planı sayfa başına hücre düzenlemeleri (spStorageKey() ile üretilir).
+  if(BACKUP_FIXED_KEYS.includes(key) || /^sp_edits_h[0-9a-z]+$/i.test(key)) return true;
   return BACKUP_PER_ATHLETE_PREFIXES.some(prefix =>
     key.startsWith(prefix) && /^[a-z0-9_-]+$/i.test(key.slice(prefix.length))
   );
@@ -6644,6 +6646,38 @@ function setBackupBusy(btnId, busy, busyLabel, idleLabel){
   btn.textContent = busy ? busyLabel : idleLabel;
 }
 
+/* ---- Antrenman Test Kayıtları (test_kayitlari.html) --------------
+   Bu modül window.storage'ı HİÇ kullanmıyor: kendi verisini
+   doğrudan REST ile, kullanıcıdan bağımsız sabit bir Firebase
+   yolunda tutuyor (bkz. test_kayitlari.html içindeki DB_PATH).
+   Bu yüzden yukarıdaki window.storage tabanlı yedekleme bu veriyi
+   hiç görmüyordu -- burada aynı yola aynı yöntemle erişip yedek/
+   geri yükleme akışına elle ekliyoruz. */
+const TEST_KAYIT_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel";
+const TEST_KAYIT_ROSTER_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_roster";
+const TEST_KAYIT_RTDB_BASE = (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
+
+function testKayitFetchWithTimeout(url, options, ms){
+  const controller = new AbortController();
+  const timer = setTimeout(()=> controller.abort(), ms || 8000);
+  return fetch(url, { ...options, signal: controller.signal }).finally(()=> clearTimeout(timer));
+}
+async function testKayitRtdbGet(path){
+  if(!TEST_KAYIT_RTDB_BASE) return null;
+  const res = await testKayitFetchWithTimeout(`${TEST_KAYIT_RTDB_BASE}/${path}.json`);
+  if(!res.ok) throw new Error(`RTDB GET ${res.status}`);
+  return res.json();
+}
+async function testKayitRtdbSet(path, value){
+  if(!TEST_KAYIT_RTDB_BASE) return;
+  const res = await testKayitFetchWithTimeout(`${TEST_KAYIT_RTDB_BASE}/${path}.json`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(value)
+  });
+  if(!res.ok) throw new Error(`RTDB PUT ${res.status}`);
+}
+
 document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
   setBackupBusy('exportBackupBtn', true, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
   try{
@@ -6660,12 +6694,26 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
       }catch(e){ failCount++; }
     }
 
+    // Test Kayıtları modülü (ayrı Firebase yolu, window.storage dışında)
+    let testKayitlari = null;
+    try{
+      const [manuel, roster] = await Promise.all([
+        testKayitRtdbGet(TEST_KAYIT_DB_PATH).catch(()=>null),
+        testKayitRtdbGet(TEST_KAYIT_ROSTER_DB_PATH).catch(()=>null)
+      ]);
+      if(manuel || roster){
+        testKayitlari = { manuel, roster };
+        okCount += (manuel?1:0) + (roster?1:0);
+      }
+    }catch(e){ console.warn('Test kayıtları yedeklenemedi:', e); }
+
     const backupObj = {
       app: BACKUP_APP_ID,
       formatVersion: BACKUP_FORMAT_VERSION,
       exportedAt: new Date().toISOString(),
       keyCount: okCount,
-      data: payload
+      data: payload,
+      testKayitlari
     };
 
     const json = JSON.stringify(backupObj, null, 2);
@@ -6717,12 +6765,15 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
   const entries = Object.entries(parsed.data).filter(([key, value]) =>
     isAllowedBackupKey(key) && (typeof value === 'string' || (value && typeof value === 'object'))
   );
-  if(!entries.length){
+  const hasTestKayit = parsed.testKayitlari && typeof parsed.testKayitlari === 'object' &&
+    (parsed.testKayitlari.manuel || parsed.testKayitlari.roster);
+  if(!entries.length && !hasTestKayit){
     showToast('Yedek dosyası boş görünüyor');
     return;
   }
 
-  const confirmMsg = `${entries.length} kayıt bu cihaza yüklenecek ve mevcut verilerin üzerine yazılacak.\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}\n\nDevam etmek istiyor musun?`;
+  const totalCount = entries.length + (hasTestKayit ? (parsed.testKayitlari.manuel?1:0) + (parsed.testKayitlari.roster?1:0) : 0);
+  const confirmMsg = `${totalCount} kayıt bu cihaza yüklenecek ve mevcut verilerin üzerine yazılacak.\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}\n\nDevam etmek istiyor musun?`;
   if(!window.confirm(confirmMsg)) return;
 
   setBackupBusy('importBackupBtn', true, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
@@ -6734,6 +6785,16 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
       okCount++;
     }catch(err){ failCount++; }
   }
+
+  if(hasTestKayit){
+    try{
+      if(parsed.testKayitlari.manuel){ await testKayitRtdbSet(TEST_KAYIT_DB_PATH, parsed.testKayitlari.manuel); okCount++; }
+    }catch(err){ failCount++; }
+    try{
+      if(parsed.testKayitlari.roster){ await testKayitRtdbSet(TEST_KAYIT_ROSTER_DB_PATH, parsed.testKayitlari.roster); okCount++; }
+    }catch(err){ failCount++; }
+  }
+
   setBackupBusy('importBackupBtn', false, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
 
   showToast(failCount ? `${okCount} kayıt yüklendi (${failCount} başarısız)` : `${okCount} kayıt başarıyla yüklendi, sayfa yenileniyor…`);
