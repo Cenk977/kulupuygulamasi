@@ -20,6 +20,8 @@
 
 <!-- Sezon planı Excel içe aktarması -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Sezon planı degisikliklerini secilen orijinal Excel dosyasina (bicimlendirme/renkler korunarak) geri yazmak icin -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
 <style>
 
@@ -1822,7 +1824,8 @@ td.sp-empty{color:#c3ccd1;}
       <div class="sp-title" id="spSheetTitle">Sezon Takvimi</div>
       <div class="sp-toolbar-actions">
         <button type="button" class="btn btn-ghost" id="spImportBtn">Excel'den Güncelle</button>
-        <button type="button" class="btn btn-ghost" id="spExportBtn">⬇ Excel'e Kaydet</button>
+        <button type="button" class="btn btn-ghost" id="spExportBtn">⬆⬇ Excel Dosyasını Güncelle</button>
+        <input type="file" id="spExportFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
         <button type="button" class="btn btn-ghost" id="spPdfBtn" style="display:none;">&#8991; PDF olustur</button>
         <button type="button" class="btn btn-ghost" id="spResetBtn">Sayfayi sifirla</button>
       </div>
@@ -6989,6 +6992,77 @@ async function spRenderSheet(key){
   table.appendChild(frag);
 }
 
+/* ---- MESO sayfalarinda TOTAL sütunu otomatik toplama -------------
+   Orijinal Excel'de TOTAL hucreleri muhtemelen =SUM(...) formuluydu,
+   ama disa aktarilirken (SheetJS) sadece hesaplanmis SONUC deger
+   okunuyor, formul degil. Bu yuzden "Hacim" satirinda bir gun
+   hucresini degistirince TOTAL kendiliginden guncellenmiyordu.
+   Asagidaki fonksiyonlar, MESO sayfalarindaki her 8'li blokta
+   (PZT..PZR + TOTAL) TOTAL hucresini, o bloktaki 7 gun hucresinin
+   GUNCEL (varsa duzenlenmis) degerlerinin toplami olarak yeniden
+   hesaplayip hem ekranda hem kayitli duzenlemelerde gunceller. */
+function spMesoTotalBlocks(sheet){
+  const grid = sheet.grid;
+  for(let r=0;r<grid.length;r++){
+    const row = grid[r];
+    const totalCols = [];
+    row.forEach((cell,c)=>{
+      const v = Array.isArray(cell) ? cell[0] : cell;
+      if(typeof v === 'string' && v.trim().toLocaleUpperCase('tr') === 'TOTAL') totalCols.push(c);
+    });
+    if(totalCols.length >= 2){
+      return totalCols.filter(tc=>tc>=7).map(tc => ({ totalCol: tc, dayCols: [tc-7,tc-6,tc-5,tc-4,tc-3,tc-2,tc-1] }));
+    }
+  }
+  return [];
+}
+
+function spFormatNumber(n){
+  if(!isFinite(n)) return '';
+  const rounded = Math.round(n*1000)/1000;
+  return String(rounded);
+}
+
+async function spRecomputeRowTotal(sheetKey, r, editedCol){
+  if(!/^MESO/i.test(sheetKey.trim())) return;
+  const sheet = SP_DATA[sheetKey];
+  const row = sheet.grid[r];
+  if(!row) return;
+  const label = Array.isArray(row[1]) ? row[1][0] : row[1];
+  if((label||'').trim() !== 'Hacim') return; // sadece Hacim (Sbh/Aks) satirlari
+  const blocks = spMesoTotalBlocks(sheet);
+  const block = blocks.find(b => b.dayCols.includes(Number(editedCol)));
+  if(!block) return;
+
+  const edits = spEditsCache[sheetKey] || {};
+  let sum = 0;
+  block.dayCols.forEach(c=>{
+    const editKey = r+'_'+c;
+    let val;
+    if(Object.prototype.hasOwnProperty.call(edits, editKey)) val = edits[editKey];
+    else { const raw = row[c]; val = Array.isArray(raw) ? raw[0] : raw; }
+    const num = parseFloat(String(val).replace(',', '.'));
+    if(!isNaN(num)) sum += num;
+  });
+  const totalStr = spFormatNumber(sum);
+  const totalKey = r + '_' + block.totalCol;
+  const origTotalRaw = row[block.totalCol];
+  const origTotal = Array.isArray(origTotalRaw) ? origTotalRaw[0] : origTotalRaw;
+  if(totalStr === origTotal) delete edits[totalKey];
+  else edits[totalKey] = totalStr;
+  spEditsCache[sheetKey] = edits;
+  await spSaveEdits(sheetKey);
+
+  if(sheetKey === spCurrentSheet){
+    const totalTd = document.querySelector(`#spGrid td[data-r="${r}"][data-c="${block.totalCol}"]`);
+    if(totalTd){
+      totalTd.textContent = totalStr;
+      totalTd.classList.toggle('sp-empty', totalStr==='');
+      totalTd.classList.toggle('sp-edited', totalStr !== origTotal);
+    }
+  }
+}
+
 async function spHandleCellEdit(td){
   const r = td.dataset.r, c = td.dataset.c;
   const editKey = r+'_'+c;
@@ -7007,6 +7081,7 @@ async function spHandleCellEdit(td){
   td.classList.toggle('sp-empty', text==='');
   spEditsCache[spCurrentSheet] = edits;
   await spSaveEdits(spCurrentSheet);
+  await spRecomputeRowTotal(spCurrentSheet, Number(r), Number(c));
 }
 
 document.getElementById('spGrid').addEventListener('focusout', (e)=>{
@@ -7070,51 +7145,96 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
   }
 });
 
-/* ---- Excel'e Kaydet: mevcut plani (hucre duzenlemeleri dahil) -----
-   SP_ORDER sirasiyla, her sayfayi ayri bir Excel sekmesi olarak
-   yazar. Once bu sayfada yapilmis tum hucre duzenlemelerini (spEditsCache
-   / Firebase'deki sp_edits_*) orijinal grid uzerine uygular, sonra
-   birlesik hucreleri (!merges) korur. Renk/stil disa aktarilmiyor,
-   sadece metin degerleri ve birlesimler -- SheetJS'in ucretsiz surumu
-   yazarken hucre stilini desteklemiyor. */
-async function spExportPlanToExcel(){
+/* ---- Excel Dosyasini Guncelle -----------------------------------
+   "Excel'den Güncelle" bunun tersini yapar (Excel -> uygulama).
+   Bu fonksiyon ise uygulamada yapilan hucre duzenlemelerini SECILEN
+   orijinal Excel dosyasinin USTUNE yazar: sadece degistirilmis
+   hucrelerin degerini gunceller, dosyanin geri kalanina (renkler,
+   formuller, sutun genislikleri, diger sayfalar) DOKUNMAZ.
+   Bunun icin SheetJS degil ExcelJS kullanilir, cunku SheetJS'in
+   ucretsiz surumu yazarken bicimlendirmeyi siler; ExcelJS okurken
+   de yazarken de orijinal stili korur. Sonuc, tarayicinin indirme
+   klasorune yeni bir dosya olarak iner -- secilen dosyanin kendisi
+   diskte otomatik degismez (tarayicilar buna izin vermiyor), bu
+   yuzden indirilen guncel kopyayla eskisinin ustune elle yazman
+   gerekir. */
+document.getElementById('spExportBtn').addEventListener('click', ()=>{
+  document.getElementById('spExportFile').click();
+});
+
+document.getElementById('spExportFile').addEventListener('change', async event=>{
+  const input = event.target;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  if(!window.ExcelJS){ showToast('Excel güncelleme kütüphanesi yüklenemedi; sayfayı yenileyip tekrar dene'); return; }
+  if(file.size > 15 * 1024 * 1024){ showToast('Excel dosyası 15 MB’den küçük olmalı'); return; }
   const button = document.getElementById('spExportBtn');
-  if(button){ button.disabled = true; button.textContent = 'Hazırlanıyor…'; }
+  button.disabled = true;
+  button.textContent = 'Güncelleniyor…';
   try{
-    if(!window.XLSX) throw new Error('Excel kütüphanesi yüklenemedi');
-    const wb = XLSX.utils.book_new();
-    const usedNames = new Set();
+    const buffer = await file.arrayBuffer();
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+
+    let totalCells = 0;
+    const matchedSheets = [];
+    const missingSheets = [];
+
     for(const key of SP_ORDER){
-      const sheet = SP_DATA[key];
-      if(!sheet || !Array.isArray(sheet.grid) || !sheet.grid.length) continue;
       const edits = spEditsCache[key] !== undefined ? spEditsCache[key] : await spLoadEdits(key);
-      const aoa = sheet.grid.map((row, r) => row.map((cell, c) => {
-        const editKey = r + '_' + c;
-        if(Object.prototype.hasOwnProperty.call(edits, editKey)) return edits[editKey];
-        return Array.isArray(cell) ? cell[0] : cell;
-      }));
-      const ws = XLSX.utils.aoa_to_sheet(aoa);
-      if(Array.isArray(sheet.merges) && sheet.merges.length){
-        ws['!merges'] = sheet.merges.map(([r1,c1,r2,c2]) => ({s:{r:r1,c:c1}, e:{r:r2,c:c2}}));
+      const editKeys = Object.keys(edits);
+      if(!editKeys.length) continue; // bu sayfada duzenleme yoksa dosyaya dokunma
+
+      // Once tam isim eslesmesi dene, olmazsa bosluk-farkli eslesme dene
+      let ws = workbook.getWorksheet(key);
+      if(!ws){
+        const target = key.trim().toLocaleLowerCase('tr');
+        ws = workbook.worksheets.find(s => s.name.trim().toLocaleLowerCase('tr') === target);
       }
-      let sheetName = (key || 'Sayfa').trim().slice(0,31) || 'Sayfa';
-      let base = sheetName, n = 2;
-      while(usedNames.has(sheetName)){ sheetName = (base.slice(0,28) + '_' + n).slice(0,31); n++; }
-      usedNames.add(sheetName);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      if(!ws){ missingSheets.push(key); continue; }
+
+      editKeys.forEach(editKey=>{
+        const [rStr, cStr] = editKey.split('_');
+        const r = parseInt(rStr, 10), c = parseInt(cStr, 10);
+        const cell = ws.getRow(r + 1).getCell(c + 1); // ExcelJS 1-tabanli
+        const text = edits[editKey];
+        const num = text !== '' && !isNaN(text) && /^-?\d+(\.\d+)?$/.test(text.trim()) ? Number(text) : null;
+        cell.value = num !== null ? num : text; // sadece deger degisir, stil (cell.style) korunur
+        totalCells++;
+      });
+      matchedSheets.push(key);
     }
-    if(!wb.SheetNames.length) throw new Error('Aktarilacak sayfa bulunamadi');
-    const stamp = new Date().toISOString().slice(0,10);
-    XLSX.writeFile(wb, `sezon_plani_${stamp}.xlsx`);
-    showToast('Sezon planı Excel olarak indirildi');
+
+    if(!totalCells){
+      showToast('Güncellenecek bir değişiklik bulunamadı.');
+      return;
+    }
+    if(missingSheets.length){
+      console.warn('Eslesmeyen sayfalar (dosyada bulunamadi):', missingSheets.join(', '));
+    }
+
+    const outBuffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([outBuffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const baseName = file.name.replace(/\.xlsx?$/i, '');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${baseName}_güncel.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+
+    const missingNote = missingSheets.length ? ` (${missingSheets.length} sayfa dosyada bulunamadı, atlandı)` : '';
+    showToast(`${totalCells} hücre güncellendi, ${matchedSheets.length} sayfa yazıldı${missingNote}. Yeni dosya indirildi.`);
   }catch(error){
-    console.error('Sezon planı Excel dışa aktarma hatası:', error);
-    showToast(error && error.message ? 'Dışa aktarılamadı: ' + error.message : 'Excele aktarılamadı, tekrar dene');
+    console.error('Excel dosyasını güncelleme hatası:', error);
+    showToast(error && error.message ? 'Güncellenemedi: ' + error.message : 'Excel dosyası okunamadı veya yazılamadı.');
   }finally{
-    if(button){ button.disabled = false; button.textContent = "⬇ Excel'e Kaydet"; }
+    button.disabled = false;
+    button.textContent = "⬆⬇ Excel Dosyasını Güncelle";
   }
-}
-document.getElementById('spExportBtn').addEventListener('click', spExportPlanToExcel);
+});
 
 /* ---- PDF export: her Meso sayfasi 3 mantiksal bloga ayrilir -----
    1) Ana program (3 mikrosiklus, gunluk icerik) -- basliktan bir
