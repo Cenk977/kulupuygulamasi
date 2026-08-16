@@ -686,6 +686,7 @@ let draftSteps = []; // rpset ailesi: o günün basamak yapısı (geçici)
 let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
 let entryRows = []; // {athlete, ...} geçici giriş satırları
+let draftReps = null; // tekrarli ailede, o anki giriş formunda seçilen tekrar sayısı (N)
 let editingCustomId = null;
 
 async function saveManual(){
@@ -715,7 +716,7 @@ function renderProtoList(){
     </button>`;
   }).join('');
   el.querySelectorAll('.tpl-card').forEach(b=>{
-    b.onclick = ()=>{ ACTIVE_PROTO = MANUAL.templates.find(t=>t.id===b.dataset.id); entryRows=[]; renderProtoList(); renderManualMain(); };
+    b.onclick = ()=>{ ACTIVE_PROTO = MANUAL.templates.find(t=>t.id===b.dataset.id); entryRows=[]; draftReps=null; renderProtoList(); renderManualMain(); };
   });
 }
 
@@ -745,7 +746,7 @@ function renderReadyList(){
       const t = { id: uid(), name:p.name, family:p.family, config: JSON.parse(JSON.stringify(p.config)) };
       MANUAL.templates.push(t);
       await saveManual();
-      ACTIVE_PROTO = t; entryRows=[];
+      ACTIVE_PROTO = t; entryRows=[]; draftReps=null;
       renderProtoList(); renderManualMain();
       $('#readyOverlay').classList.remove('show');
     };
@@ -891,7 +892,7 @@ function descLineFor(t){
   if(t.family==='ayak') return '400m · 200m · 100m · 50m ayak süreleri';
   if(t.family==='rpset') return 'Basamaklı özel set — her kayıtta o günün yapısı yeniden tanımlanır';
   if(t.family==='tekrarli'){
-    let d = `${t.config.reps} x ${t.config.dist}m`;
+    let d = repsRangeLabel(t);
     if(t.config.interval) d += ` · ${t.config.interval} dinlenme`;
     if(t.config.kolMode!=='none') d += ' · '+KOL_LABEL[t.config.kolMode];
     if(t.config.branch) d += ' · branş';
@@ -930,7 +931,7 @@ function renderManualMain(){
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
 
-  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; renderProtoList(); renderManualMain(); };
+  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; renderProtoList(); renderManualMain(); };
   $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
@@ -940,6 +941,7 @@ function renderManualMain(){
       draftSteps = loaded.steps; entryRows = loaded.rows;
       renderRpSetEntryBox();
     } else {
+      draftReps = null;
       entryRows = loadRowsForDate(t, today);
       renderEntryBox();
     }
@@ -968,7 +970,7 @@ function renderManualMain(){
    (üzerine yazılmaz; aynı isim varsa o satır güncellenir).
    ========================================================= */
 function buildExportHeaders(t){
-  const cols = buildColumns(t);
+  const cols = buildColumns(t, undefined, maxRepsForProtocol(t));
   const headers = ['Tarih','Not','Sporcu', ...cols.map(c=>c.label+(c.sub?` (${c.sub})`:'')), (t.family==='kumulatif'?'Ort. Pace/100':'Ortalama')];
   return { cols, headers };
 }
@@ -982,7 +984,7 @@ function exportProtocolToExcel(t){
     s.athletes.forEach(a=>{
       const row = [s.date, s.note||'', a.athlete];
       cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
-      row.push(computeAvg(t,a).text);
+      row.push(computeAvg(t,a,undefined,repsForSession(t,s)).text);
       aoa.push(row);
     });
   });
@@ -1112,8 +1114,9 @@ function renderEntryBox(){
   refreshAthleteDatalist();
   const wrap = $('#entryBoxWrap');
   const currentDate = $('#entryDate') ? $('#entryDate').value : new Date().toISOString().slice(0,10);
-  let cols = buildColumns(t);
   const existingSession = findSessionFor(t.id, currentDate);
+  const repsForEntry = t.family==='tekrarli' ? (draftReps || repsForSession(t, existingSession)) : null;
+  let cols = buildColumns(t, undefined, repsForEntry);
 
   let head = `<tr><th>Sporcu</th>`;
   cols.forEach(c=> head += `<th>${c.label}${c.sub?`<span class="col-sub">${c.sub}</span>`:''}</th>`);
@@ -1144,6 +1147,7 @@ function renderEntryBox(){
     ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
+      ${t.family==='tekrarli' ? `<div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="entryReps" min="1" value="${repsForEntry}" style="max-width:90px;"></div>` : ''}
       <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. 350/200/100/50, sadece kol vb." value="${existingSession && existingSession.note ? existingSession.note.replace(/"/g,'&quot;') : ''}"></div>
     </div>
     <div style="overflow-x:auto;">
@@ -1161,9 +1165,16 @@ function renderEntryBox(){
   </div>`;
 
   $('#entryDate').addEventListener('change', ()=>{
+    draftReps = null;
     entryRows = loadRowsForDate(t, $('#entryDate').value);
     renderEntryBox();
   });
+  if(t.family==='tekrarli'){
+    $('#entryReps').addEventListener('change', ()=>{
+      draftReps = Math.max(1, parseInt($('#entryReps').value)||1);
+      renderEntryBox();
+    });
+  }
 
   wrap.querySelectorAll('[data-row]').forEach(inp=>{
     const handler = ()=>{
@@ -1378,7 +1389,7 @@ $('#btnQuickAddConfirm').onclick = ()=>{
 };
 
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
-function buildColumns(t, steps){
+function buildColumns(t, steps, repsOverride){
   const cols = [];
   if(t.family==='ayak'){
     [400,200,100,50].forEach(d=> cols.push({ key:`d${d}`, label:`${d}m`, type:'time', ph:'ör. 1:17' }));
@@ -1392,7 +1403,8 @@ function buildColumns(t, steps){
       }
     });
   } else if(t.family==='tekrarli'){
-    for(let i=1;i<=t.config.reps;i++){
+    const N = repsOverride || t.config.reps;
+    for(let i=1;i<=N;i++){
       cols.push({ key:`rep${i}`, label:`${i}`, sub:`${t.config.dist}m`, type:'time', ph:'ör. 38.60' });
       if(t.config.kolMode==='tek') cols.push({ key:`kol${i}`, label:'KS', type:'num', ph:'#' });
       if(t.config.kolMode==='iki'){
@@ -1419,13 +1431,38 @@ function buildColumns(t, steps){
   return cols;
 }
 
+// Bir protokolün TÜM kayıtları arasında görülen en yüksek tekrar
+// sayısını döndürür (şablonun varsayılanı dahil) — dışa aktarma ve
+// çoklu-kayıt tablolarında hiçbir kaydın sütunu kesilmesin diye.
+function maxRepsForProtocol(t){
+  if(t.family!=='tekrarli') return null;
+  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps).filter(Boolean);
+  return sessReps.length ? Math.max(t.config.reps, ...sessReps) : t.config.reps;
+}
+
+// Protokol başlığının altında gösterilen "N x Mesafe" özeti — kayıtlar
+// arasında tekrar sayısı değişiyorsa (ör. bazen 24x100, bazen 20x100)
+// bunu bir aralık olarak gösterir.
+function repsRangeLabel(t){
+  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps).filter(Boolean);
+  if(!sessReps.length) return `${t.config.reps} x ${t.config.dist}m`;
+  const mn = Math.min(...sessReps, t.config.reps), mx = Math.max(...sessReps, t.config.reps);
+  if(mn===mx) return `${mn} x ${t.config.dist}m`;
+  return `${mn}–${mx} x ${t.config.dist}m (kayda göre değişir)`;
+}
+
+// Bir kaydın (session) gerçek tekrar sayısını döndürür — kayıtta
+// belirtilmemişse şablonun varsayılanına düşer.
+function repsForSession(t, s){ return (s && s.reps) || (t && t.config.reps); }
+
 // Bir satırın ortalama/pace değerini hesaplar — hem DOM güncellemesinde
 // hem de karşılaştırma tablosunda ortak kullanılır (yalnızca gerçekten
 // girilmiş tekrarlar sayılır, boş tekrarlar ortalamayı bozmaz).
-function computeAvg(t, row, steps){
+function computeAvg(t, row, steps, repsOverride){
   if(t.family==='tekrarli'){
     let vals = [];
-    for(let i=1;i<=t.config.reps;i++){ const sec = parseTimeStr(row[`rep${i}`]); if(sec!==null) vals.push(sec); }
+    const N = repsOverride || t.config.reps;
+    for(let i=1;i<=N;i++){ const sec = parseTimeStr(row[`rep${i}`]); if(sec!==null) vals.push(sec); }
     if(!vals.length) return { text:'–', sec:null };
     const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
     return { text: fmtTime(avg), sec: avg };
@@ -1480,6 +1517,8 @@ async function saveSession(){
     return o;
   });
   const existing = findSessionFor(ACTIVE_PROTO.id, date);
+  const repsInp = $('#entryReps');
+  const repsToSave = (ACTIVE_PROTO.family==='tekrarli' && repsInp) ? Math.max(1, parseInt(repsInp.value)||1) : undefined;
   if(existing){
     // Aynı tarihte kayıt zaten var: aynı isimli sporcunun verisini güncelle,
     // yeni isimleri ekle — ayrı bir kayıt olarak listelenmesin.
@@ -1488,11 +1527,13 @@ async function saveSession(){
       if(idx>-1) existing.athletes[idx] = newA; else existing.athletes.push(newA);
     });
     if(note) existing.note = note;
+    if(repsToSave) existing.reps = repsToSave;
   } else {
-    MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, athletes: clean });
+    MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, reps: repsToSave, athletes: clean });
   }
   await saveManual();
   entryRows = [];
+  draftReps = null;
   $('#entryBoxWrap').innerHTML = '';
   renderProtoList();
   renderSessionList();
@@ -1504,11 +1545,13 @@ function renderSessionList(){
   const sessions = MANUAL.sessions.filter(s=>s.templateId===ACTIVE_PROTO.id).sort((a,b)=> b.date.localeCompare(a.date));
   if(!sessions.length){ wrap.innerHTML = `<div class="empty-side" style="padding:10px 0;">Bu protokol için henüz kayıt yok.</div>`; return; }
   wrap.innerHTML = sessions.map(s=>{
-    const intervalLine = s.interval ? `<div class="s-interval">İnterval: ${s.interval}</div>` : '';
+    const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${ACTIVE_PROTO.config.dist}m` : '';
+    const intervalPart = s.interval ? `İnterval: ${s.interval}` : '';
+    const topLine = (repsDistStr || intervalPart) ? `<div class="s-interval">${[repsDistStr, intervalPart].filter(Boolean).join(' · ')}</div>` : '';
     const noteLine = s.note ? `<div class="s-note">${s.note}</div>` : '';
     return `<div class="session-card">
       <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
-      ${intervalLine}
+      ${topLine}
       ${noteLine}
       <div class="s-meta">${s.athletes.length} sporcu</div></div>
       <div class="s-actions">
@@ -1545,33 +1588,40 @@ function stepSummaryHtml(steps){
 
 function detailTitleFor(t, s){
   const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
+  const repsDistStr = t.family==='tekrarli' ? ` — ${repsForSession(t,s)}x${t.config.dist}m` : '';
   const intervalStr = s.interval ? ` · İnterval: ${s.interval}` : '';
   const noteStr = s.note ? ` · ${s.note}` : '';
-  return `${t.name} — ${dateStr}${intervalStr}${noteStr}`;
+  return `${t.name} — ${dateStr}${repsDistStr}${intervalStr}${noteStr}`;
 }
 
 function openManualDetail(sessionId){
   const s = MANUAL.sessions.find(x=>x.id===sessionId);
   const t = MANUAL.templates.find(x=>x.id===s.templateId);
   const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
-  const cols = buildColumns(t, steps);
+  const repsN = repsForSession(t, s);
+  const cols = buildColumns(t, steps, repsN);
   currentSessionAthletes = s.athletes.map((a,i)=>({...a, id:'v'+i}));
 
   $('#manualDetailTitle').textContent = detailTitleFor(t, s);
 
-  // İnterval düzenleme + sporcu ekleme çubuğu (modalın en üstünde)
+  // İnterval + tekrar sayısı düzenleme + sporcu ekleme çubuğu (modalın en üstünde)
+  const repsField = t.family==='tekrarli' ? `<label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">Tekrar Sayısı (N)</label>
+      <input type="number" id="mdRepsInput" min="1" value="${repsN}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:70px;">` : '';
   $('#manualDetailIntervalBar').innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">İnterval</label>
       <input type="text" id="mdIntervalInput" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 1'30&quot;" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:110px;">
+      ${repsField}
       <button class="btn btn-line" id="btnSaveMdInterval" style="padding:6px 12px; font-size:12px;">Kaydet</button>
       <button class="btn btn-primary" id="btnAddAthleteToSession" style="padding:6px 12px; font-size:12px; margin-left:auto;">＋ Sporcu Ekle</button>
     </div>`;
   $('#btnSaveMdInterval').onclick = async ()=>{
     s.interval = $('#mdIntervalInput').value.trim();
+    const repsInp = $('#mdRepsInput');
+    if(repsInp) s.reps = Math.max(1, parseInt(repsInp.value)||1);
     await saveManual();
     renderSessionList();
-    $('#manualDetailTitle').textContent = detailTitleFor(t, s);
+    openManualDetail(sessionId); // tekrar sayısı değişmiş olabilir, tabloyu tazele
   };
   $('#btnAddAthleteToSession').onclick = ()=>{
     $('#manualDetailOverlay').classList.remove('show');
@@ -1580,6 +1630,7 @@ function openManualDetail(sessionId){
       draftSteps = loaded.steps; entryRows = loaded.rows;
       renderRpSetEntryBox();
     } else {
+      draftReps = null;
       entryRows = loadRowsForDate(t, s.date);
       renderEntryBox();
     }
@@ -1599,7 +1650,7 @@ function openManualDetail(sessionId){
       else if(v===undefined || v===''){ v = '—'; }
       html += `<td>${v}</td>`;
     });
-    html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps).text}</td>`;
+    html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, repsN).text}</td>`;
     html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${a.athlete.replace(/"/g,'&quot;')}" title="Sporcuyu çıkar">✕</button></td>`;
     html += `</tr>`;
   });
@@ -1716,8 +1767,8 @@ function populateCmpAthletes(side){
   athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${a.athlete}</option>`).join('');
 }
 
-function renderSingleRowTable(t, row, label, steps){
-  const cols = buildColumns(t, steps);
+function renderSingleRowTable(t, row, label, steps, repsOverride){
+  const cols = buildColumns(t, steps, repsOverride);
   let html = stepSummaryHtml(steps);
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
@@ -1729,7 +1780,7 @@ function renderSingleRowTable(t, row, label, steps){
     else if(v===undefined || v===''){ v = '—'; }
     html += `<td>${v}</td>`;
   });
-  html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps).text}</td></tr></table></div>`;
+  html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps,repsOverride).text}</td></tr></table></div>`;
   return html;
 }
 
@@ -1760,7 +1811,8 @@ function renderCompareResult(){
 
   if(canDiff){
     const t = tA;
-    const cols = buildColumns(t);
+    const cmpRepsN = t.family==='tekrarli' ? Math.max(repsForSession(tA,sA), repsForSession(tB,sB)) : undefined;
+    const cols = buildColumns(t, undefined, cmpRepsN);
     html = `<div style="overflow-x:auto;"><table class="detail-table" id="cmpTable"><tr><th>Kayıt</th>`;
     cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
     html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
@@ -1773,7 +1825,7 @@ function renderCompareResult(){
         else if(v===undefined || v===''){ v = '—'; }
         html += `<td>${v}</td>`;
       });
-      html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row).text}</td>`;
+      html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,undefined,cmpRepsN).text}</td>`;
       html += `</tr>`;
     });
 
@@ -1789,8 +1841,8 @@ function renderCompareResult(){
         } else html += `<td>—</td>`;
       } else html += `<td>—</td>`;
     });
-    const avgA = computeAvg(t, rowA);
-    const avgB = computeAvg(t, rowB);
+    const avgA = computeAvg(t, rowA, undefined, cmpRepsN);
+    const avgB = computeAvg(t, rowB, undefined, cmpRepsN);
     if(avgA.sec!==null && avgB.sec!==null){
       const d = avgB.sec - avgA.sec;
       const cls = d<0 ? 'badge-ok' : (d>0 ? 'badge-warn' : '');
@@ -1799,9 +1851,9 @@ function renderCompareResult(){
     html += `</tr></table></div>
     <div style="font-size:11px; color:#8a97a0; margin-top:6px;">Yeşil: B daha hızlı/erken. Kırmızı: B daha yavaş.</div>`;
   } else {
-    html = renderSingleRowTable(tA, rowA, labelA, stepsA) +
+    html = renderSingleRowTable(tA, rowA, labelA, stepsA, repsForSession(tA,sA)) +
       '<div style="height:14px;"></div>' +
-      renderSingleRowTable(tB, rowB, labelB, stepsB) +
+      renderSingleRowTable(tB, rowB, labelB, stepsB, repsForSession(tB,sB)) +
       `<div style="font-size:11px; color:#8a97a0; margin-top:6px;">${tA.family==='rpset'||tB.family==='rpset' ? 'RP Set tipi protokollerde set yapısı her kayıtta değişebildiği için satır bazlı fark gösterilmiyor.' : 'A ve B farklı test protokolleri olduğu için satır bazlı fark gösterilmiyor.'}</div>`;
   }
 
@@ -1954,7 +2006,9 @@ function protocolStepColumns(t, sessionsForUnion){
     return [400,200,100,50].map(d=>({ key:`d${d}`, label:`${d}m` }));
   }
   if(t.family==='tekrarli'){
-    return Array.from({length:t.config.reps}, (_,i)=>({ key:`rep${i+1}`, label:`${i+1}` }));
+    const sessReps = (sessionsForUnion||[]).map(s=>s.reps).filter(Boolean);
+    const maxReps = sessReps.length ? Math.max(t.config.reps, ...sessReps) : t.config.reps;
+    return Array.from({length:maxReps}, (_,i)=>({ key:`rep${i+1}`, label:`${i+1}` }));
   }
   if(t.family==='kumulatif'){
     return t.config.checkpoints.map((d,i)=> ({ key:`cp${d}`, label:`${i+1}.${d}m` }));
@@ -2114,13 +2168,14 @@ function renderMultiTrendSvg(series, paceMode){
 // Seçilen protokoller AYNI aileden ise (ör. iki farklı tekrarlı 100'lük
 // set), sütun yapılarını birleştirip TEK bir adım-bazlı grafikte
 // göstermeyi mümkün kılar. Farklı aileler karışıksa null döner.
-function unionStepColumnsAcrossProtocols(protos){
+function unionStepColumnsAcrossProtocols(protos, sessionsForUnion){
   if(!protos.length) return null;
   const family = protos[0].family;
   if(protos.some(t=> t.family!==family)) return null;
   if(family==='ayak') return protocolStepColumns(protos[0]);
   if(family==='tekrarli'){
-    const maxReps = Math.max(...protos.map(t=> t.config.reps));
+    const sessReps = (sessionsForUnion||[]).map(s=>s.reps).filter(Boolean);
+    const maxReps = sessReps.length ? Math.max(...protos.map(t=> t.config.reps), ...sessReps) : Math.max(...protos.map(t=> t.config.reps));
     return Array.from({length:maxReps}, (_,i)=>({ key:`rep${i+1}`, label:`${i+1}` }));
   }
   if(family==='kumulatif'){
@@ -2152,16 +2207,19 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
       const allSessions = protoEntries.flatMap(pe=> pe.entries.map(e=>e.session));
       stepCols = protocolStepColumns(protoEntries[0].t, allSessions);
     } else {
-      stepCols = unionStepColumnsAcrossProtocols(protoEntries.map(pe=>pe.t));
+      const allSessions = protoEntries.flatMap(pe=> pe.entries.map(e=>e.session));
+      stepCols = unionStepColumnsAcrossProtocols(protoEntries.map(pe=>pe.t), allSessions);
     }
     const dateSeries = [];
     protoEntries.forEach(pe=>{
       pe.entries.forEach(e=>{
         const steps = family==='rpset' ? (e.session.steps||[]) : undefined;
         const dateStr = new Date(e.session.date).toLocaleDateString('tr-TR');
-        const intervalSuffix = e.session.interval ? ` · ${e.session.interval}` : '';
+        const repsDistStr = family==='tekrarli' ? `${repsForSession(pe.t, e.session)}x${pe.t.config.dist}` : '';
+        const intervalSuffix = e.session.interval ? `${e.session.interval}` : '';
+        const extraBits = [repsDistStr, intervalSuffix].filter(Boolean).join(' · ');
         dateSeries.push({
-          label: (multiProto ? `${pe.t.name} — ${dateStr}` : dateStr) + intervalSuffix,
+          label: (multiProto ? `${pe.t.name} — ${dateStr}` : dateStr) + (extraBits ? ` · ${extraBits}` : ''),
           color: AP_COLOR_PALETTE[dateSeries.length % AP_COLOR_PALETTE.length],
           values: stepRowValues(stepCols, e.row)
         });
@@ -2207,7 +2265,8 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
           <td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, steps).text}</td></tr>`;
       });
     } else {
-      const cols = buildColumns(t);
+      const maxRepsHere = t.family==='tekrarli' ? Math.max(t.config.reps, ...entries.map(e=> e.session.reps||0)) : undefined;
+      const cols = buildColumns(t, undefined, maxRepsHere);
       cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
       entries.forEach(e=>{
@@ -2218,7 +2277,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap){
           else if(v===undefined || v===''){ v = '—'; }
           html += `<td>${v}</td>`;
         });
-        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row).text}</td></tr>`;
+        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, undefined, maxRepsHere).text}</td></tr>`;
       });
     }
     html += `</table></div>`;
@@ -2256,7 +2315,7 @@ function renderBulkProtocols(protoIds, wrap){
       sessions.forEach(s=>{
         const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
         (s.athletes||[]).forEach(a=>{
-          const avg = computeAvg(t, a, steps);
+          const avg = computeAvg(t, a, steps, repsForSession(t,s));
           if(avg.sec!==null){
             if(!athleteMap.has(a.athlete)) athleteMap.set(a.athlete, []);
             athleteMap.get(a.athlete).push({ date: s.date, sec: avg.sec });
@@ -2271,8 +2330,10 @@ function renderBulkProtocols(protoIds, wrap){
     html += `<h4 style="color:var(--navy); margin:16px 0 6px;">${t.name}</h4>`;
     sessions.forEach(s=>{
       const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
-      const cols = buildColumns(t, steps);
-      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')}${s.note ? ' · '+s.note : ''} — ${s.athletes.length} sporcu</div>`;
+      const sessRepsN = repsForSession(t,s);
+      const cols = buildColumns(t, steps, sessRepsN);
+      const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${t.config.dist}m — ` : '';
+      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? s.note+' — ' : ''}${s.athletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);
 
       html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
@@ -2286,7 +2347,7 @@ function renderBulkProtocols(protoIds, wrap){
           else if(v===undefined || v===''){ v = '—'; }
           html += `<td>${v}</td>`;
         });
-        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps).text}</td></tr>`;
+        html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, sessRepsN).text}</td></tr>`;
       });
       html += `</table></div>`;
     });
@@ -2340,6 +2401,31 @@ $('#btnPdfAthleteProgress').onclick = ()=>{
 /* =========================================================
    BAŞLANGIÇ
    ========================================================= */
+// ESKİ KAYIT GÖÇÜ: Daha önce "tekrar sayısı" şablona sabitliydi; artık
+// her kayda (session) özel. Eski kayıtlarda `reps` alanı yoksa, o
+// kayıtta GERÇEKTEN doldurulmuş en yüksek tekrar sütununa bakarak
+// (ör. rep21..rep24 boşsa ve en son dolu sütun rep20 ise) otomatik
+// olarak reps=20 atanır. Kimse elle bir şey yapmasın diye uygulama
+// her açıldığında sessizce çalışır, sadece eksik olanları tamamlar.
+function migrateSessionReps(){
+  let changed = false;
+  MANUAL.sessions.forEach(s=>{
+    if(s.reps) return; // zaten göç etmiş / zaten girilmiş
+    const t = MANUAL.templates.find(x=>x.id===s.templateId);
+    if(!t || t.family!=='tekrarli') return;
+    let maxFilled = 0;
+    (s.athletes||[]).forEach(a=>{
+      for(let i=1;i<=t.config.reps;i++){
+        const v = a[`rep${i}`];
+        if(v!==undefined && v!==null && String(v).trim()!==''){ if(i>maxFilled) maxFilled = i; }
+      }
+    });
+    s.reps = maxFilled>0 ? maxFilled : t.config.reps;
+    changed = true;
+  });
+  return changed;
+}
+
 (async function init(){
   await loadRoster();
   updateRosterStatus();
@@ -2367,6 +2453,7 @@ $('#btnPdfAthleteProgress').onclick = ()=>{
       }
     }catch(e){ console.warn('Yerel veri taşınamadı:', e); }
   }
+  if(migrateSessionReps()){ await saveManual(); }
   renderProtoList();
   renderManualMain();
 })();
