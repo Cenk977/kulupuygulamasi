@@ -387,6 +387,10 @@
         <div id="apProtoChecks" style="border:1px solid var(--line); border-radius:8px; max-height:140px; overflow-y:auto; padding:8px 10px; background:#fff;"></div>
       </div>
     </div>
+    <div class="field" id="apDateField" style="margin-top:10px;">
+      <label>Kayıtlar <span style="font-weight:400; color:#8a97a0;">(hangi tarihlerin grafiğe/tabloya dahil olacağını seç)</span></label>
+      <div id="apDateChecks" style="border:1px solid var(--line); border-radius:8px; max-height:160px; overflow-y:auto; padding:8px 10px; background:#fff;"></div>
+    </div>
     <div id="apResultWrap" style="margin-top:14px;"></div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btnPdfAthleteProgress" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);" disabled>⬇ PDF İndir</button>
@@ -1936,14 +1940,54 @@ function populateApProtoChecks(){
   const bulk = $('#apModeBulk').checked;
   const box = $('#apProtoChecks');
   const protos = bulk ? allProtocolsWithData() : protocolsForAthlete($('#apAthlete').value);
-  if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; return; }
+  if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; $('#apDateField').style.display='none'; return; }
   box.innerHTML = protos.map(t=>`<label style="display:flex; align-items:center; gap:6px; padding:3px 0; font-size:13px; font-weight:400; cursor:pointer;">
     <input type="checkbox" class="apProtoCheck" value="${t.id}" checked> ${t.name}
   </label>`).join('');
-  box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', renderAthleteProgress));
+  box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', ()=>{ populateApDateChecks(); renderAthleteProgress(); }));
+  populateApDateChecks();
+}
+// Seçilen protokol(ler)e ait TÜM tarihleri listeler; kullanıcı bazılarının
+// işaretini kaldırarak grafiğe/tabloya sadece seçtiği kayıtların girmesini
+// sağlayabilir (ör. HPE SET altındaki 7 kayıttan sadece 3'ünü seçmek gibi).
+function populateApDateChecks(){
+  const field = $('#apDateField');
+  const box = $('#apDateChecks');
+  if(!box || !field) return;
+  const bulk = $('#apModeBulk').checked;
+  if(bulk){ field.style.display = 'none'; box.innerHTML=''; return; } // toplu görünüm zaten protokol bazlı
+  const athlete = $('#apAthlete').value;
+  const protoIds = apSelectedProtoIds();
+  if(!athlete || !protoIds.length){ field.style.display='none'; box.innerHTML=''; return; }
+  const groups = protoIds.map(id=> MANUAL.templates.find(t=>t.id===id)).filter(Boolean)
+    .map(t=> ({ t, entries: athleteEntriesForProto(athlete, t.id) }))
+    .filter(g=> g.entries.length);
+  if(!groups.length){ field.style.display='none'; box.innerHTML=''; return; }
+  field.style.display = '';
+  const multi = groups.length > 1;
+  box.innerHTML = groups.map(g=>{
+    const rows = g.entries.map(e=>{
+      const s = e.session;
+      const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
+      const repsDistStr = g.t.family==='tekrarli' ? `${repsForSession(g.t,s)}x${g.t.config.dist}m` : '';
+      const bits = [repsDistStr, s.interval||''].filter(Boolean).join(' · ');
+      return `<label style="display:flex; align-items:center; gap:6px; padding:2px 0 2px ${multi?'14px':'0'}; font-size:12.5px; font-weight:400; cursor:pointer;">
+        <input type="checkbox" class="apDateCheck" value="${s.id}" checked> ${dateStr}${bits ? ' · '+bits : ''}
+      </label>`;
+    }).join('');
+    return (multi ? `<div style="font-size:11.5px; font-weight:700; color:var(--navy-2); margin-top:4px;">${g.t.name}</div>` : '') + rows;
+  }).join('');
+  box.querySelectorAll('.apDateCheck').forEach(cb=> cb.addEventListener('change', renderAthleteProgress));
 }
 function apSelectedProtoIds(){
   return Array.from(document.querySelectorAll('.apProtoCheck:checked')).map(cb=>cb.value);
+}
+// null = henüz tarih filtresi kurulmamış (tümü dahil kabul edilir);
+// dolu bir Set = sadece o session id'leri dahil edilir.
+function apSelectedSessionIds(){
+  const boxes = document.querySelectorAll('.apDateCheck');
+  if(!boxes.length) return null;
+  return new Set(Array.from(boxes).filter(cb=>cb.checked).map(cb=>cb.value));
 }
 function updateApModeUI(){
   const bulk = $('#apModeBulk').checked;
@@ -2189,10 +2233,10 @@ function unionStepColumnsAcrossProtocols(protos, sessionsForUnion){
   return null; // rpset: session bazlı union gerektiği için ayrıca ele alınır
 }
 
-function renderAthleteMultiDetail(athlete, protoIds, wrap){
+function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
   const protos = protoIds.map(pid=> MANUAL.templates.find(x=>x.id===pid)).filter(Boolean);
-  const protoEntries = protos.map(t=> ({ t, entries: athleteEntriesForProto(athlete, t.id) })).filter(pe=> pe.entries.length);
-  if(!protoEntries.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için seçilen test(ler)de kayıt yok.</div>`; apDisableButtons(); return; }
+  const protoEntries = protos.map(t=> ({ t, entries: athleteEntriesForProto(athlete, t.id).filter(e=> !sessionIds || sessionIds.has(e.session.id)) })).filter(pe=> pe.entries.length);
+  if(!protoEntries.length){ wrap.innerHTML = `<div class="empty-side">Bu sporcu için seçilen test(ler)/kayıtlarda veri yok.</div>`; apDisableButtons(); return; }
 
   const families = new Set(protoEntries.map(pe=> pe.t.family));
   const multiProto = protoEntries.length > 1;
@@ -2370,7 +2414,9 @@ function renderAthleteProgress(){
   const athlete = $('#apAthlete').value;
   if(!athlete){ wrap.innerHTML = ''; apDisableButtons(); return; }
   if(!protoIds.length){ wrap.innerHTML = `<div class="empty-side">En az bir test seç.</div>`; apDisableButtons(); return; }
-  renderAthleteMultiDetail(athlete, protoIds, wrap);
+  const sessionIds = apSelectedSessionIds();
+  if(sessionIds && sessionIds.size===0){ wrap.innerHTML = `<div class="empty-side">En az bir kayıt seç.</div>`; apDisableButtons(); return; }
+  renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds);
 }
 
 $('#btnAthleteProgressOpen').onclick = ()=>{
@@ -2381,6 +2427,7 @@ $('#btnAthleteProgressOpen').onclick = ()=>{
   if(!names.length){
     $('#apResultWrap').innerHTML = `<div class="empty-side">Henüz sporcu/kayıt yok.</div>`;
     $('#apProtoChecks').innerHTML = '';
+    $('#apDateField').style.display = 'none';
     apDisableButtons();
   } else {
     populateApProtoChecks();
