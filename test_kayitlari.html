@@ -801,6 +801,9 @@ function renderCustomForm(existing){
           <label class="checkfield"><input type="checkbox" id="cfPerCpNabiz" ${t.config.perCpNabiz?'checked':''}> Her kontrol noktasında nabız</label>
         </div>
         <div class="field-row">
+          <label class="checkfield"><input type="checkbox" id="cfSingleNabiz" ${t.config.singleNabiz?'checked':''}> Tek Nabız (checkpoint başına değil, test sonunda bir kez)</label>
+        </div>
+        <div class="field-row">
           <label class="checkfield"><input type="checkbox" id="cfBranch" ${t.config.branch?'checked':''}> Branş (stil) alanı ekle</label>
           <label class="checkfield"><input type="checkbox" id="cfExtraBranch" ${t.config.extraBranch?'checked':''}> Ek branş ölçümü (50m + 100m tek stil)</label>
         </div>`;
@@ -836,6 +839,7 @@ $('#btnSaveCustom').onclick = async ()=>{
       checkpoints: cps,
       perCpKol: $('#cfPerCpKol').checked,
       perCpNabiz: $('#cfPerCpNabiz').checked,
+      singleNabiz: $('#cfSingleNabiz').checked,
       branch: $('#cfBranch').checked,
       extraBranch: $('#cfExtraBranch').checked
     };
@@ -1453,6 +1457,7 @@ function buildColumns(t, steps, repsOverride){
     t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub:'kümülatif', type:'time', ph:'ör. 5:16' }));
     if(t.config.perCpKol) t.config.checkpoints.forEach(d=> cols.push({ key:`kol${d}`, label:`KS ${d}m`, type:'num', ph:'#' }));
     if(t.config.perCpNabiz) t.config.checkpoints.forEach(d=> cols.push({ key:`nb${d}`, label:`Nb ${d}m`, type:'num', ph:'#' }));
+    if(t.config.singleNabiz) cols.push({ key:'nb_single', label:'Nabız', type:'num', ph:'#' });
     if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
     if(t.config.extraBranch){
       cols.push({ key:'b50', label:'Branş 50m', type:'time', ph:'ör. 32.10' });
@@ -1687,12 +1692,7 @@ function openManualDetail(sessionId){
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th><th class="detail-action-col"></th></tr>`;
   currentSessionAthletes.forEach(a=>{
     html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
-    cols.forEach(c=>{
-      let v = a[c.key];
-      if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-      else if(v===undefined || v===''){ v = '—'; }
-      html += `<td>${v}</td>`;
-    });
+    html += renderRowCellsHtml(cols, a);
     html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, repsN).text}</td>`;
     html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${a.athlete.replace(/"/g,'&quot;')}" title="Sporcuyu çıkar">✕</button></td>`;
     html += `</tr>`;
@@ -1733,24 +1733,75 @@ function printNow(title, bodyHtml){
   $('#printArea').innerHTML = buildPrintHtml(title, bodyHtml);
   window.print();
 }
-function downloadPdf(title, bodyEl, filenameBase){
+function downloadPdf(title, bodyEl, filenameBase, opts){
   // Not: html2canvas, ekran dışına (ör. left:-9999px) yerleştirilmiş
   // gizli kopyaları güvenilir şekilde yakalayamıyor (boş/şeffaf çıktı
   // üretebiliyor). Bu yüzden gerçekten EKRANDA GÖRÜNEN öğeyi
   // kullanıyoruz — geçici bir başlık ekleyip PDF sonrası kaldırıyoruz.
+  opts = opts || {};
   const header = document.createElement('div');
   header.style.cssText = 'font-family:Segoe UI,Arial,sans-serif; padding:0 0 10px;';
   header.innerHTML = `<h2 style="color:#0b2942; margin:0 0 2px; font-size:17px;">${title}</h2>
     <div style="color:#647680; font-size:11px;">Bursa Kolejliler Spor Kulübü</div>`;
   bodyEl.insertBefore(header, bodyEl.firstChild);
-  const cleanup = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
-  return html2pdf().set({
+  const cleanup0 = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
+
+  let pdfOptions = {
     margin: 8,
     filename: `${filenameBase}.pdf`,
     image: { type:'jpeg', quality:0.98 },
     html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
     jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-  }).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
+  };
+  let cleanupWide = ()=>{};
+
+  if(opts.fitOnePage){
+    // Genellikle modal genişliği (ör. 820px) sabit olduğu için çok
+    // sütunlu tablolar (ör. 7x200 Step Test) sıkışıp başlıklar satır
+    // sarıyor, bu da PDF'in birden fazla sayfaya bölünmesine yol
+    // açıyor. Burada geçici olarak modal/tablo genişlik kısıtlarını
+    // kaldırıp tabloyu DOĞAL genişliğine açıyoruz, sonra o gerçek
+    // piksel boyutuna göre TEK sayfalık özel bir PDF sayfa ölçüsü
+    // hesaplıyoruz — böylece hiçbir şey kırpılmadan tek sayfaya sığar.
+    const modalEl = bodyEl.closest('.modal');
+    const tables = bodyEl.querySelectorAll('table');
+    const prevModalStyle = modalEl ? modalEl.getAttribute('style') : null;
+    const prevBodyStyle = bodyEl.getAttribute('style');
+    const prevTableStyles = Array.from(tables).map(t=> t.getAttribute('style'));
+
+    if(modalEl) modalEl.style.cssText += ';max-width:none !important; width:max-content !important;';
+    bodyEl.style.cssText += ';width:max-content !important; max-width:none !important;';
+    tables.forEach(t=>{ t.style.cssText += ';width:auto !important;'; t.querySelectorAll('th,td').forEach(c=> c.style.whiteSpace='nowrap'); });
+
+    // Reflow sonrası gerçek (doğal) piksel boyutlarını ölç.
+    const pxW = bodyEl.scrollWidth;
+    const pxH = bodyEl.scrollHeight;
+    const pxToMm = 25.4/96;
+    const marginMm = 10;
+    const wMm = Math.max(60, pxW*pxToMm + marginMm*2);
+    const hMm = Math.max(40, pxH*pxToMm + marginMm*2);
+
+    pdfOptions = {
+      margin: marginMm,
+      filename: `${filenameBase}.pdf`,
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
+      jsPDF: { unit:'mm', format:[wMm, hMm], orientation: wMm>=hMm ? 'landscape' : 'portrait' },
+      pagebreak: { mode:['avoid-all'] }
+    };
+
+    cleanupWide = ()=>{
+      if(modalEl){ if(prevModalStyle===null) modalEl.removeAttribute('style'); else modalEl.setAttribute('style', prevModalStyle); }
+      if(prevBodyStyle===null) bodyEl.removeAttribute('style'); else bodyEl.setAttribute('style', prevBodyStyle);
+      tables.forEach((t,i)=>{
+        if(prevTableStyles[i]===null) t.removeAttribute('style'); else t.setAttribute('style', prevTableStyles[i]);
+        t.querySelectorAll('th,td').forEach(c=> c.style.whiteSpace='');
+      });
+    };
+  }
+
+  const cleanup = ()=>{ cleanup0(); cleanupWide(); };
+  return html2pdf().set(pdfOptions).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
 }
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
 $('#btnPrintManualDetail').onclick = ()=>{
@@ -1764,7 +1815,7 @@ $('#btnPdfManualDetail').onclick = ()=>{
   const actionEls = $('#manualDetailBody').querySelectorAll('.detail-action-col');
   actionEls.forEach(el=> el.style.display='none');
   const restore = ()=> actionEls.forEach(el=> el.style.display='');
-  const result = downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody'), `${t}`);
+  const result = downloadPdf($('#manualDetailTitle').textContent, $('#manualDetailBody'), `${t}`, { fitOnePage:true });
   if(result && typeof result.then === 'function') result.then(restore).catch(restore);
   else restore();
 };
@@ -2158,6 +2209,50 @@ function stepRowValues(columns, row){
   columns.forEach(c=>{ out[c.key] = parseTimeStr(row[c.key]); });
   return out;
 }
+// Kumulatif ailede grafik için: X ekseni değerleri KÜMÜLATİF derece
+// yerine her checkpoint'in KENDİ (bir önceki checkpoint'ten bu yana
+// geçen) SEGMENT süresi olarak hesaplanır — böylece grafik "300m'ye
+// kadar toplam kaç saniye" yerine "her 100m kaç saniyede yüzüldü"yü
+// gösterir. columns'un ARTAN mesafe sırasında olduğu varsayılır
+// (protokol kurulurken checkpoint'ler zaten artan girilir).
+function stepRowSplitValues(columns, row){
+  const out = {};
+  let prevSec = null;
+  columns.forEach(c=>{
+    const sec = parseTimeStr(row[c.key]);
+    if(sec===null){ out[c.key] = null; return; }
+    out[c.key] = prevSec===null ? sec : (sec - prevSec);
+    prevSec = sec;
+  });
+  return out;
+}
+// Bir satırın hücrelerini <td> HTML'i olarak üretir. Kumulatif ailenin
+// checkpoint sütunlarında (sub==='kümülatif'), ana kümülatif derecenin
+// ALTINA, o checkpoint'e özel TEK SEGMENT (split) süresini küçük gri
+// yazıyla ekler — ör. "300m" hücresinde üstte "4:00.00" (toplam), altta
+// "1:23.00" (200m'den 300m'ye kadar geçen süre) görünür. İlk checkpoint'te
+// split = kümülatif olduğu için ikinci satır boş bırakılır.
+function renderRowCellsHtml(cols, rowData){
+  let prevCumSec = null;
+  return cols.map(c=>{
+    let v = rowData[c.key];
+    if(c.type==='time'){
+      const sec = parseTimeStr(v);
+      const mainTxt = sec!==null ? fmtTime(sec) : '—';
+      if(c.sub==='kümülatif'){
+        let splitHtml = '';
+        if(sec!==null){
+          if(prevCumSec!==null) splitHtml = `<div style="font-size:10px; color:#8a97a0; margin-top:1px;">${fmtTime(sec-prevCumSec)}</div>`;
+          prevCumSec = sec;
+        }
+        return `<td>${mainTxt}${splitHtml}</td>`;
+      }
+      return `<td>${mainTxt}</td>`;
+    }
+    if(v===undefined || v===''){ v = '—'; }
+    return `<td>${v}</td>`;
+  }).join('');
+}
 // Tüm tekrar/adım değerlerini gösteren çizgi grafiği: X ekseni = testin
 // adımları (tekrar 1..N ya da mesafe/kontrol noktası), Y ekseni = derece.
 // Her SERİ bir TARİH — böylece aynı testin farklı günlerdeki tüm
@@ -2341,7 +2436,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
           out.push({
             label: (multiProto ? `${pe.t.name} — ${dateStr}` : dateStr) + (extraBits ? ` · ${extraBits}` : ''),
             color: AP_COLOR_PALETTE[out.length % AP_COLOR_PALETTE.length],
-            values: stepRowValues(cols, e.row)
+            values: family==='kumulatif' ? stepRowSplitValues(cols, e.row) : stepRowValues(cols, e.row)
           });
         });
       });
@@ -2408,12 +2503,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
       entries.forEach(e=>{
         html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>`;
-        cols.forEach(c=>{
-          let v = e.row[c.key];
-          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-          else if(v===undefined || v===''){ v = '—'; }
-          html += `<td>${v}</td>`;
-        });
+        html += renderRowCellsHtml(cols, e.row);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, undefined, maxRepsHere).text}</td></tr>`;
       });
     }
@@ -2473,12 +2563,7 @@ function renderBulkProtocols(protoIds, wrap){
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
       s.athletes.forEach(a=>{
         html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
-        cols.forEach(c=>{
-          let v = a[c.key];
-          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-          else if(v===undefined || v===''){ v = '—'; }
-          html += `<td>${v}</td>`;
-        });
+        html += renderRowCellsHtml(cols, a);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, sessRepsN).text}</td></tr>`;
       });
       html += `</table></div>`;
