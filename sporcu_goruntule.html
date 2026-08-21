@@ -3,21 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Antrenman Test Kayıtları</title>
+<title>Sporcu Gelişimi</title>
 <!-- ============================================================
   KURULUM NOTU
-  Bu dosya, index.html'deki SwimAnalyzer / Hedef Derece Hesaplayıcı
-  sekmeleri ile aynı mantıkla çalışır: klasöre bırak, bir <iframe>
-  sekmesi olarak ekle.
-  Firebase'e bağlamak için: index.html'de kullandığın firebaseConfig
-  nesnesini aşağıdaki "FIREBASE_CONFIG" alanına yapıştır. Boş
-  bırakırsan araç otomatik olarak tarayıcı içi (localStorage)
-  depolamaya döner — aynı cihazda çalışır ama cihazlar arası
-  senkron olmaz.
-  Sporcu listesi (isim seçimi), index.html'in kendi "Sporcu Listesi"
-  (roster_v1) kaydını PAYLAŞIR — bu dosya index.html içine <iframe>
-  olarak yerleştirildiğinde otomatik devreye girer. Bağımsız açılırsa
-  sporcu adı serbest metin olarak girilir.
+  Bu dosya (sporcu_goruntule.html), test_kayitlari.html ile AYNI
+  klasöre bırakılır. Sporcularla PAYLAŞMAK için salt-okunur bir
+  görünümdür: "sporcu_goruntule.html?id=SPORCU_ID" şeklinde açılır
+  ve sadece o ID'ye ait sporcunun kendi test kayıtlarını/grafiklerini
+  gösterir. Düzenleme, silme, protokol ekleme, başka sporcu verisi
+  görme gibi hiçbir yetki yoktur.
+
+  Sporcu ID'sini bulmak için: test_kayitlari.html'de "👥 Sporcu
+  Ekle / Çıkar" panelini aç.
+
+  ÖNEMLİ GÜVENLİK NOTU: Bu, diğer araçlarla aynı seviyede koruma
+  sunar — şifre/oturum açma YOKTUR, sadece linki bilenler görebilir
+  ("gizli link" mantığı). Gerçek erişim kontrolü için Firebase
+  güvenlik kuralları eklenmelidir.
+
+  Firebase'e bağlamak için: test_kayitlari.html'de kullandığın
+  FIREBASE_CONFIG nesnesinin AYNISINI aşağıya yapıştır (aynı veriye
+  bakması gerekir). Boş bırakırsan localStorage'a döner (sadece bu
+  cihazda çalışır, paylaşım linki işe yaramaz).
 ============================================================= -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -111,6 +118,29 @@
     align-items:center; justify-content:center; z-index:50; padding:20px;
   }
   .overlay.show{display:flex;}
+  /* Salt-okunur sporcu görünümü: "Sporcu Gelişimi" panelini modal değil,
+     tam sayfa içerik gibi göster; sidebar/ana giriş alanı ve tüm
+     düzenleme modalları tamamen gizli. */
+  #mainLayout, #readyOverlay, #customOverlay, #manualDetailOverlay,
+  #rosterMgmtOverlay, #quickAddOverlay, #compareOverlay{ display:none !important; }
+  #athleteProgressOverlay{
+    position:static; background:none; padding:0; display:block;
+  }
+  #athleteProgressOverlay .modal{
+    max-width:1000px; margin:18px auto; max-height:none; box-shadow:none;
+    border:1px solid var(--line);
+  }
+  #athleteProgressOverlay h3, #apModeField, #btnCloseAthleteProgress{ display:none; }
+  #readOnlyNotice{
+    max-width:1000px; margin:14px auto 0; padding:10px 16px; background:var(--pool-light);
+    color:var(--navy-2); border-radius:8px; font-size:12.5px; text-align:center;
+    display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;
+  }
+  #btnRefreshData{
+    border:1px solid var(--navy-2); background:#fff; color:var(--navy-2); border-radius:6px;
+    padding:4px 10px; font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  #btnRefreshData:hover{ background:var(--navy-2); color:#fff; }
   .modal{
     background:#fff; border-radius:12px; max-width:640px; width:100%;
     max-height:86vh; overflow-y:auto; padding:24px 26px; box-shadow:0 20px 60px rgba(0,0,0,.35);
@@ -210,14 +240,12 @@
 </head>
 <body>
 <header>
-  <h1><span class="tag">Kulüp Performans Sistemi</span> Antrenman Test Kayıtları</h1>
+  <h1><span class="tag">Kulüp Performans Sistemi</span> <span id="headerAthleteName">Sporcu Gelişimi</span></h1>
   <div style="display:flex; align-items:center; gap:10px;">
-    <span class="meta" id="lastUpdated">Kayıt yok</span>
-    <span class="meta" id="rosterStatus" style="display:none;"></span>
     <span class="meta" id="cloudStatus" style="display:none; color:#ffd7d0; font-weight:600;"></span>
-    <button class="btn btn-ghost" id="btnRosterMgmt">👥 Sporcu Ekle / Çıkar</button>
-    <button class="btn btn-ghost" id="btnCompareOpen">⚖ Karşılaştır</button>
-    <button class="btn btn-ghost" id="btnAthleteProgressOpen">📈 Sporcu Gelişimi</button>
+    <button class="btn btn-ghost" id="btnRosterMgmt" style="display:none;">👥 Sporcu Ekle / Çıkar</button>
+    <button class="btn btn-ghost" id="btnCompareOpen" style="display:none;">⚖ Karşılaştır</button>
+    <button class="btn btn-ghost" id="btnAthleteProgressOpen" style="display:none;">📈 Sporcu Gelişimi</button>
   </div>
 </header>
 <div class="layout" id="mainLayout">
@@ -339,9 +367,9 @@
   <div class="modal" style="max-width:960px;">
     <h3>Sporcu Gelişimi</h3>
     <div style="font-size:12.5px; color:#647680; margin:-6px 0 12px;">
-      Sporcu bazlı: bir sporcunun seçtiğin testlerdeki gelişimini gör. Toplu: seçtiğin testlere katılan tüm sporcuları bir arada gör.
+      Aşağıdan testleri seçerek gelişimini görebilirsin. Bu sadece kendi kayıtlarını gösteren, salt-okunur bir sayfadır.
     </div>
-    <div class="field-row" style="align-items:flex-end; gap:16px;">
+    <div class="field-row" id="apModeField" style="align-items:flex-end; gap:16px;">
       <div class="field">
         <label>Görünüm</label>
         <div style="display:flex; gap:14px; padding-top:6px; font-size:13px;">
@@ -351,7 +379,7 @@
       </div>
     </div>
     <div class="field-row" style="align-items:flex-start; margin-top:10px;">
-      <div class="field" id="apAthleteField" style="flex:1; min-width:200px;">
+      <div class="field" id="apAthleteField" style="flex:1; min-width:200px; display:none;">
         <label>Sporcu</label>
         <select id="apAthlete" style="width:100%;"></select>
       </div>
@@ -377,6 +405,11 @@
     </div>
   </div>
 </div>
+<div id="readOnlyNotice" style="display:none;">
+  <span id="readOnlyNoticeText"></span>
+  <button id="btnRefreshData">🔄 Yenile</button>
+</div>
+
 <!-- Printable area (populated on demand, shown only via print CSS) -->
 <div class="print-only" id="printArea"></div>
 <script>
@@ -552,7 +585,7 @@ function renderRosterMgmtModal(){
     wrap.innerHTML = `<div class="roster-empty">Henüz sporcu eklenmedi. Aşağıdan ekleyebilirsin.</div>`;
     return;
   }
-  wrap.innerHTML = sorted.map(a=>`<div class="roster-row"><span>${a.sporcuAdi}</span><span style="display:flex; gap:4px;"><button data-rmlink="${a.id}" title="Sporcuya özel paylaşım linkini kopyala" style="background:none; border:none; cursor:pointer; font-size:15px; padding:2px 6px; line-height:1;">🔗</button><button data-rmid="${a.id}" title="Listeden çıkar">×</button></span></div>`).join('');
+  wrap.innerHTML = sorted.map(a=>`<div class="roster-row"><span>${a.sporcuAdi}</span><button data-rmid="${a.id}" title="Listeden çıkar">×</button></div>`).join('');
   wrap.querySelectorAll('button[data-rmid]').forEach(b=>{
     b.onclick = async ()=>{
       const a = ROSTER.find(x=>x.id===b.dataset.rmid);
@@ -560,22 +593,6 @@ function renderRosterMgmtModal(){
       if(!confirm(`"${a.sporcuAdi}" listeden çıkarılsın mı? Geçmiş test kayıtları silinmez, sadece seçim listesinden kaldırılır.`)) return;
       await saveRosterList(ROSTER.filter(x=>x.id!==a.id));
       renderRosterMgmtModal();
-    };
-  });
-  wrap.querySelectorAll('button[data-rmlink]').forEach(b=>{
-    b.onclick = async ()=>{
-      const a = ROSTER.find(x=>x.id===b.dataset.rmlink);
-      if(!a) return;
-      const url = new URL('sporcu_goruntule.html', location.href);
-      url.searchParams.set('id', a.id);
-      const link = url.toString();
-      try{
-        await navigator.clipboard.writeText(link);
-        b.textContent = '✅';
-        setTimeout(()=>{ b.textContent = '🔗'; }, 1500);
-      }catch(e){
-        prompt(`"${a.sporcuAdi}" için paylaşım linki (kopyala):`, link);
-      }
     };
   });
 }
@@ -2559,36 +2576,74 @@ function migrateSessionReps(){
   });
   return changed;
 }
-(async function init(){
+function showAccessError(msg){
+  document.body.innerHTML = `
+    <div style="max-width:440px; margin:70px auto; text-align:center; font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif; color:#647680; padding:0 20px;">
+      <div style="font-size:40px; margin-bottom:10px;">🔒</div>
+      <h2 style="color:var(--navy, #0b2942); margin:0 0 8px;">${msg}</h2>
+      <div style="font-size:13px;">Bu bağlantı geçerli değil. Doğru linki almak için antrenörünle iletişime geç.</div>
+    </div>`;
+}
+
+// SALT-OKUNUR GİRİŞ NOKTASI: hiçbir zaman Storage.save / saveManual /
+// saveRosterList çağırmaz — sadece okur ve URL'deki ?id= parametresine
+// ait sporcunun kendi verisiyle bellekteki MANUAL/ROSTER'ı daraltır.
+async function loadAndRenderAthlete(athleteId){
   await loadRoster();
-  updateRosterStatus();
+  const target = ROSTER.find(a => a.id === athleteId);
+  if(!target){ showAccessError('Sporcu bulunamadı'); return; }
+
   const saved = await Storage.load();
   if(saved && saved.payload){
     MANUAL = saved.payload;
     MANUAL.templates = MANUAL.templates || [];
     MANUAL.sessions = MANUAL.sessions || [];
-    $('#lastUpdated').textContent = `Son güncelleme: ${new Date(saved.updatedAt).toLocaleString('tr-TR')}`;
-  } else if (cloudEnabled) {
-    // Bulutta hiç kayıt yok — Firebase daha yeni açıldığı için bu
-    // tarayıcıda daha önce yerel (localStorage) olarak birikmiş veri
-    // varsa, onu bir kereliğine buluta taşı ki diğer cihazlarda da görünsün.
-    try{
-      const localRaw = localStorage.getItem('atk_manual_data');
-      if(localRaw){
-        const localRecord = JSON.parse(localRaw);
-        if(localRecord && localRecord.payload && (localRecord.payload.templates||[]).length){
-          MANUAL = localRecord.payload;
-          MANUAL.templates = MANUAL.templates || [];
-          MANUAL.sessions = MANUAL.sessions || [];
-          await Storage.save(MANUAL);
-          $('#lastUpdated').textContent = `Yerel veriler buluta taşındı — ${new Date().toLocaleString('tr-TR')}`;
-        }
-      }
-    }catch(e){ console.warn('Yerel veri taşınamadı:', e); }
+  } else {
+    MANUAL = { templates: [], sessions: [] };
   }
-  if(migrateSessionReps()){ await saveManual(); }
-  renderProtoList();
-  renderManualMain();
+
+  // Belleği bu sporcuyla sınırla: başka hiçbir sporcunun adı ya da
+  // test kaydı bu sayfanın JS'inde/DOM'unda hiç var olmaz.
+  ROSTER = [target];
+  MANUAL.sessions = MANUAL.sessions
+    .map(s => ({ ...s, athletes: (s.athletes||[]).filter(a => a.athlete === target.sporcuAdi) }))
+    .filter(s => s.athletes.length > 0);
+
+  document.title = `Sporcu Gelişimi — ${target.sporcuAdi}`;
+  $('#headerAthleteName').textContent = `Sporcu Gelişimi — ${target.sporcuAdi}`;
+  const notice = $('#readOnlyNotice');
+  notice.style.display = 'flex';
+  $('#readOnlyNoticeText').textContent = `${target.sporcuAdi} — kendi test kayıtların, salt-okunur görünüm. Yeni bir test eklendiyse "Yenile"ye bas.`;
+
+  if(!knownAthletes().length){
+    $('#athleteProgressOverlay').classList.add('show');
+    $('#apResultWrap').innerHTML = `<div class="empty-side">Henüz test kaydın yok.</div>`;
+    $('#apProtoChecks').innerHTML = '';
+    $('#apDateField').style.display = 'none';
+    apDisableButtons();
+    return;
+  }
+
+  populateApAthletes();
+  $('#apAthlete').value = target.sporcuAdi;
+  $('#apModeAthlete').checked = true;
+  populateApProtoChecks();
+  renderAthleteProgress();
+  $('#athleteProgressOverlay').classList.add('show');
+}
+
+(async function init(){
+  const athleteId = new URLSearchParams(location.search).get('id');
+  if(!athleteId){ showAccessError('Sporcu bağlantısı eksik'); return; }
+
+  $('#btnRefreshData').onclick = async ()=>{
+    const btn = $('#btnRefreshData');
+    btn.disabled = true; btn.textContent = '⏳ Yükleniyor...';
+    await loadAndRenderAthlete(athleteId);
+    btn.disabled = false; btn.textContent = '🔄 Yenile';
+  };
+
+  await loadAndRenderAthlete(athleteId);
 })();
 </script>
 </body>
