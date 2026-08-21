@@ -1465,6 +1465,7 @@ function buildColumns(t, steps, repsOverride){
     t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub:'kümülatif', type:'time', ph:'ör. 5:16' }));
     if(t.config.perCpKol) t.config.checkpoints.forEach(d=> cols.push({ key:`kol${d}`, label:`KS ${d}m`, type:'num', ph:'#' }));
     if(t.config.perCpNabiz) t.config.checkpoints.forEach(d=> cols.push({ key:`nb${d}`, label:`Nb ${d}m`, type:'num', ph:'#' }));
+    if(t.config.singleNabiz) cols.push({ key:'nb_single', label:'Nabız', type:'num', ph:'#' });
     if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
     if(t.config.extraBranch){
       cols.push({ key:'b50', label:'Branş 50m', type:'time', ph:'ör. 32.10' });
@@ -1671,12 +1672,7 @@ function openManualDetail(sessionId){
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   currentSessionAthletes.forEach(a=>{
     html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
-    cols.forEach(c=>{
-      let v = a[c.key];
-      if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-      else if(v===undefined || v===''){ v = '—'; }
-      html += `<td>${v}</td>`;
-    });
+    html += renderRowCellsHtml(cols, a);
     html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, repsN).text}</td>`;
     html += `</tr>`;
   });
@@ -2123,6 +2119,49 @@ function stepRowValues(columns, row){
   columns.forEach(c=>{ out[c.key] = parseTimeStr(row[c.key]); });
   return out;
 }
+// Kumulatif ailede grafik için: X ekseni değerleri KÜMÜLATİF derece
+// yerine her checkpoint'in KENDİ (bir önceki checkpoint'ten bu yana
+// geçen) SEGMENT süresi olarak hesaplanır — böylece grafik "300m'ye
+// kadar toplam kaç saniye" yerine "her 100m kaç saniyede yüzüldü"yü
+// gösterir. columns'un ARTAN mesafe sırasında olduğu varsayılır
+// (protokol kurulurken checkpoint'ler zaten artan girilir).
+// Bkz. test_kayitlari.html'deki aynı isimli fonksiyon.
+function stepRowSplitValues(columns, row){
+  const out = {};
+  let prevSec = null;
+  columns.forEach(c=>{
+    const sec = parseTimeStr(row[c.key]);
+    if(sec===null){ out[c.key] = null; return; }
+    out[c.key] = prevSec===null ? sec : (sec - prevSec);
+    prevSec = sec;
+  });
+  return out;
+}
+// Bir satırın hücrelerini <td> HTML'i olarak üretir. Kumulatif ailenin
+// checkpoint sütunlarında (sub==='kümülatif'), ana kümülatif derecenin
+// ALTINA, o checkpoint'e özel TEK SEGMENT (split) süresini küçük gri
+// yazıyla ekler. Bkz. test_kayitlari.html'deki aynı isimli fonksiyon.
+function renderRowCellsHtml(cols, rowData){
+  let prevCumSec = null;
+  return cols.map(c=>{
+    let v = rowData[c.key];
+    if(c.type==='time'){
+      const sec = parseTimeStr(v);
+      const mainTxt = sec!==null ? fmtTime(sec) : '—';
+      if(c.sub==='kümülatif'){
+        let splitHtml = '';
+        if(sec!==null){
+          if(prevCumSec!==null) splitHtml = `<div style="font-size:10px; color:#8a97a0; margin-top:1px;">${fmtTime(sec-prevCumSec)}</div>`;
+          prevCumSec = sec;
+        }
+        return `<td>${mainTxt}${splitHtml}</td>`;
+      }
+      return `<td>${mainTxt}</td>`;
+    }
+    if(v===undefined || v===''){ v = '—'; }
+    return `<td>${v}</td>`;
+  }).join('');
+}
 // Tüm tekrar/adım değerlerini gösteren çizgi grafiği: X ekseni = testin
 // adımları (tekrar 1..N ya da mesafe/kontrol noktası), Y ekseni = derece.
 // Her SERİ bir TARİH — böylece aynı testin farklı günlerdeki tüm
@@ -2306,7 +2345,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
           out.push({
             label: (multiProto ? `${pe.t.name} — ${dateStr}` : dateStr) + (extraBits ? ` · ${extraBits}` : ''),
             color: AP_COLOR_PALETTE[out.length % AP_COLOR_PALETTE.length],
-            values: stepRowValues(cols, e.row)
+            values: family==='kumulatif' ? stepRowSplitValues(cols, e.row) : stepRowValues(cols, e.row)
           });
         });
       });
@@ -2373,12 +2412,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : 'Ortalama'}</th></tr>`;
       entries.forEach(e=>{
         html += `<tr><td class="who">${new Date(e.session.date).toLocaleDateString('tr-TR')}</td>`;
-        cols.forEach(c=>{
-          let v = e.row[c.key];
-          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-          else if(v===undefined || v===''){ v = '—'; }
-          html += `<td>${v}</td>`;
-        });
+        html += renderRowCellsHtml(cols, e.row);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, e.row, undefined, maxRepsHere).text}</td></tr>`;
       });
     }
@@ -2438,12 +2472,7 @@ function renderBulkProtocols(protoIds, wrap){
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
       s.athletes.forEach(a=>{
         html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
-        cols.forEach(c=>{
-          let v = a[c.key];
-          if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-          else if(v===undefined || v===''){ v = '—'; }
-          html += `<td>${v}</td>`;
-        });
+        html += renderRowCellsHtml(cols, a);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, sessRepsN).text}</td></tr>`;
       });
       html += `</table></div>`;
