@@ -215,6 +215,14 @@
     <span class="meta" id="lastUpdated">Kayıt yok</span>
     <span class="meta" id="rosterStatus" style="display:none;"></span>
     <span class="meta" id="cloudStatus" style="display:none; color:#ffd7d0; font-weight:600;"></span>
+    <!-- Firebase kuralları buluta yazmayı sadece giriş yapmış kullanıcılara
+         açtığı için (bkz. rtdbSet), kayıtların buluta senkron olması için
+         Google girişi gerekiyor. index.html'de zaten giriş yapıldıysa
+         (aynı origin/proje) bu otomatik algılanır, ayrıca tıklamaya gerek
+         kalmaz. -->
+    <span class="meta" id="authStatus" style="color:#ffd7d0; font-weight:600;">Bağlanıyor...</span>
+    <button class="btn btn-ghost" id="googleSignInBtn" style="display:none;">🔑 Google ile Giriş Yap</button>
+    <button class="btn btn-ghost" id="googleSignOutBtn" style="display:none;">Çıkış Yap</button>
     <button class="btn btn-ghost" id="btnRosterMgmt">👥 Sporcu Ekle / Çıkar</button>
     <button class="btn btn-ghost" id="btnCompareOpen">⚖ Karşılaştır</button>
     <button class="btn btn-ghost" id="btnAthleteProgressOpen">📈 Sporcu Gelişimi</button>
@@ -395,6 +403,81 @@ const FIREBASE_CONFIG = {
 };
 const RTDB_BASE = (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
 const DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel"; // Realtime Database yolu
+
+/* =========================================================
+   FIREBASE AUTH (Google ile giriş)
+   ---------------------------------------------------------
+   Realtime Database kuralları artık kulup_verileri yoluna yazmak için
+   "auth != null" istiyor (bkz. Firebase konsolündeki güvenlik kuralları).
+   Bu araç veritabanına Firebase SDK'sı yerine düz REST çağrısıyla
+   bağlandığı için (aşağıdaki not), kimliği REST isteğine ?auth=<idToken>
+   parametresiyle elle eklememiz gerekiyor. Aynı origin+proje olduğu için,
+   index.html'de zaten Google girişi yapılmışsa bu sayfa (tek başına ya da
+   index.html içine iframe olarak) oturumu otomatik devralır; ayrı giriş
+   gerekmez. Giriş yoksa yazmalar bulut yerine bu cihazın localStorage'ına
+   düşer (bkz. Storage/RosterStorage — mevcut davranış korunuyor).
+   ========================================================= */
+let fbAuthUser = null;
+const fbAuthReady = (async ()=>{
+  function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+  function setAuthUI(user){
+    fbAuthUser = user || null;
+    const statusEl = document.getElementById('authStatus');
+    const inBtn = document.getElementById('googleSignInBtn');
+    const outBtn = document.getElementById('googleSignOutBtn');
+    if(!statusEl) return;
+    if(user){
+      statusEl.textContent = '🟢 ' + (user.displayName || user.email || 'Giriş yapıldı');
+      if(inBtn) inBtn.style.display = 'none';
+      if(outBtn) outBtn.style.display = '';
+    } else {
+      statusEl.textContent = '🔴 Giriş yapılmadı — buluta yazma başarısız olur';
+      if(inBtn) inBtn.style.display = '';
+      if(outBtn) outBtn.style.display = 'none';
+    }
+  }
+  if(!RTDB_BASE) { setAuthUI(null); return; }
+  try{
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
+    await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
+    if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const auth = firebase.auth();
+    await new Promise(resolve=>{
+      const unsub = auth.onAuthStateChanged(user=>{ unsub(); setAuthUI(user); resolve(); });
+    });
+    auth.onAuthStateChanged(setAuthUI);
+    const inBtn = document.getElementById('googleSignInBtn');
+    if(inBtn) inBtn.addEventListener('click', async ()=>{
+      try{
+        const provider = new firebase.auth.GoogleAuthProvider();
+        try{ await auth.signInWithPopup(provider); }
+        catch(popupErr){
+          if(popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request'){
+            await auth.signInWithRedirect(provider);
+          } else { throw popupErr; }
+        }
+      }catch(e){ console.error('Google giriş hatası:', e); alert('Google ile giriş yapılamadı: ' + e.message); }
+    });
+    const outBtn = document.getElementById('googleSignOutBtn');
+    if(outBtn) outBtn.addEventListener('click', async ()=>{ await auth.signOut(); });
+    try{
+      const result = await auth.getRedirectResult();
+      if(result && result.user) setAuthUI(result.user);
+    }catch(e){ /* redirect sonucu yoksa hata gelmez */ }
+  }catch(e){
+    console.warn('Firebase Auth başlatılamadı, giriş olmadan devam ediliyor:', e);
+    setAuthUI(null);
+  }
+})();
+async function authQueryParam(){
+  try{
+    await fbAuthReady;
+    if(!fbAuthUser) return '';
+    const token = await fbAuthUser.getIdToken();
+    return token ? `?auth=${encodeURIComponent(token)}` : '';
+  }catch(e){ console.warn('Oturum belirteci alınamadı:', e); return ''; }
+}
+
 // Firebase SDK'nın WebSocket bağlantısı bazı mobil operatörlerde sessizce
 // engellenip hiç hata vermeden asılı kalabiliyor. Bunun yerine düz HTTPS
 // (REST API) kullanıyoruz — normal bir web isteği gibi, her ağda çalışır —
@@ -405,12 +488,14 @@ function fetchWithTimeout(url, options, ms){
   return fetch(url, { ...options, signal: controller.signal }).finally(()=> clearTimeout(timer));
 }
 async function rtdbGet(path){
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json`);
+  const authParam = await authQueryParam();
+  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json${authParam}`);
   if(!res.ok){ const err = new Error(`RTDB GET ${res.status}`); err.code = res.status===401||res.status===403 ? 'PERMISSION_DENIED' : String(res.status); throw err; }
   return res.json();
 }
 async function rtdbSet(path, value){
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json`, {
+  const authParam = await authQueryParam();
+  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json${authParam}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(value)
@@ -432,27 +517,40 @@ function markCloudFailure(e){
 }
 const Storage = {
   async load(){
+    let local = null;
+    try{ const raw = localStorage.getItem('atk_manual_data'); local = raw ? JSON.parse(raw) : null; }catch(e){ local = null; }
     if (cloudEnabled){
       try{
-        const data = await rtdbGet(DB_PATH);
+        const cloud = await rtdbGet(DB_PATH);
         cloudOk = true;
-        return data || null;
+        // Bu cihazda buluttakinden daha yeni bir yerel kayıt varsa (ör.
+        // internet/giriş yokken kaydedilmiş ve o zamandan beri tekrar
+        // kaydedilmemiş), yerel veri kullanılır ve arka planda sessizce
+        // buluta gönderilmeye çalışılır — offline kayıtlar bağlantı
+        // dönünce böylece kaybolmadan senkronize olur.
+        if(local && local.updatedAt && (!cloud || !cloud.updatedAt || local.updatedAt > cloud.updatedAt)){
+          console.warn('Yerel kayıt buluttakinden daha yeni, yerel veri kullanılıyor ve buluta senkronize ediliyor.');
+          rtdbSet(DB_PATH, local).then(()=>{ cloudOk = true; }).catch(e=> console.warn('Yerel veri buluta senkronize edilemedi (bir sonraki kayıtta tekrar denenecek):', e));
+          return local;
+        }
+        return cloud || null;
       }catch(e){
         console.warn("Buluttan okuma başarısız, yerel veriye (localStorage) dönülüyor:", e);
         cloudOk = false;
         markCloudFailure(e);
       }
     }
-    const raw = localStorage.getItem('atk_manual_data');
-    return raw ? JSON.parse(raw) : null;
+    return local;
   },
   async save(payload){
     const record = { payload, updatedAt: new Date().toISOString() };
+    // Önce HER ZAMAN yerelde yedekle (internet/giriş olsun olmasın) —
+    // böylece bağlantı kesikken de bu cihazda veri kaybı yaşanmaz.
+    localStorage.setItem('atk_manual_data', JSON.stringify(record));
     if (cloudEnabled){
       try{
         await rtdbSet(DB_PATH, record);
         cloudOk = true;
-        localStorage.setItem('atk_manual_data', JSON.stringify(record)); // yerelde de yedekle
         return;
       }catch(e){
         console.warn("Buluta kayıt başarısız, yerel olarak (localStorage) kaydedildi:", e);
@@ -460,7 +558,6 @@ const Storage = {
         markCloudFailure(e);
       }
     }
-    localStorage.setItem('atk_manual_data', JSON.stringify(record));
   }
 };
 /* =========================================================
@@ -480,28 +577,44 @@ const Storage = {
 const ROSTER_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_roster";
 const RosterStorage = {
   async load(){
+    let local = null;
+    try{ const raw = localStorage.getItem('atk_roster_local'); local = raw ? JSON.parse(raw) : null; }catch(e){ local = null; }
+    // Eski sürümlerde bu anahtar düz bir liste (array) olarak saklanıyordu;
+    // geriye dönük uyumluluk için ikisini de destekle.
+    const localList = Array.isArray(local) ? local : (local && Array.isArray(local.list) ? local.list : []);
     if (cloudEnabled){
       try{
         const data = await rtdbGet(ROSTER_DB_PATH);
-        return data ? (data.list || []) : [];
+        const cloudList = data ? (data.list || []) : [];
+        // İnternet/giriş yokken eklenmiş ama buluta hiç ulaşmamış bir
+        // sporcu varsa kaybetmemek için yerel + bulut listesini birleştir
+        // ve arka planda buluta yaz.
+        const cloudNames = new Set(cloudList.map(a=> (a.sporcuAdi||'').toLocaleLowerCase('tr')));
+        const missing = localList.filter(a=> a && a.sporcuAdi && !cloudNames.has(a.sporcuAdi.toLocaleLowerCase('tr')));
+        if(missing.length){
+          const merged = [...cloudList, ...missing];
+          console.warn(`${missing.length} yerel sporcu bulut listesinde yok, birleştirilip buluta gönderiliyor.`);
+          rtdbSet(ROSTER_DB_PATH, { list: merged, updatedAt: new Date().toISOString() }).catch(e=> console.warn('Sporcu listesi buluta senkronize edilemedi:', e));
+          return merged;
+        }
+        return cloudList;
       }catch(e){
         console.warn("Sporcu listesi buluttan okunamadı, yerel listeye dönülüyor:", e);
       }
     }
-    const raw = localStorage.getItem('atk_roster_local');
-    return raw ? JSON.parse(raw) : [];
+    return localList;
   },
   async save(list){
+    // Önce HER ZAMAN yerelde yedekle (internet/giriş olsun olmasın).
+    localStorage.setItem('atk_roster_local', JSON.stringify({ list, updatedAt: new Date().toISOString() }));
     if (cloudEnabled){
       try{
         await rtdbSet(ROSTER_DB_PATH, { list, updatedAt: new Date().toISOString() });
-        localStorage.setItem('atk_roster_local', JSON.stringify(list));
         return;
       }catch(e){
         console.warn("Sporcu listesi buluta kaydedilemedi, yerel olarak kaydedildi:", e);
       }
     }
-    localStorage.setItem('atk_roster_local', JSON.stringify(list));
   }
 };
 let ROSTER = [];

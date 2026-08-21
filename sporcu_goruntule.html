@@ -525,8 +525,15 @@ const RosterStorage = {
         console.warn("Sporcu listesi buluttan okunamadı, yerel listeye dönülüyor:", e);
       }
     }
-    const raw = localStorage.getItem('atk_roster_local');
-    return raw ? JSON.parse(raw) : [];
+    // Not: test_kayitlari.html bu anahtarı {list, updatedAt} olarak
+    // yazabiliyor (offline senkron için) — burada her iki biçimi de
+    // (düz dizi ya da {list}) güvenle destekliyoruz, aksi halde bir
+    // nesneyi dizi gibi kullanmaya çalışıp hataya düşebilirdik.
+    let raw = null;
+    try{ raw = JSON.parse(localStorage.getItem('atk_roster_local') || 'null'); }catch(e){ raw = null; }
+    if(Array.isArray(raw)) return raw;
+    if(raw && Array.isArray(raw.list)) return raw.list;
+    return [];
   },
   async save(list){
     if (cloudEnabled){
