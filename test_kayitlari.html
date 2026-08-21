@@ -1014,9 +1014,9 @@ function renderManualMain(){
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
       <button class="btn btn-danger" id="btnDelProto">🗑 Sil</button>
-      ${t.family!=='rpset' ? `<button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>
+      <button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>
       <button class="btn btn-ghost" id="btnExcelImport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬆ Excel Yükle</button>
-      <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none;">` : ''}
+      <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none;">
       <button class="btn btn-primary" id="btnNewSession">＋ Yeni Kayıt Ekle</button>
     </div>
   </div>
@@ -1066,6 +1066,7 @@ function buildExportHeaders(t){
   return { cols, headers };
 }
 function exportProtocolToExcel(t){
+  if(t.family==='rpset'){ exportRpSetToExcel(t); return; }
   const { cols, headers } = buildExportHeaders(t);
   const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
   if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
@@ -1081,6 +1082,41 @@ function exportProtocolToExcel(t){
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, t.name.slice(0,31) || 'Test');
+  const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
+  XLSX.writeFile(wb, `${safeName}.xlsx`);
+}
+/* ---- Basamaklı Özel Set (RP Set): her kayıt (tarih) kendi basamak
+   yapısını taşıdığı için sabit bir sütun şablonu yok. Bu yüzden dışa
+   aktarımda HER KAYIT AYRI BİR SAYFA olur; sayfanın 1. satırına o
+   kaydın basamak yapısı JSON olarak gizlice yazılır (kullanıcı
+   düzenlemesin diye "düzenlemeyin" notu var), 2. satır gerçek başlık,
+   3. satırdan itibaren sporcu verileri gelir. İçe aktarımda bu JSON
+   okunarak sütunlar yeniden kurulur — böylece yeni bir tarih için bile
+   (protokolde daha önce hiç olmayan bir basamak yapısıyla) kayıt
+   oluşturulabilir. ---- */
+function exportRpSetToExcel(t){
+  const sessions = MANUAL.sessions.filter(s=>s.templateId===t.id).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!sessions.length){ alert('Bu protokol için henüz kayıt yok.'); return; }
+  const wb = XLSX.utils.book_new();
+  const usedNames = new Set();
+  sessions.forEach(s=>{
+    const steps = s.steps || [];
+    const cols = buildColumns(t, steps);
+    const headers = ['Tarih','Not','Sporcu', ...cols.map(c=>c.label+(c.sub?` (${c.sub})`:'')), 'Basamak Ortalaması'];
+    const aoa = [ ['__RPSET_STEPS__ (bu satırı silme/düzenleme)', JSON.stringify(steps)], headers ];
+    s.athletes.forEach(a=>{
+      const row = [s.date, s.note||'', a.athlete];
+      cols.forEach(c=>{ const v = a[c.key]; row.push(v===undefined || v===null ? '' : v); });
+      row.push(computeAvg(t,a,steps).text);
+      aoa.push(row);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    let base = ((s.date||'kayit') + (s.note?` ${s.note}`:'')).replace(/[\[\]\*\/\\\?:]/g,'').trim().slice(0,28) || 'Kayit';
+    let name = base, n = 2;
+    while(usedNames.has(name)){ name = `${base} (${n++})`.slice(0,31); }
+    usedNames.add(name);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
   const safeName = (t.name || 'test').replace(/[^\w\-ığüşöçİĞÜŞÖÇ ]/g,'').trim() || 'test';
   XLSX.writeFile(wb, `${safeName}.xlsx`);
 }
@@ -1117,6 +1153,7 @@ function excelCellToDateStr(v){
   return null;
 }
 function importExcelForProtocol(t, file){
+  if(t.family==='rpset'){ importRpSetFromExcel(t, file); return; }
   const reader = new FileReader();
   reader.onload = async (e)=>{
     try{
@@ -1179,6 +1216,79 @@ function importExcelForProtocol(t, file){
       await saveManual();
       renderProtoList(); renderManualMain();
       alert(`İçe aktarma tamamlandı: ${addedSessions} yeni kayıt (tarih) oluşturuldu, ${touchedAthletes} sporcu satırı işlendi${skipped?`, ${skipped} satır atlandı (tarih/sporcu eksik)`:''}.`);
+    }catch(err){
+      console.error(err);
+      alert('Excel dosyası okunurken bir hata oluştu. Dosyanın .xlsx formatında ve bozulmamış olduğundan emin ol.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+/* ---- Basamaklı Özel Set (RP Set) içe aktarma: dosyadaki HER SAYFA
+   ayrı bir kayıt (tarih) olarak işlenir. Her sayfanın 1. satırındaki
+   gizli JSON'dan o kaydın basamak yapısı (steps) okunur, 2. satır
+   başlık kabul edilir, 3. satırdan itibaren sporcu verileri okunur.
+   Bu sayede exportRpSetToExcel ile üretilmemiş / bozulmuş sayfalar
+   sessizce atlanır (skippedSheets sayaci). ---- */
+function importRpSetFromExcel(t, file){
+  const reader = new FileReader();
+  reader.onload = async (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:false});
+      let addedSessions = 0, touchedAthletes = 0, skipped = 0, skippedSheets = 0;
+      wb.SheetNames.forEach(sheetName=>{
+        const ws = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        if(!rows.length || rows.length<2){ skippedSheets++; return; }
+        const metaCell = (rows[0] && rows[0][0]!==undefined && rows[0][0]!==null) ? rows[0][0].toString().trim() : '';
+        if(!metaCell.startsWith('__RPSET_STEPS__')){ skippedSheets++; return; }
+        let steps;
+        try{ steps = JSON.parse(rows[0][1]); }catch(err){ skippedSheets++; return; }
+        if(!Array.isArray(steps)){ skippedSheets++; return; }
+        const headerRow = rows[1].map(h=>(h===null||h===undefined) ? '' : h.toString().trim());
+        const cols = buildColumns(t, steps);
+        const idxDate = headerRow.findIndex(h=>h.toLocaleLowerCase('tr')==='tarih');
+        const idxNote = headerRow.findIndex(h=>h.toLocaleLowerCase('tr')==='not');
+        const idxAthlete = headerRow.findIndex(h=>h.toLocaleLowerCase('tr')==='sporcu');
+        if(idxDate===-1 || idxAthlete===-1){ skippedSheets++; return; }
+        const colIdxMap = cols.map(c=>{
+          const label = c.label+(c.sub?` (${c.sub})`:'');
+          return headerRow.findIndex(h=>h===label);
+        });
+        for(let ri=2; ri<rows.length; ri++){
+          const row = rows[ri];
+          if(!row || !row.length) continue;
+          const dateStr = excelCellToDateStr(row[idxDate]);
+          const athleteName = (row[idxAthlete]===null||row[idxAthlete]===undefined) ? '' : row[idxAthlete].toString().trim();
+          if(!dateStr || !athleteName){ skipped++; continue; }
+          const note = idxNote!==-1 ? (row[idxNote]||'').toString().trim() : '';
+          let session = MANUAL.sessions.find(s=>s.templateId===t.id && s.date===dateStr && (s.note||'')===note);
+          if(!session){
+            session = { id: uid(), templateId: t.id, date: dateStr, note, athletes: [], steps: JSON.parse(JSON.stringify(steps)) };
+            MANUAL.sessions.push(session);
+            addedSessions++;
+          }
+          const athleteRow = { athlete: athleteName };
+          cols.forEach((c,ci)=>{
+            const colIdx = colIdxMap[ci];
+            if(colIdx===-1) return;
+            const v = row[colIdx];
+            if(v===undefined || v===null || v==='') return;
+            athleteRow[c.key] = v.toString().trim();
+          });
+          const existingIdx = session.athletes.findIndex(a=>a.athlete.toLocaleLowerCase('tr')===athleteName.toLocaleLowerCase('tr'));
+          if(existingIdx>=0) session.athletes[existingIdx] = athleteRow;
+          else session.athletes.push(athleteRow);
+          touchedAthletes++;
+        }
+      });
+      await saveManual();
+      renderProtoList(); renderManualMain();
+      if(addedSessions===0 && touchedAthletes===0){
+        alert('İçe aktarılacak geçerli veri bulunamadı. Bu dosyanın bu protokolün "⬇ Excel İndir" çıktısı olduğundan ve sayfaların 1. satırındaki basamak yapısı bilgisinin bozulmadığından emin ol.');
+      } else {
+        alert(`İçe aktarma tamamlandı: ${addedSessions} yeni kayıt (tarih) oluşturuldu, ${touchedAthletes} sporcu satırı işlendi${skipped?`, ${skipped} satır atlandı (tarih/sporcu eksik)`:''}${skippedSheets?`, ${skippedSheets} sayfa atlandı (format uyumsuz)`:''}.`);
+      }
     }catch(err){
       console.error(err);
       alert('Excel dosyası okunurken bir hata oluştu. Dosyanın .xlsx formatında ve bozulmamış olduğundan emin ol.');
