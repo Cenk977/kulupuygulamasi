@@ -979,16 +979,16 @@ function exportProtocolToExcel(t){
   XLSX.writeFile(wb, `${safeName}.xlsx`);
 }
 function excelCellToDateStr(v){
-  // NOT: SheetJS, cellDates:true ile tarih hücrelerini "yerel gece yarısı"nı
-  // temsil eden bir Date nesnesine çeviriyor. toISOString() bunu UTC'ye
-  // çevirdiği için, UTC'nin ilerisindeki saat dilimlerinde (ör. Türkiye,
-  // UTC+3) tarih 1 gün geriye kayıyordu. Bunun yerine Date nesnesinin
-  // YEREL (local) yıl/ay/gün değerlerini okuyoruz — saat dilimi kayması olmaz.
-  if(v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+  // Bkz. test_kayitlari.html'deki aynı isimli fonksiyon: cellDates:true
+  // İstanbul saat diliminde SheetJS'in dahili 1899 tarihsel saat dilimi
+  // düzeltmesi yüzünden tarihi HER SEFERİNDE 1 gün geriye kaydırıyor
+  // (test edilip doğrulandı). Bu yüzden sayısal seri numarasını öncelikli
+  // olarak XLSX.SSF.parse_date_code ile (saat diliminden bağımsız) okuyoruz.
   if(typeof v === 'number' && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code){
     const d = XLSX.SSF.parse_date_code(v);
     if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
   }
+  if(v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
   if(typeof v === 'string'){
     const s = v.trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1003,7 +1003,8 @@ function importExcelForProtocol(t, file){
   reader.onload = async (e)=>{
     try{
       const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, {type:'array', cellDates:true});
+      // cellDates:false — bkz. excelCellToDateStr üstündeki not.
+      const wb = XLSX.read(data, {type:'array', cellDates:false});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       if(!rows.length){ alert('Excel dosyası boş görünüyor.'); return; }

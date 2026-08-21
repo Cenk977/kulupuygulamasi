@@ -1085,16 +1085,28 @@ function exportProtocolToExcel(t){
   XLSX.writeFile(wb, `${safeName}.xlsx`);
 }
 function excelCellToDateStr(v){
-  // NOT: SheetJS, cellDates:true ile tarih hücrelerini "yerel gece yarısı"nı
-  // temsil eden bir Date nesnesine çeviriyor. toISOString() bunu UTC'ye
-  // çevirdiği için, UTC'nin ilerisindeki saat dilimlerinde (ör. Türkiye,
-  // UTC+3) tarih 1 gün geriye kayıyordu. Bunun yerine Date nesnesinin
-  // YEREL (local) yıl/ay/gün değerlerini okuyoruz — saat dilimi kayması olmaz.
-  if(v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+  // ÖNCELİK SIRASI ÖNEMLİ:
+  // 1) Sayısal Excel seri numarası (normal durum — yukarıda cellDates:false
+  //    kullandığımız için tarih hücreleri hep buraya düşer). XLSX.SSF.
+  //    parse_date_code SADECE seri numarası üzerinde saf aritmetik yapar,
+  //    saat dilimiyle HİÇ ilgisi yoktur — bu yüzden her zaman doğrudur.
   if(typeof v === 'number' && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code){
     const d = XLSX.SSF.parse_date_code(v);
     if(d) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
   }
+  // 2) Zaten bir Date nesnesi geldiyse (bu import akışında normalde
+  //    olmaz, ama fonksiyon başka yerden çağrılırsa diye tutuluyor):
+  //    YEREL yıl/ay/gün oku. DİKKAT — SheetJS'in KENDİ ürettiği Date
+  //    nesnelerini (cellDates:true ile) buraya vermeyin: SheetJS'in
+  //    numdate() fonksiyonu, 1899 (Excel başlangıcı) için tarayıcının o
+  //    tarihe ait TARİHSEL saat dilimi farkını referans alıyor. İstanbul
+  //    gibi 1926 öncesi "yerel güneş saati" (~UTC+1:56, bugünkü sabit
+  //    UTC+3'ten farklı) kullanan yerlerde bu, üretilen Date'i ~1 dakika
+  //    geriye kaydırıp gece yarısı sınırını aşırıyor ve tarih HER
+  //    SEFERİNDE 1 gün önceki günü gösteriyor (test edilip doğrulandı).
+  //    Bu yüzden import'ta cellDates:true ASLA kullanılmamalı.
+  if(v instanceof Date && !isNaN(v)) return `${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,'0')}-${String(v.getDate()).padStart(2,'0')}`;
+  // 3) Metin olarak girilmiş tarih ("2026-03-15" ya da "15.03.2026" gibi):
   if(typeof v === 'string'){
     const s = v.trim();
     let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1109,7 +1121,18 @@ function importExcelForProtocol(t, file){
   reader.onload = async (e)=>{
     try{
       const data = new Uint8Array(e.target.result);
-      const wb = XLSX.read(data, {type:'array', cellDates:true});
+      // ÖNEMLİ: cellDates:true KULLANMA. SheetJS'in tarih hücrelerini Date
+      // nesnesine çevirirken kullandığı iç düzeltme, 1899 (Excel başlangıç
+      // tarihi) için tarayıcının o zamana ait TARİHSEL saat dilimi
+      // farkını (İstanbul için standart UTC+3 değil, 1926 öncesi yerel
+      // güneş saati ~UTC+1:56) referans alıyor. Bu, İstanbul saat
+      // diliminde her tarihi ~1 dakika geriye kaydırıp gece yarısı
+      // sınırını aşırıyor ve tarih HER SEFERİNDE 1 gün önceki günü
+      // gösteriyor (test edildi — bkz. excelCellToDateStr). Bunun yerine
+      // ham Excel seri numarasını (düz sayı) okuyup aşağıdaki
+      // excelCellToDateStr içindeki XLSX.SSF.parse_date_code ile
+      // çeviriyoruz — bu yöntem saat dilimine hiç bağlı değil.
+      const wb = XLSX.read(data, {type:'array', cellDates:false});
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
       if(!rows.length){ alert('Excel dosyası boş görünüyor.'); return; }
