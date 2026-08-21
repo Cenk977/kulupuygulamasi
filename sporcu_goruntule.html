@@ -251,8 +251,9 @@
 <div class="layout" id="mainLayout">
   <nav class="sidebar">
     <div class="side-title">Protokoller</div>
-    <button class="btn btn-line" id="btnAddReady" style="width:100%; margin-bottom:6px; justify-content:center;">＋ Hazır Protokol Ekle</button>
-    <button class="btn btn-line" id="btnAddCustom" style="width:100%; margin-bottom:12px; justify-content:center;">⚙ Özel Protokol Oluştur</button>
+    <!-- Salt-okunur sayfa: yeni protokol ekleme/oluşturma kaldırıldı. -->
+    <button class="btn btn-line" id="btnAddReady" style="display:none;">＋ Hazır Protokol Ekle</button>
+    <button class="btn btn-line" id="btnAddCustom" style="display:none;">⚙ Özel Protokol Oluştur</button>
     <div id="protoList"><div class="empty-side">Henüz protokol yok. Yukarıdan bir protokol ekleyerek başla.</div></div>
   </nav>
   <main id="manualMain">
@@ -443,13 +444,16 @@ async function rtdbGet(path){
   return res.json();
 }
 async function rtdbSet(path, value){
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
-  });
-  if(!res.ok){ const err = new Error(`RTDB PUT ${res.status}`); err.code = res.status===401||res.status===403 ? 'PERMISSION_DENIED' : String(res.status); throw err; }
-  return res.json();
+  // GÜVENLİK KİLİDİ: sporcu_goruntule.html KESİNLİKLE salt-okunurdur.
+  // Bu sayfa, kimlik doğrulaması olmadan kulübün PAYLAŞILAN bulut
+  // veritabanına yazan tek dosyalardan biri olduğu için (bkz. rtdbGet
+  // ile aynı DB_PATH), buradan asla ağ üzerinden yazma isteği
+  // gönderilmez — hangi buton/akış tetiklerse tetiklesin. Bu satırı
+  // kaldırmak bu sayfayı yeniden yazılabilir hale getirir; yapma.
+  console.warn('rtdbSet engellendi: sporcu_goruntule.html salt-okunurdur, bulut veritabanına yazma yapılmadı.', path);
+  const err = new Error('Bu sayfa salt-okunurdur, buluta yazma devre dışı bırakıldı.');
+  err.code = 'READ_ONLY_PAGE';
+  throw err;
 }
 const cloudEnabled = !!RTDB_BASE;
 let cloudOk = null; // null=henüz denenmedi, true=bulut çalışıyor, false=bulut başarısız (yerelde çalışıyor)
@@ -912,32 +916,15 @@ function renderManualMain(){
   <div class="panel-head">
     <div><h2>${t.name}</h2><div class="sub">${descLineFor(t)}</div></div>
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
-      <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
-      <button class="btn btn-danger" id="btnDelProto">🗑 Sil</button>
-      ${t.family!=='rpset' ? `<button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>
-      <button class="btn btn-ghost" id="btnExcelImport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬆ Excel Yükle</button>
-      <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none;">` : ''}
-      <button class="btn btn-primary" id="btnNewSession">＋ Yeni Kayıt Ekle</button>
+      ${t.family!=='rpset' ? `<button class="btn btn-ghost" id="btnExcelExport" style="background:var(--pool-light); color:var(--navy); border:1px solid var(--line);">⬇ Excel İndir</button>` : ''}
     </div>
   </div>
   <div id="entryBoxWrap"></div>
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
   $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; renderProtoList(); renderManualMain(); };
-  $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
-  $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
-  $('#btnNewSession').onclick = ()=>{
-    const today = todayLocalStr();
-    if(t.family==='rpset'){
-      const loaded = loadStepsAndRowsForDate(t, today);
-      draftSteps = loaded.steps; entryRows = loaded.rows;
-      renderRpSetEntryBox();
-    } else {
-      draftReps = null;
-      entryRows = loadRowsForDate(t, today);
-      renderEntryBox();
-    }
-  };
+  // Salt-okunur sayfa: protokol düzenleme/silme, yeni kayıt ekleme ve
+  // Excel içe aktarma kaldırıldı (bkz. rtdbSet kilidi + dosya başı not).
   const excelExportBtn = $('#btnExcelExport');
   if(excelExportBtn) excelExportBtn.onclick = ()=> exportProtocolToExcel(t);
   const excelImportBtn = $('#btnExcelImport');
@@ -1608,17 +1595,11 @@ function renderSessionList(){
       <div class="s-meta">${s.athletes.length} sporcu</div></div>
       <div class="s-actions">
         <button class="btn btn-line" data-view="${s.id}">Detaylar</button>
-        <button class="btn btn-danger" data-del="${s.id}">Sil</button>
       </div>
     </div>`;
   }).join('');
   wrap.querySelectorAll('button[data-view]').forEach(b=> b.onclick = ()=> openManualDetail(b.dataset.view));
-  wrap.querySelectorAll('button[data-del]').forEach(b=> b.onclick = async ()=>{
-    if(!confirm('Bu kaydı silmek istediğine emin misin?')) return;
-    MANUAL.sessions = MANUAL.sessions.filter(s=>s.id!==b.dataset.del);
-    await saveManual();
-    renderProtoList(); renderSessionList();
-  });
+  // Salt-okunur sayfa: kayıt silme kaldırıldı.
 }
 let currentSessionAthletes = null;
 // RP Set (basamaklı) protokollerde "Gönderme" (interval) bilgisi hiçbir
@@ -1668,40 +1649,18 @@ function openManualDetail(sessionId){
   // İnterval + tekrar sayısı düzenleme + sporcu ekleme çubuğu (modalın en üstünde)
   const repsField = t.family==='tekrarli' ? `<label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">Tekrar Sayısı (N)</label>
       <input type="number" id="mdRepsInput" min="1" value="${repsN}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:70px;">` : '';
-  $('#manualDetailIntervalBar').innerHTML = `
-    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-      <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">İnterval</label>
-      <input type="text" id="mdIntervalInput" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 1'30&quot;" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:110px;">
-      ${repsField}
-      <button class="btn btn-line" id="btnSaveMdInterval" style="padding:6px 12px; font-size:12px;">Kaydet</button>
-      <button class="btn btn-primary" id="btnAddAthleteToSession" style="padding:6px 12px; font-size:12px; margin-left:auto;">＋ Sporcu Ekle</button>
-    </div>`;
-  $('#btnSaveMdInterval').onclick = async ()=>{
-    s.interval = $('#mdIntervalInput').value.trim();
-    const repsInp = $('#mdRepsInput');
-    if(repsInp) s.reps = Math.max(1, parseInt(repsInp.value)||1);
-    await saveManual();
-    renderSessionList();
-    openManualDetail(sessionId); // tekrar sayısı değişmiş olabilir, tabloyu tazele
-  };
-  $('#btnAddAthleteToSession').onclick = ()=>{
-    $('#manualDetailOverlay').classList.remove('show');
-    if(t.family==='rpset'){
-      const loaded = loadStepsAndRowsForDate(t, s.date);
-      draftSteps = loaded.steps; entryRows = loaded.rows;
-      renderRpSetEntryBox();
-    } else {
-      draftReps = null;
-      entryRows = loadRowsForDate(t, s.date);
-      renderEntryBox();
-    }
-    const box = document.getElementById('entryBoxWrap');
-    if(box) box.scrollIntoView({behavior:'smooth', block:'start'});
-  };
+  // Salt-okunur sayfa: interval/tekrar düzenleme ve sporcu ekleme/çıkarma
+  // kaldırıldı — sadece kayıtlı değerler gösterilir.
+  $('#manualDetailIntervalBar').innerHTML = s.interval || t.family==='tekrarli'
+    ? `<div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:12.5px; color:#647680;">
+        ${s.interval ? `<span><b style="color:var(--navy);">İnterval:</b> ${s.interval}</span>` : ''}
+        ${t.family==='tekrarli' ? `<span><b style="color:var(--navy);">Tekrar Sayısı:</b> ${repsN}</span>` : ''}
+      </div>`
+    : '';
   let html = stepSummaryHtml(steps);
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
-  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th><th class="detail-action-col"></th></tr>`;
+  html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   currentSessionAthletes.forEach(a=>{
     html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
     cols.forEach(c=>{
@@ -1711,29 +1670,10 @@ function openManualDetail(sessionId){
       html += `<td>${v}</td>`;
     });
     html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, repsN).text}</td>`;
-    html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${a.athlete.replace(/"/g,'&quot;')}" title="Sporcuyu çıkar">✕</button></td>`;
     html += `</tr>`;
   });
   html += `</table></div>`;
   $('#manualDetailBody').innerHTML = html;
-  $('#manualDetailBody').querySelectorAll('button[data-rmath]').forEach(b=>{
-    b.onclick = async ()=>{
-      const name = b.dataset.rmath;
-      if(!confirm(`${name} adlı sporcuyu bu kayıttan çıkarmak istediğine emin misin?`)) return;
-      s.athletes = s.athletes.filter(a=>a.athlete!==name);
-      if(!s.athletes.length){
-        // Kayıtta hiç sporcu kalmadıysa, kaydın kendisi de kaldırılır
-        MANUAL.sessions = MANUAL.sessions.filter(x=>x.id!==s.id);
-        await saveManual();
-        renderSessionList();
-        $('#manualDetailOverlay').classList.remove('show');
-        return;
-      }
-      await saveManual();
-      renderSessionList();
-      openManualDetail(sessionId);
-    };
-  });
   $('#manualDetailOverlay').classList.add('show');
 }
 // Yazdırma alanını doldurup tarayıcının yazdırma diyaloğunu açar
