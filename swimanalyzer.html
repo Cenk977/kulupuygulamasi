@@ -632,8 +632,9 @@ function generate() {
     return ZONE_ORDER[Math.min(bi, ZONE_ORDER.length-1)];
   }
 
-  // Build rows
-  const rows = [];
+  // Build the raw (unique) rows — one per idx, each "owned" by exactly one
+  // zone (the zone that introduces it as a NEW value).
+  const rawRows = [];
   let lastL = null;
 
   for (let idx = 0; idx < TOTAL_ROWS; idx++) {
@@ -670,8 +671,29 @@ function generate() {
       r800 = idx>cut.r800 ? null : r50*16*cfg[3];
     }
 
-    rows.push({ pct, zone, lact:getLact(idx,zone), r50, r100, r200, r400, r800, anchor:`r${dist}`, cascade: pct===null });
+    rawRows.push({ idx, pct, zone, r50, r100, r200, r400, r800, anchor:`r${dist}` });
   }
+
+  // Orijinal Excel'de her zon, kendisinden önceki zonun SON satırını kendi
+  // İLK satırı olarak tekrar gösterir — aynı sayılar iki zon renginde de
+  // (iki ayrı satır olarak) görünür. rawRows'ta her deger tek bir zona
+  // (onu "yeni" olarak tanitan zona) ait; burada, ilk zon (Aero 1) haric
+  // her zonun basina, kendinden onceki zonun son satirinin bir kopyasini
+  // ekliyoruz. Aero 1'den once paylasilacak bir zon olmadigi icin o
+  // tekrarsiz basliyor (Excel'de de öyle).
+  const rows = [];
+  ZONE_ORDER.forEach((zoneKey, zi) => {
+    if (zi > 0) {
+      const prevZoneRows = rawRows.filter(r => r.zone === ZONE_ORDER[zi - 1]);
+      const boundaryRow = prevZoneRows[prevZoneRows.length - 1];
+      if (boundaryRow){
+        rows.push({ ...boundaryRow, zone: zoneKey, lact: getLact(boundaryRow.idx, zoneKey), cascade: boundaryRow.pct===null });
+      }
+    }
+    rawRows.filter(r => r.zone === zoneKey).forEach(r => {
+      rows.push({ ...r, lact: getLact(r.idx, zoneKey), cascade: r.pct===null });
+    });
+  });
 
   // ─── Render header ───
   const anchorCol = `r${dist}`;
