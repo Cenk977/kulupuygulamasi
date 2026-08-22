@@ -7211,27 +7211,48 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
    formuller, sutun genislikleri, diger sayfalar) DOKUNMAZ.
    Bunun icin SheetJS degil ExcelJS kullanilir, cunku SheetJS'in
    ucretsiz surumu yazarken bicimlendirmeyi siler; ExcelJS okurken
-   de yazarken de orijinal stili korur. Sonuc, tarayicinin indirme
-   klasorune yeni bir dosya olarak iner -- secilen dosyanin kendisi
-   diskte otomatik degismez (tarayicilar buna izin vermiyor), bu
-   yuzden indirilen guncel kopyayla eskisinin ustune elle yazman
-   gerekir. */
-document.getElementById('spExportBtn').addEventListener('click', ()=>{
-  document.getElementById('spExportFile').click();
-});
+   de yazarken de orijinal stili korur.
 
-document.getElementById('spExportFile').addEventListener('change', async event=>{
-  const input = event.target;
-  const file = input.files && input.files[0];
-  input.value = '';
-  if(!file) return;
+   Dosyanin kendisinin ustune yazma: Chrome/Edge (ve diger Chromium
+   tabanli tarayicilar) File System Access API'yi destekler --
+   window.showOpenFilePicker() ile secilen dosya icin bir "handle"
+   alinir ve workbook.xlsx.writeBuffer() ciktisi dogrudan o handle
+   uzerinden diske yazilir (writable.write + close). Boylece kullanici
+   hangi Excel dosyasini secmisse tam olarak O DOSYA guncellenir, ayrica
+   bir "_güncel" kopyasi inmez.
+   Safari ve Firefox bu API'yi desteklemedigi icin (showOpenFilePicker
+   yok), o tarayicilarda otomatik olarak eski yonteme donulur: klasik
+   <input type=file> ile dosya secilir, guncellenmis hali yeni bir
+   dosya olarak indirilir ve kullanicinin eskisinin ustune elle
+   kaydetmesi gerekir. */
+async function pickExcelHandleForWrite(){
+  if(!window.showOpenFilePicker) return null; // API yok -> eski yonteme don
+  try{
+    const [handle] = await window.showOpenFilePicker({
+      types: [{
+        description: 'Excel dosyası',
+        accept: {'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx']}
+      }],
+      excludeAcceptAllOption: false,
+      multiple: false
+    });
+    return handle;
+  }catch(e){
+    if(e && e.name === 'AbortError') return undefined; // kullanici dosya secmeden iptal etti
+    console.warn('Dosya seçici açılamadı, klasik yükleme yöntemine dönülüyor:', e);
+    return null;
+  }
+}
+
+async function runSpExcelUpdate({ file, handle }){
   if(!window.ExcelJS){ showToast('Excel güncelleme kütüphanesi yüklenemedi; sayfayı yenileyip tekrar dene'); return; }
-  if(file.size > 15 * 1024 * 1024){ showToast('Excel dosyası 15 MB’den küçük olmalı'); return; }
+  const sourceFile = file || await handle.getFile();
+  if(sourceFile.size > 15 * 1024 * 1024){ showToast('Excel dosyası 15 MB’den küçük olmalı'); return; }
   const button = document.getElementById('spExportBtn');
   button.disabled = true;
   button.textContent = 'Güncelleniyor…';
   try{
-    const buffer = await file.arrayBuffer();
+    const buffer = await sourceFile.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
 
@@ -7273,18 +7294,29 @@ document.getElementById('spExportFile').addEventListener('change', async event=>
     }
 
     const outBuffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([outBuffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    const baseName = file.name.replace(/\.xlsx?$/i, '');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${baseName}_güncel.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
-
     const missingNote = missingSheets.length ? ` (${missingSheets.length} sayfa dosyada bulunamadı, atlandı)` : '';
-    showToast(`${totalCells} hücre güncellendi, ${matchedSheets.length} sayfa yazıldı${missingNote}. Yeni dosya indirildi.`);
+
+    if(handle){
+      // Secilen dosyanin USTUNE dogrudan yaz — yeni dosya inmez.
+      const perm = await handle.requestPermission({ mode: 'readwrite' });
+      if(perm !== 'granted') throw new Error('Dosyaya yazma izni verilmedi.');
+      const writable = await handle.createWritable();
+      await writable.write(outBuffer);
+      await writable.close();
+      showToast(`${totalCells} hücre güncellendi, ${matchedSheets.length} sayfa yazıldı${missingNote}. "${handle.name}" dosyasının üzerine kaydedildi.`);
+    } else {
+      // Eski yontem (Safari/Firefox ya da API basarisiz oldu): yeni dosya indir.
+      const blob = new Blob([outBuffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const baseName = sourceFile.name.replace(/\.xlsx?$/i, '');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${baseName}_güncel.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+      showToast(`${totalCells} hücre güncellendi, ${matchedSheets.length} sayfa yazıldı${missingNote}. Yeni dosya indirildi (bu tarayıcı dosyanın üzerine doğrudan yazmayı desteklemiyor).`);
+    }
   }catch(error){
     console.error('Excel dosyasını güncelleme hatası:', error);
     showToast(error && error.message ? 'Güncellenemedi: ' + error.message : 'Excel dosyası okunamadı veya yazılamadı.');
@@ -7292,6 +7324,24 @@ document.getElementById('spExportFile').addEventListener('change', async event=>
     button.disabled = false;
     button.textContent = "⬆⬇ Excel Dosyasını Güncelle";
   }
+}
+
+document.getElementById('spExportBtn').addEventListener('click', async ()=>{
+  const handle = await pickExcelHandleForWrite();
+  if(handle === undefined) return; // kullanici iptal etti
+  if(handle){
+    await runSpExcelUpdate({ handle });
+  } else {
+    document.getElementById('spExportFile').click(); // API yok -> klasik dosya secici + indirme
+  }
+});
+
+document.getElementById('spExportFile').addEventListener('change', async event=>{
+  const input = event.target;
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  await runSpExcelUpdate({ file });
 });
 
 /* ---- PDF export: her Meso sayfasi 3 mantiksal bloga ayrilir -----
