@@ -237,6 +237,8 @@
     <div class="side-title">Protokoller</div>
     <button class="btn btn-line" id="btnAddReady" style="width:100%; margin-bottom:6px; justify-content:center;">＋ Hazır Protokol Ekle</button>
     <button class="btn btn-line" id="btnAddCustom" style="width:100%; margin-bottom:12px; justify-content:center;">⚙ Özel Protokol Oluştur</button>
+    <input type="text" id="protoSearchInput" placeholder="🔍 Protokol ara..."
+      style="width:100%; margin-bottom:10px; padding:8px 10px; border:1px solid var(--line); border-radius:6px; font-size:12.5px; font-family:inherit; color:var(--ink);">
     <div id="protoList"><div class="empty-side">Henüz protokol yok. Yukarıdan bir protokol ekleyerek başla.</div></div>
   </nav>
   <main id="manualMain">
@@ -318,22 +320,22 @@
   <div class="modal" style="max-width:920px;">
     <h3>Test Karşılaştırma</h3>
     <div style="font-size:12.5px; color:#647680; margin:-6px 0 12px;">
-      Önce tarihi seç, o tarihte yapılan testlerden birini seç, sonra sporcuyu seç. İki taraf birbirinden bağımsızdır — aynı sporcunun iki farklı tarihini, ya da aynı/başka bir testte iki farklı sporcuyu karşılaştırabilirsin.
+      Önce testi (protokolü) seç, sonra o testin yapıldığı tarihlerden birini seç, sonra sporcuyu seç. İki taraf birbirinden bağımsızdır — aynı testin iki farklı tarihini, ya da aynı/başka bir testte iki farklı sporcuyu karşılaştırabilirsin.
     </div>
     <div class="field-row" style="align-items:flex-start;">
       <div class="field" style="flex:1; min-width:230px;">
-        <label>A — Tarih</label>
-        <input type="date" id="cmpDateA" list="cmpDatesList" style="width:100%; margin-bottom:6px;">
-        <label>Test</label>
-        <select id="cmpTestA" style="width:100%; margin-bottom:6px;"></select>
+        <label>A — Test</label>
+        <select id="cmpProtoA" style="width:100%; margin-bottom:6px;"></select>
+        <label>Tarih</label>
+        <select id="cmpDateA" style="width:100%; margin-bottom:6px;"></select>
         <label>Sporcu</label>
         <select id="cmpAthleteA" style="width:100%;"></select>
       </div>
       <div class="field" style="flex:1; min-width:230px;">
-        <label>B — Tarih</label>
-        <input type="date" id="cmpDateB" list="cmpDatesList" style="width:100%; margin-bottom:6px;">
-        <label>Test</label>
-        <select id="cmpTestB" style="width:100%; margin-bottom:6px;"></select>
+        <label>B — Test</label>
+        <select id="cmpProtoB" style="width:100%; margin-bottom:6px;"></select>
+        <label>Tarih</label>
+        <select id="cmpDateB" style="width:100%; margin-bottom:6px;"></select>
         <label>Sporcu</label>
         <select id="cmpAthleteB" style="width:100%;"></select>
       </div>
@@ -776,6 +778,7 @@ function newStep(){ return { type:'basit', reps:4, dist:50, interval:'', rpRef:'
 let draftSteps = []; // rpset ailesi: o günün basamak yapısı (geçici)
 let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
+let protoSearchQuery = ''; // sol menüdeki protokol arama kutusunun geçerli değeri
 let entryRows = []; // {athlete, ...} geçici giriş satırları
 let draftReps = null; // tekrarli ailede, o anki giriş formunda seçilen tekrar sayısı (N)
 let editingCustomId = null;
@@ -795,7 +798,21 @@ function renderProtoList(){
     el.innerHTML = `<div class="empty-side">Henüz protokol yok. Yukarıdan bir protokol ekleyerek başla.</div>`;
     return;
   }
-  el.innerHTML = MANUAL.templates.map(t=>{
+  // Arama kutusu #protoList'in DIŞINDA (sabit HTML'de) durur, böylece her
+  // renderProtoList() çağrısında yeniden oluşturulup odağı/imleç konumunu
+  // kaybetmez — sadece burada MANUAL.templates'i sorguya göre süzüyoruz.
+  const q = protoSearchQuery.trim().toLocaleLowerCase('tr');
+  const list = q
+    ? MANUAL.templates.filter(t=>{
+        const hay = `${t.name} ${FAMILY_LABEL[t.family]||''}`.toLocaleLowerCase('tr');
+        return hay.includes(q);
+      })
+    : MANUAL.templates;
+  if(!list.length){
+    el.innerHTML = `<div class="empty-side">Aramayla eşleşen protokol yok.</div>`;
+    return;
+  }
+  el.innerHTML = list.map(t=>{
     const active = t.id === (ACTIVE_PROTO && ACTIVE_PROTO.id) ? 'active' : '';
     const n = MANUAL.sessions.filter(s=>s.templateId===t.id).length;
     return `<button class="tpl-card ${active}" data-id="${t.id}">
@@ -920,6 +937,10 @@ function renderCustomForm(existing){
   editingCustomId = existing ? existing.id : null;
 }
 $('#btnAddCustom').onclick = ()=>{ renderCustomForm(null); $('#customOverlay').classList.add('show'); };
+$('#protoSearchInput').addEventListener('input', ()=>{
+  protoSearchQuery = $('#protoSearchInput').value;
+  renderProtoList();
+});
 $('#btnCancelCustom').onclick = ()=> $('#customOverlay').classList.remove('show');
 $('#btnSaveCustom').onclick = async ()=>{
   const name = $('#cfName').value.trim();
@@ -2069,28 +2090,33 @@ function sessionLabel(s){
 function allSessionDates(){
   return Array.from(new Set(MANUAL.sessions.map(s=>s.date))).sort().reverse();
 }
-function populateCmpDatesList(){
-  let dl = document.getElementById('cmpDatesList');
-  if(!dl){ dl = document.createElement('datalist'); dl.id = 'cmpDatesList'; document.body.appendChild(dl); }
-  dl.innerHTML = allSessionDates().map(d=>`<option value="${d}">`).join('');
-}
-function populateCmpTests(side){
-  const date = $(`#cmpDate${side}`).value;
-  const testSel = $(`#cmpTest${side}`);
-  const sessions = MANUAL.sessions.filter(s=>s.date===date);
-  if(!sessions.length){
-    testSel.innerHTML = `<option value="">Bu tarihte kayıt yok</option>`;
+// Önce protokol (Test) seçilir, ardından o protokole ait tarihler listelenir —
+// böylece hangi testin hangi tarihte yapıldığını hatırlamak gerekmez.
+function populateCmpProtos(side){
+  const sel = $(`#cmpProto${side}`);
+  const templatesWithData = MANUAL.templates.filter(t=> MANUAL.sessions.some(s=>s.templateId===t.id));
+  if(!templatesWithData.length){
+    sel.innerHTML = `<option value="">Kayıtlı test yok</option>`;
+    $(`#cmpDate${side}`).innerHTML = `<option value="">—</option>`;
     $(`#cmpAthlete${side}`).innerHTML = `<option value="">—</option>`;
     return;
   }
-  testSel.innerHTML = sessions.map(s=>{
-    const t = MANUAL.templates.find(x=>x.id===s.templateId);
-    return `<option value="${s.id}">${t ? t.name : '—'}</option>`;
-  }).join('');
+  sel.innerHTML = templatesWithData.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+}
+function populateCmpDates(side){
+  const protoId = $(`#cmpProto${side}`).value;
+  const dateSel = $(`#cmpDate${side}`);
+  const sessions = MANUAL.sessions.filter(s=>s.templateId===protoId).slice().sort((a,b)=> b.date.localeCompare(a.date));
+  if(!sessions.length){
+    dateSel.innerHTML = `<option value="">Kayıt yok</option>`;
+    $(`#cmpAthlete${side}`).innerHTML = `<option value="">—</option>`;
+    return;
+  }
+  dateSel.innerHTML = sessions.map(s=>`<option value="${s.id}">${sessionLabel(s)} · ${s.athletes.length} sporcu</option>`).join('');
   populateCmpAthletes(side);
 }
 function populateCmpAthletes(side){
-  const s = MANUAL.sessions.find(x=>x.id===$(`#cmpTest${side}`).value);
+  const s = MANUAL.sessions.find(x=>x.id===$(`#cmpDate${side}`).value);
   const athSel = $(`#cmpAthlete${side}`);
   if(!s || !s.athletes.length){ athSel.innerHTML = `<option value="">Sporcu yok</option>`; return; }
   athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${a.athlete}</option>`).join('');
@@ -2112,8 +2138,8 @@ function renderSingleRowTable(t, row, label, steps, repsOverride){
   return html;
 }
 function renderCompareResult(){
-  const sA = MANUAL.sessions.find(x=>x.id===$('#cmpTestA').value);
-  const sB = MANUAL.sessions.find(x=>x.id===$('#cmpTestB').value);
+  const sA = MANUAL.sessions.find(x=>x.id===$('#cmpDateA').value);
+  const sB = MANUAL.sessions.find(x=>x.id===$('#cmpDateB').value);
   const idxA = parseInt($('#cmpAthleteA').value);
   const idxB = parseInt($('#cmpAthleteB').value);
   const wrap = $('#cmpResultWrap');
@@ -2184,25 +2210,34 @@ function renderCompareResult(){
   $('#cmpResultWrap').dataset.title = `Karşılaştırma: ${labelA}  /  ${labelB}`;
 }
 $('#btnCompareOpen').onclick = ()=>{
-  populateCmpDatesList();
-  const dates = allSessionDates();
-  if(!dates.length){
+  if(!MANUAL.sessions.length){
     $('#cmpResultWrap').innerHTML = `<div class="empty-side">Henüz hiç test kaydı yok.</div>`;
     $('#btnPrintCompare').disabled = true;
     $('#btnPdfCompare').disabled = true;
   } else {
-    $('#cmpDateA').value = dates[0];
-    $('#cmpDateB').value = dates[1] || dates[0];
-    populateCmpTests('A'); populateCmpTests('B');
+    populateCmpProtos('A'); populateCmpProtos('B');
+    // Varsayılan: her iki taraf da en son kaydı girilen protokolle açılır —
+    // A en yeni tarihi, B (varsa) bir önceki tarihi gösterir. Kullanıcı
+    // istediği zaman B tarafındaki testi de değiştirebilir.
+    const latestSession = MANUAL.sessions.slice().sort((a,b)=> b.date.localeCompare(a.date))[0];
+    if(latestSession){
+      $('#cmpProtoA').value = latestSession.templateId;
+      $('#cmpProtoB').value = latestSession.templateId;
+    }
+    populateCmpDates('A'); populateCmpDates('B');
+    if($('#cmpDateB').options.length > 1){
+      $('#cmpDateB').selectedIndex = 1;
+      populateCmpAthletes('B');
+    }
     renderCompareResult();
   }
   $('#compareOverlay').classList.add('show');
 };
 $('#btnCloseCompare').onclick = ()=> $('#compareOverlay').classList.remove('show');
-$('#cmpDateA').addEventListener('change', ()=>{ populateCmpTests('A'); renderCompareResult(); });
-$('#cmpDateB').addEventListener('change', ()=>{ populateCmpTests('B'); renderCompareResult(); });
-$('#cmpTestA').addEventListener('change', ()=>{ populateCmpAthletes('A'); renderCompareResult(); });
-$('#cmpTestB').addEventListener('change', ()=>{ populateCmpAthletes('B'); renderCompareResult(); });
+$('#cmpProtoA').addEventListener('change', ()=>{ populateCmpDates('A'); renderCompareResult(); });
+$('#cmpProtoB').addEventListener('change', ()=>{ populateCmpDates('B'); renderCompareResult(); });
+$('#cmpDateA').addEventListener('change', ()=>{ populateCmpAthletes('A'); renderCompareResult(); });
+$('#cmpDateB').addEventListener('change', ()=>{ populateCmpAthletes('B'); renderCompareResult(); });
 $('#cmpAthleteA').addEventListener('change', renderCompareResult);
 $('#cmpAthleteB').addEventListener('change', renderCompareResult);
 $('#btnPrintCompare').onclick = ()=> printNow($('#cmpResultWrap').dataset.title || 'Test Karşılaştırma', $('#cmpResultWrap').innerHTML);
