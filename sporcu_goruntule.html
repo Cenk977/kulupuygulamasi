@@ -28,6 +28,10 @@
 ============================================================= -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- test_kayitlari.html, sporcu_goruntule.html ve index.html ile ortak
+     Firebase REST yardımcıları (rtdbGetShared/rtdbSetShared) — aynı
+     klasörde bulunmalı. -->
+<script src="firebase-rtdb-helpers.js"></script>
 <style>
   :root{
     --navy:#0b2942;
@@ -433,15 +437,12 @@ const DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel"; // Realtime Da
 // engellenip hiç hata vermeden asılı kalabiliyor. Bunun yerine düz HTTPS
 // (REST API) kullanıyoruz — normal bir web isteği gibi, her ağda çalışır —
 // ve her isteğe bir zaman aşımı koyuyoruz ki asla sonsuza dek beklemesin.
-function fetchWithTimeout(url, options, ms){
-  const controller = new AbortController();
-  const timer = setTimeout(()=> controller.abort(), ms || 8000);
-  return fetch(url, { ...options, signal: controller.signal }).finally(()=> clearTimeout(timer));
-}
+// (fetchWithTimeout/rtdbGetShared artık firebase-rtdb-helpers.js içinde,
+// üç dosya arasında ortak — bkz. o dosyadaki not. rtdbSet BİLEREK bu
+// dosyada kalıyor, ortak dosyaya taşınmıyor — aşağıdaki güvenlik kilidi
+// notuna bak.)
 async function rtdbGet(path){
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json`);
-  if(!res.ok){ const err = new Error(`RTDB GET ${res.status}`); err.code = res.status===401||res.status===403 ? 'PERMISSION_DENIED' : String(res.status); throw err; }
-  return res.json();
+  return rtdbGetShared(RTDB_BASE, path, '');
 }
 async function rtdbSet(path, value){
   // GÜVENLİK KİLİDİ: sporcu_goruntule.html KESİNLİKLE salt-okunurdur.

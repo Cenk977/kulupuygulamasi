@@ -21,6 +21,10 @@
 ============================================================= -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- test_kayitlari.html, sporcu_goruntule.html ve index.html ile ortak
+     Firebase REST yardımcıları (rtdbGetShared/rtdbSetShared) — aynı
+     klasörde bulunmalı. -->
+<script src="firebase-rtdb-helpers.js"></script>
 <style>
   :root{
     --navy:#0b2942;
@@ -482,26 +486,15 @@ async function authQueryParam(){
 // engellenip hiç hata vermeden asılı kalabiliyor. Bunun yerine düz HTTPS
 // (REST API) kullanıyoruz — normal bir web isteği gibi, her ağda çalışır —
 // ve her isteğe bir zaman aşımı koyuyoruz ki asla sonsuza dek beklemesin.
-function fetchWithTimeout(url, options, ms){
-  const controller = new AbortController();
-  const timer = setTimeout(()=> controller.abort(), ms || 8000);
-  return fetch(url, { ...options, signal: controller.signal }).finally(()=> clearTimeout(timer));
-}
+// (fetchWithTimeout/rtdbGetShared/rtdbSetShared artık firebase-rtdb-helpers.js
+// içinde, üç dosya arasında ortak — bkz. o dosyadaki not.)
 async function rtdbGet(path){
   const authParam = await authQueryParam();
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json${authParam}`);
-  if(!res.ok){ const err = new Error(`RTDB GET ${res.status}`); err.code = res.status===401||res.status===403 ? 'PERMISSION_DENIED' : String(res.status); throw err; }
-  return res.json();
+  return rtdbGetShared(RTDB_BASE, path, authParam);
 }
 async function rtdbSet(path, value){
   const authParam = await authQueryParam();
-  const res = await fetchWithTimeout(`${RTDB_BASE}/${path}.json${authParam}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
-  });
-  if(!res.ok){ const err = new Error(`RTDB PUT ${res.status}`); err.code = res.status===401||res.status===403 ? 'PERMISSION_DENIED' : String(res.status); throw err; }
-  return res.json();
+  return rtdbSetShared(RTDB_BASE, path, value, authParam);
 }
 const cloudEnabled = !!RTDB_BASE;
 let cloudOk = null; // null=henüz denenmedi, true=bulut çalışıyor, false=bulut başarısız (yerelde çalışıyor)

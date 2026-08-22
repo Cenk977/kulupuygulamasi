@@ -23,6 +23,11 @@
 <!-- Sezon planı degisikliklerini secilen orijinal Excel dosyasina (bicimlendirme/renkler korunarak) geri yazmak icin -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
+<!-- test_kayitlari.html, sporcu_goruntule.html ve index.html ile ortak
+     Firebase REST yardımcıları (rtdbGetShared/rtdbSetShared) — aynı
+     klasörde bulunmalı. -->
+<script src="firebase-rtdb-helpers.js"></script>
+
 <style>
 
   :root{
@@ -6657,25 +6662,29 @@ const TEST_KAYIT_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel";
 const TEST_KAYIT_ROSTER_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_roster";
 const TEST_KAYIT_RTDB_BASE = (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
 
-function testKayitFetchWithTimeout(url, options, ms){
-  const controller = new AbortController();
-  const timer = setTimeout(()=> controller.abort(), ms || 8000);
-  return fetch(url, { ...options, signal: controller.signal }).finally(()=> clearTimeout(timer));
+// window.currentAuthUser, yukarıdaki Google giriş akışında (satır ~2052)
+// zaten set ediliyor — aynı Firebase projesi/oturumu. Test Kayıtları'na
+// yazarken de bu kullanıcının kimlik token'ını eklememiz gerekiyor,
+// yoksa yazma kuralı "auth != null" istiyorsa istek sessizce başarısız olur.
+async function testKayitAuthQueryParam(){
+  try{
+    if(!window.currentAuthUser) return '';
+    const token = await window.currentAuthUser.getIdToken();
+    return token ? `?auth=${encodeURIComponent(token)}` : '';
+  }catch(e){ console.warn('Test Kayıtları için oturum belirteci alınamadı:', e); return ''; }
 }
+// (testKayitFetchWithTimeout artık firebase-rtdb-helpers.js içinde,
+// test_kayitlari.html ve sporcu_goruntule.html ile ortak — bkz. o
+// dosyadaki not.)
 async function testKayitRtdbGet(path){
   if(!TEST_KAYIT_RTDB_BASE) return null;
-  const res = await testKayitFetchWithTimeout(`${TEST_KAYIT_RTDB_BASE}/${path}.json`);
-  if(!res.ok) throw new Error(`RTDB GET ${res.status}`);
-  return res.json();
+  const authParam = await testKayitAuthQueryParam();
+  return rtdbGetShared(TEST_KAYIT_RTDB_BASE, path, authParam);
 }
 async function testKayitRtdbSet(path, value){
   if(!TEST_KAYIT_RTDB_BASE) return;
-  const res = await testKayitFetchWithTimeout(`${TEST_KAYIT_RTDB_BASE}/${path}.json`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(value)
-  });
-  if(!res.ok) throw new Error(`RTDB PUT ${res.status}`);
+  const authParam = await testKayitAuthQueryParam();
+  return rtdbSetShared(TEST_KAYIT_RTDB_BASE, path, value, authParam);
 }
 
 document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
