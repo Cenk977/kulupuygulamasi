@@ -1746,7 +1746,7 @@ function repsRangeLabel(t){
 }
 // Bir kaydın (session) gerçek tekrar sayısını döndürür — kayıtta
 // belirtilmemişse şablonun varsayılanına düşer.
-function repsForSession(t, s){ return (s && s.reps) || (t && t.config.reps); }
+function repsForSession(t, s){ return (s && s.reps) || (t && t.config && t.config.reps) || null; }
 // Bir satırın ortalama/pace değerini hesaplar — hem DOM güncellemesinde
 // hem de karşılaştırma tablosunda ortak kullanılır (yalnızca gerçekten
 // girilmiş tekrarlar sayılır, boş tekrarlar ortalamayı bozmaz).
@@ -1811,18 +1811,18 @@ async function saveSession(){
   const note = $('#entryNote').value.trim();
   if(!date){ alert('Tarih gerekli.'); return; }
   const athletes = entryRows.filter(r=> (r.athlete||'').trim() !== '');
+  console.log('saveSession: entryRows=', entryRows, 'athletes (after filter)=', athletes);
   if(!athletes.length){ alert('En az bir sporcu seç.'); return; }
   const clean = athletes.map(r=>{
     const o = { athlete: r.athlete.trim() };
     Object.keys(r).forEach(k=>{ if(k!=='id' && k!=='athlete') o[k] = r[k]; });
     return o;
   });
+  console.log('saveSession: clean=', clean);
   const existing = findSessionFor(ACTIVE_PROTO.id, date);
   const repsInp = $('#entryReps');
   const repsToSave = (ACTIVE_PROTO.family==='tekrarli' && repsInp) ? Math.max(1, parseInt(repsInp.value)||1) : undefined;
   if(existing){
-    // Aynı tarihte kayıt zaten var: aynı isimli sporcunun verisini güncelle,
-    // yeni isimleri ekle — ayrı bir kayıt olarak listelenmesin.
     clean.forEach(newA=>{
       const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
       if(idx>-1) existing.athletes[idx] = newA; else existing.athletes.push(newA);
@@ -1832,6 +1832,7 @@ async function saveSession(){
   } else {
     MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, reps: repsToSave, athletes: clean });
   }
+  console.log('saveSession: saved session athletes=', existing ? existing.athletes : clean);
   await saveManual();
   entryRows = [];
   draftReps = null;
@@ -2290,7 +2291,7 @@ function populateApProtoChecks(){
   const protos = bulk ? allProtocolsWithData() : protocolsForAthlete($('#apAthlete').value);
   if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; $('#apDateField').style.display='none'; return; }
   box.innerHTML = protos.map(t=>`<label style="display:flex; align-items:center; gap:6px; padding:3px 0; font-size:13px; font-weight:400; cursor:pointer;">
-    <input type="checkbox" class="apProtoCheck" value="${t.id}" checked> ${t.name}
+    <input type="checkbox" class="apProtoCheck" value="${t.id}"> ${t.name}
   </label>`).join('');
   box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', ()=>{ populateApDateChecks(); updateApTargetFieldVisibility(); renderAthleteProgress(); }));
   populateApDateChecks();
@@ -2803,17 +2804,13 @@ function renderBulkProtocols(protoIds, wrap){
     anyData = true;
     titleParts.push(t.name);
     if(singleTest){
-      // Tek test seçiliyse: bu teste giren HER sporcu için ayrı renkte
-      // çizgi olarak tek bir toplu grafik üret (tarihler ortak eksende).
-      // Her (sporcu, tarih) için TEK temsili değer (genel ortalama)
-      // kullanılır — aksi halde tek tarihte tekrarlı testin onlarca
-      // değeri üst üste yığılıp çizgi yerine dikey nokta yığını gibi
-      // görünüyordu.
       const athleteMap = new Map();
       sessions.forEach(s=>{
         const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
-        (s.athletes||[]).forEach(a=>{
-          const avg = computeAvg(t, a, steps, repsForSession(t,s));
+        const sessRepsN = repsForSession(t,s);
+        const allAthletes = s.athletes || [];
+        allAthletes.forEach(a=>{
+          const avg = computeAvg(t, a, steps, sessRepsN);
           if(avg.sec!==null){
             if(!athleteMap.has(a.athlete)) athleteMap.set(a.athlete, []);
             athleteMap.get(a.athlete).push({ date: s.date, sec: avg.sec });
@@ -2830,12 +2827,13 @@ function renderBulkProtocols(protoIds, wrap){
       const sessRepsN = repsForSession(t,s);
       const cols = buildColumns(t, steps, sessRepsN);
       const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${t.config.dist}m — ` : '';
-      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? s.note+' — ' : ''}${s.athletes.length} sporcu</div>`;
+      const allAthletes = s.athletes || [];
+      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? s.note+' — ' : ''}${allAthletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);
       html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
       cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
-      s.athletes.forEach(a=>{
+      allAthletes.forEach(a=>{
         html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
         html += renderRowCellsHtml(cols, a);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, sessRepsN).text}</td></tr>`;
