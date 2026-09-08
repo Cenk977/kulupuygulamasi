@@ -571,6 +571,9 @@ table.sp-grid tr:first-child td:first-child{z-index:4;}
 td.sp-editable:focus{background:#fff7e0 !important;box-shadow:inset 0 0 0 2px var(--lane-coral);}
 td.sp-edited{box-shadow:inset 3px 0 0 var(--lane-coral);}
 td.sp-empty{color:#c3ccd1;}
+td.sp-computed{background:#eef3f0;color:var(--foam-dim);cursor:not-allowed;font-weight:600;font-variant-numeric:tabular-nums;}
+td.sp-computed.sp-edited{color:var(--pool-900);box-shadow:inset 3px 0 0 var(--pool-700);}
+tr.sp-synth-row td{background:#dceaed !important;color:var(--pool-900) !important;font-weight:700;border-top:2px solid var(--pool-700);}
 .pdf-doc.landscape table.pdf-table-season{border-collapse:collapse;width:100%;table-layout:fixed;font-size:9.5px;}
 .pdf-doc.landscape table.pdf-table-season td{border:1px solid rgba(26,46,53,0.35);padding:3px 4px;vertical-align:top;white-space:pre-wrap;word-break:break-word;line-height:1.2;}
 .pdf-doc.landscape table.pdf-table-season thead td{background:#f3eee3;font-weight:700;font-size:9.5px;}
@@ -4314,21 +4317,33 @@ async function spRenderSheet(key){
       skip.add(r+'_'+c);
     }
   });
+  const computed = spComputedCells(key); // r_c -> otomatik hesaplanan değer
+  const syns = spSyntheticTotalRows(key); // MESO: her "Others" üstüne "Genel Toplam" satırı
   const table = document.getElementById('spGrid');
   table.innerHTML = '';
   const frag = document.createDocumentFragment();
   grid.forEach((row,r)=>{
+    const synHere = syns.find(s=>s.beforeRowIdx===r);
+    if(synHere) frag.appendChild(spBuildSyntheticTr(synHere));
     const tr = document.createElement('tr');
     row.forEach((cell,c)=>{
       const k2 = r+'_'+c;
       if(skip.has(k2)) return;
       let val, bg;
       if(Array.isArray(cell)){ val=cell[0]; bg=cell[1]; } else { val=cell; bg=null; }
-      const hasEdit = Object.prototype.hasOwnProperty.call(edits, k2);
-      const shown = hasEdit ? edits[k2] : val;
+      const isComputed = computed.has(k2);
+      const origStr = (val==null ? '' : String(val));
+      const hasEdit = !isComputed && Object.prototype.hasOwnProperty.call(edits, k2);
+      const shown = isComputed ? computed.get(k2) : (hasEdit ? edits[k2] : val);
       const td = document.createElement('td');
-      td.className = 'sp-editable' + (shown==='' ? ' sp-empty' : '') + (hasEdit ? ' sp-edited' : '');
-      td.contentEditable = 'true';
+      if(isComputed){
+        td.className = 'sp-computed' + (shown==='' ? ' sp-empty' : '') + (String(shown)!==origStr ? ' sp-edited' : '');
+        td.contentEditable = 'false';
+        td.title = 'Otomatik hesaplanır — düzenlenemez';
+      } else {
+        td.className = 'sp-editable' + (shown==='' ? ' sp-empty' : '') + (hasEdit ? ' sp-edited' : '');
+        td.contentEditable = 'true';
+      }
       td.dataset.r = r; td.dataset.c = c;
       td.textContent = shown;
       if(bg){
@@ -4345,6 +4360,76 @@ async function spRenderSheet(key){
     frag.appendChild(tr);
   });
   table.appendChild(frag);
+  // Hesaplanan değerleri edits-katmanına yaz (Excel dışa aktarımı görsün).
+  await spApplyComputed(key, false);
+}
+
+// MESO sayfalarında HER "Others" satırının ÜSTÜNE bir sanal "Genel Toplam"
+// satırı: o bölümdeki Sbh "Hacim" TOTAL + Akş "Hacim" TOTAL (mikro blok başına).
+// MESO sayfasında birden fazla bölüm (Others) olabilir — her biri kendi
+// Hacim satırlarını toplar. Sadece ekranda görünür; SP_DATA/edits/Excel'e YAZILMAZ.
+function spSyntheticTotalRows(sheetKey){
+  const sheet = SP_DATA[sheetKey];
+  if(!sheet || !/^MESO/i.test(sheetKey.trim())) return [];
+  const grid = sheet.grid;
+  const lbl = (r,c)=> String((grid[r] && Array.isArray(grid[r][c]) ? grid[r][c][0] : (grid[r]?grid[r][c]:''))||'').trim();
+  const othersRows = [];
+  for(let r=0;r<grid.length;r++){
+    for(let c=0;c<2;c++){
+      const v = lbl(r,c).toLocaleLowerCase('tr');
+      if(v==='others' || v==='other'){ othersRows.push({row:r, labelCol:c}); break; }
+    }
+  }
+  if(!othersRows.length) return [];
+  const blocks = spMesoTotalBlocks(sheet);
+  if(!blocks.length) return [];
+  const computed = spComputedCells(sheetKey); // "r_totalCol" -> Hacim TOTAL değeri
+  const allHacim = [];
+  for(let r=0;r<grid.length;r++){
+    if(lbl(r,0)==='Hacim' || lbl(r,1)==='Hacim') allHacim.push(r);
+  }
+  const colCount = sheet.cols || Math.max.apply(null, grid.map(r=>r.length));
+  const rows = [];
+  let sectionStart = -1;
+  othersRows.forEach(o=>{
+    const hacimInSection = allHacim.filter(r=> r>sectionStart && r<o.row);
+    const cells = new Map();
+    blocks.forEach(b=>{
+      let sum = 0, any = false;
+      hacimInSection.forEach(r=>{
+        const n = parseFloat(String(computed.get(r+'_'+b.totalCol)).replace(',','.'));
+        if(!isNaN(n)){ sum += n; any = true; }
+      });
+      cells.set(b.totalCol, any ? spFormatNumber(sum) : '');
+    });
+    rows.push({ beforeRowIdx:o.row, labelCol:o.labelCol, label:'Genel Toplam', cells, colCount });
+    sectionStart = o.row;
+  });
+  return rows;
+}
+
+function spBuildSyntheticTr(syn){
+  const tr = document.createElement('tr');
+  tr.className = 'sp-synth-row';
+  for(let c=0;c<syn.colCount;c++){
+    const td = document.createElement('td');
+    td.className = 'sp-computed sp-synth';
+    td.contentEditable = 'false';
+    td.title = 'Otomatik hesaplanır (Sbh Hacim + Akş Hacim) — düzenlenemez';
+    if(c === syn.labelCol){
+      td.textContent = syn.label;
+    } else if(syn.cells.has(c)){
+      const v = syn.cells.get(c);
+      td.textContent = v;
+      td.dataset.synthRow = syn.beforeRowIdx;
+      td.dataset.synthC = c;
+      if(v==='') td.classList.add('sp-empty');
+    } else {
+      td.classList.add('sp-empty');
+    }
+    tr.appendChild(td);
+  }
+  return tr;
 }
 /* ---- MESO sayfalarinda TOTAL sütunu otomatik toplama -------------
    Orijinal Excel'de TOTAL hucreleri muhtemelen =SUM(...) formuluydu,
@@ -4375,41 +4460,133 @@ function spFormatNumber(n){
   const rounded = Math.round(n*1000)/1000;
   return String(rounded);
 }
-async function spRecomputeRowTotal(sheetKey, r, editedCol){
-  if(!/^MESO/i.test(sheetKey.trim())) return;
-  const sheet = SP_DATA[sheetKey];
-  const row = sheet.grid[r];
-  if(!row) return;
-  const label = Array.isArray(row[1]) ? row[1][0] : row[1];
-  if((label||'').trim() !== 'Hacim') return; // sadece Hacim (Sbh/Aks) satirlari
-  const blocks = spMesoTotalBlocks(sheet);
-  const block = blocks.find(b => b.dayCols.includes(Number(editedCol)));
-  if(!block) return;
-  const edits = spEditsCache[sheetKey] || {};
-  let sum = 0;
-  block.dayCols.forEach(c=>{
-    const editKey = r+'_'+c;
-    let val;
-    if(Object.prototype.hasOwnProperty.call(edits, editKey)) val = edits[editKey];
-    else { const raw = row[c]; val = Array.isArray(raw) ? raw[0] : raw; }
-    const num = parseFloat(String(val).replace(',', '.'));
-    if(!isNaN(num)) sum += num;
-  });
-  const totalStr = spFormatNumber(sum);
-  const totalKey = r + '_' + block.totalCol;
-  const origTotalRaw = row[block.totalCol];
-  const origTotal = Array.isArray(origTotalRaw) ? origTotalRaw[0] : origTotalRaw;
-  if(totalStr === origTotal) delete edits[totalKey];
-  else edits[totalKey] = totalStr;
-  spEditsCache[sheetKey] = edits;
-  await spSaveEdits(sheetKey);
-  if(sheetKey === spCurrentSheet){
-    const totalTd = document.querySelector(`#spGrid td[data-r="${r}"][data-c="${block.totalCol}"]`);
-    if(totalTd){
-      totalTd.textContent = totalStr;
-      totalTd.classList.toggle('sp-empty', totalStr==='');
-      totalTd.classList.toggle('sp-edited', totalStr !== origTotal);
+// Bir sayfadaki TÜM otomatik-hesaplanan hücreleri döndürür: "r_c" -> değer.
+// Kaynak hücreler kullanıcının girdiği/orijinal değerlerden okunur; sonuç
+// hücreleri salt-okunur render edilir ve edits-katmanına yazılır (Excel
+// dışa aktarımı da doğru görsün).
+//   HAFTALIK PLAN: günlük TOPLAM (col11) = METRAJ(9) + 2. seans(10);
+//                  haftalık GENEL TOPLAM (col12) = haftanın TOPLAM'ları,
+//                  hafta başı satırında (H sütunu dolu), diğer satırlarda boş.
+//   MESO*        : her mikro bloğun "Hacim" satırındaki TOTAL = o bloğun
+//                  7 gün hücresinin toplamı (eski davranışın yerini alır).
+// Bir başlık satırında verilen etiketleri arar; çoğunu bulduğu ilk satırı
+// {rowIdx, cols:{ETIKET:sütun}} olarak döndürür. Sütun numaraları sabit
+// değil — Excel'den yeni bir plan yüklenip düzen değişse bile çalışır.
+function spFindHeader(grid, labels){
+  const want = labels.map(l=>l.toLocaleUpperCase('tr'));
+  for(let r=0; r<Math.min(grid.length, 10); r++){
+    const cols = {};
+    (grid[r]||[]).forEach((cell,c)=>{
+      const v = String(Array.isArray(cell)?cell[0]:(cell==null?'':cell)).trim().toLocaleUpperCase('tr');
+      const i = want.indexOf(v);
+      if(i>=0 && cols[want[i]]===undefined) cols[want[i]] = c;
+    });
+    if(want.filter(l=>cols[l]!==undefined).length >= Math.ceil(want.length*0.6)){
+      return { rowIdx:r, cols };
     }
+  }
+  return null;
+}
+
+function spComputedCells(sheetKey){
+  const sheet = SP_DATA[sheetKey];
+  const out = new Map();
+  if(!sheet) return out;
+  const grid = sheet.grid;
+  const edits = spEditsCache[sheetKey] || {};
+  const eff = (r,c)=>{
+    const k = r+'_'+c;
+    if(Object.prototype.hasOwnProperty.call(edits,k)) return edits[k];
+    const raw = grid[r] && grid[r][c];
+    return Array.isArray(raw) ? raw[0] : (raw==null ? '' : raw);
+  };
+  const num = (v)=>{ const n = parseFloat(String(v).replace(',','.')); return isNaN(n) ? null : n; };
+  const name = sheetKey.trim().toLocaleUpperCase('tr');
+
+  // ---- HAFTALIK PLAN: başlık etiketlerinden sütunları bul ----
+  const H = spFindHeader(grid, ['METRAJ','TOPLAM','GENEL TOPLAM','H','DÖNEM']);
+  if(H && H.cols['METRAJ']!==undefined && H.cols['TOPLAM']!==undefined){
+    const METRAJ = H.cols['METRAJ'];
+    const TOPLAM = H.cols['TOPLAM'];
+    const HAFTA  = H.cols['GENEL TOPLAM'];       // olmayabilir
+    const HCOL   = H.cols['H'];                   // hafta no sütunu, olmayabilir
+    // METRAJ ile TOPLAM arasında etiketsiz bir sütun varsa = 2. seans (akşam)
+    const SEANS2 = (TOPLAM === METRAJ + 1) ? null : METRAJ + 1;
+    const dataStart = H.rowIdx + 1;
+    const dayRows = [];
+    for(let r=dataStart; r<grid.length; r++){
+      const mv = num(eff(r,METRAJ));
+      const hv = HCOL!==undefined ? String(eff(r,HCOL)).trim() : '';
+      if(mv===null && hv==='') continue;          // gün satırı değil
+      dayRows.push(r);
+      const a = mv, b = SEANS2!==null ? num(eff(r,SEANS2)) : null;
+      out.set(r+'_'+TOPLAM, (a===null && b===null) ? '' : spFormatNumber((a||0)+(b||0)));
+    }
+    if(HAFTA!==undefined){
+      let weekStart = null, weekSum = 0;
+      const flush = ()=>{ if(weekStart!==null) out.set(weekStart+'_'+HAFTA, spFormatNumber(weekSum)); };
+      dayRows.forEach((r,i)=>{
+        const isWeekStart = (HCOL!==undefined && String(eff(r,HCOL)).trim()!=='') || i===0;
+        if(isWeekStart){ flush(); weekStart = r; weekSum = 0; }
+        const t = num(out.get(r+'_'+TOPLAM));
+        if(t!==null) weekSum += t;
+        if(!isWeekStart) out.set(r+'_'+HAFTA, '');
+      });
+      flush();
+    }
+    return out;
+  }
+
+  if(/^MESO/.test(name)){
+    const blocks = spMesoTotalBlocks(sheet);
+    if(blocks.length){
+      for(let r=0;r<grid.length;r++){
+        if(String(eff(r,1)).trim() !== 'Hacim' && String(eff(r,0)).trim() !== 'Hacim') continue;
+        blocks.forEach(b=>{
+          let sum = 0, any = false;
+          b.dayCols.forEach(c=>{ const n = num(eff(r,c)); if(n!==null){ sum += n; any = true; } });
+          out.set(r+'_'+b.totalCol, any ? spFormatNumber(sum) : '');
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// Hesaplanan değerleri edits-katmanına yazar ve (aktif sayfaysa) DOM'u
+// günceller. updateDom=false ise sadece kayıt yapılır (render sonrası çağrı).
+async function spApplyComputed(sheetKey, updateDom){
+  const computed = spComputedCells(sheetKey);
+  const grid = SP_DATA[sheetKey].grid;
+  const edits = spEditsCache[sheetKey] || (spEditsCache[sheetKey] = {});
+  let changed = false;
+  computed.forEach((val, k)=>{
+    const [r,c] = k.split('_').map(Number);
+    const raw = grid[r] && grid[r][c];
+    const orig = Array.isArray(raw) ? String(raw[0]) : (raw==null ? '' : String(raw));
+    if(String(val) === orig){
+      if(Object.prototype.hasOwnProperty.call(edits,k)){ delete edits[k]; changed = true; }
+    } else if(edits[k] !== val){
+      edits[k] = val; changed = true;
+    }
+    if(updateDom && sheetKey === spCurrentSheet){
+      const td = document.querySelector(`#spGrid td[data-r="${r}"][data-c="${c}"]`);
+      if(td){
+        td.textContent = val;
+        td.classList.toggle('sp-empty', val==='');
+        td.classList.toggle('sp-edited', String(val)!==orig);
+      }
+    }
+  });
+  if(changed) await spSaveEdits(sheetKey);
+  // Sanal "Genel Toplam" satırlarını (MESO) tazele — kalıcı kayda gerek yok.
+  if(updateDom && sheetKey === spCurrentSheet){
+    spSyntheticTotalRows(sheetKey).forEach(syn=>{
+      syn.cells.forEach((val, c)=>{
+        const td = document.querySelector('#spGrid td.sp-synth[data-synth-row="'+syn.beforeRowIdx+'"][data-synth-c="'+c+'"]');
+        if(td){ td.textContent = val; td.classList.toggle('sp-empty', val===''); }
+      });
+    });
   }
 }
 async function spHandleCellEdit(td){
@@ -4430,7 +4607,7 @@ async function spHandleCellEdit(td){
   td.classList.toggle('sp-empty', text==='');
   spEditsCache[spCurrentSheet] = edits;
   await spSaveEdits(spCurrentSheet);
-  await spRecomputeRowTotal(spCurrentSheet, Number(r), Number(c));
+  await spApplyComputed(spCurrentSheet, true);
 }
 document.getElementById('spGrid').addEventListener('focusout', (e)=>{
   const td = e.target.closest('td.sp-editable');
@@ -4539,6 +4716,13 @@ async function runSpExcelUpdate({ file, handle }){
     const buffer = await sourceFile.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
+    // Dışa aktarmadan önce TÜM sayfaların otomatik-hesaplanan hücrelerini
+    // (günlük/haftalık TOPLAM, MESO TOTAL) tazele ve edits-katmanına yaz —
+    // kullanıcı o sayfayı bu oturumda hiç açmamış olsa bile dosyaya çıksın.
+    for(const key of SP_ORDER){
+      if(spEditsCache[key] === undefined) await spLoadEdits(key);
+      await spApplyComputed(key, false);
+    }
     let totalCells = 0;
     const matchedSheets = [];
     const missingSheets = [];
