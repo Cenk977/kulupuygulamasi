@@ -73,7 +73,15 @@
   }
 
   .backup-bar{display:flex; gap:8px; flex-wrap:wrap; width:100%; justify-content:flex-end; order:3;}
-  .backup-btn{font-size:11px; padding:8px 12px; white-space:nowrap;}
+  .backup-btn{font-size:11px; padding:8px 12px; white-space:nowrap; min-height:40px;}
+  #authBar{flex-wrap:wrap;}
+  @media (max-width:560px){
+    header.top{align-items:stretch;}
+    .clubmark{text-align:left; white-space:normal;}
+    .backup-bar{flex-direction:column; justify-content:stretch;}
+    .backup-btn{width:100%; min-height:44px; font-size:12px;}
+    #authBar .btn{flex:1 1 100%; min-height:44px;}
+  }
 
   /* TABS as lane numbers */
   .lanes{display:flex; gap:6px; margin-bottom:22px; overflow-x:auto; padding-bottom:2px;}
