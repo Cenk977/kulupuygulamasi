@@ -838,7 +838,10 @@ td.sp-empty{color:#c3ccd1;}
     </div>
 
     <div id="attendanceBody" style="display:none;">
-      <div class="nav-row" style="justify-content:flex-end; margin-bottom:14px; margin-top:0;">
+      <div class="nav-row" style="justify-content:flex-end; align-items:center; gap:14px; margin-bottom:14px; margin-top:0;">
+        <label style="font-size:12px; color:var(--foam-dim); display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" id="attHideSensitive"> Regl'i "Mazeretli" göster (veli/yönetici için)
+        </label>
         <button type="button" class="pdf-btn" id="attPdfBtn">PDF Olarak İndir</button>
       </div>
       <div class="att-summary" id="attSummary"></div>
@@ -874,6 +877,9 @@ td.sp-empty{color:#c3ccd1;}
         </div>
         <button type="button" class="pdf-btn" id="bulkPdfBtn" style="align-self:flex-end;">PDF Olarak İndir (Tüm Sporcular)</button>
       </div>
+      <label style="font-size:12px; color:var(--foam-dim); display:inline-flex; align-items:center; gap:6px; cursor:pointer; margin-top:8px;">
+        <input type="checkbox" id="bulkHideSensitive"> Regl'i "Mazeretli" göster (veli/yönetici için)
+      </label>
     </div>
     <div id="bulkAttBody" style="display:none;">
       <div class="session-tabs" id="bulkSessionTabs"></div>
@@ -1907,7 +1913,15 @@ const ABSENCE_REASONS = [
   {id:'tatil',     label:'Tatil'},
   {id:'raporlu',   label:'Raporlu'},
   {id:'yarista',   label:'Yarışta'},
+  {id:'terk',      label:'Terk'},
 ];
+// Veli/yönetici PDF'inde gizlenebilen hassas nedenler:
+// id -> PDF'te yerine yazılacak genel etiket.
+const SENSITIVE_REASON_MASK = { regl: 'Mazeretli' };
+function reasonLabelForPdf(id, hideSensitive){
+  if(hideSensitive && SENSITIVE_REASON_MASK[id]) return SENSITIVE_REASON_MASK[id];
+  return (ABSENCE_REASONS.find(r=>r.id===id)||{}).label || '—';
+}
 function sessionDefsForDate(dateStr){
   const dow = new Date(dateStr+'T00:00:00').getDay(); // 0=Pazar
   return dow===0 ? SUNDAY_SESSION_DEFS : SESSION_DEFS;
@@ -3395,7 +3409,8 @@ document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
   const [year, month] = monthStr.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
-  const reasonLabel = (id)=> (ABSENCE_REASONS.find(r=>r.id===id)||{}).label || '—';
+  const hideSensitive = !!document.getElementById('attHideSensitive')?.checked;
+  const reasonLabel = (id)=> reasonLabelForPdf(id, hideSensitive);
 
   let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
   const rows = [];
@@ -3470,7 +3485,8 @@ const ATTENDANCE_REASON_ABBR = {
   regl: 'Re',
   tatil: 'T',
   raporlu: 'R',
-  yarista: 'Y'
+  yarista: 'Y',
+  terk: 'Tk'
 };
 document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
   const monthStr = document.getElementById('bulkPdfMonthInput').value;
@@ -3481,6 +3497,9 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
   const [year, month] = monthStr.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
+  const hideSensitive = !!document.getElementById('bulkHideSensitive')?.checked;
+  // Regl gizlenecekse hücre kısaltması 'M' (Mazeretli) olur.
+  const reasonAbbr = (id)=> (hideSensitive && SENSITIVE_REASON_MASK[id]) ? 'M' : (ATTENDANCE_REASON_ABBR[id] || 'X');
   // Seans satır sırası: Excel'deki Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme mantığı
   const SESS_ROWS = [
     {id:'sabah_kara',  label:'Sabah Kara',  group:'kara'},
@@ -3622,7 +3641,8 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     let html = '';
     html += `<h2 class="pdf-h2" style="margin-top:0;">Seans Bazlı Katılım Tablosu${sessChunks.length>1 ? ' (Sayfa '+(idx+1)+'/'+sessChunks.length+')' : ''}</h2>`;
     if(idx===0){
-      html += `<p class="pdf-empty-note" style="margin-bottom:6px;">G = Geldi · Gelmedi nedeni: H = Hasta, S = Sakat, Re = Regl, T = Tatil, R = Raporlu, Y = Yarışta, X = Belirtilmedi · boş hücre = kayıt girilmedi · Pazar sütunu Yarış durumunu gösterir (4 seans için ortak)</p>`;
+      const reglLegend = hideSensitive ? 'M = Mazeretli' : 'Re = Regl';
+      html += `<p class="pdf-empty-note" style="margin-bottom:6px;">G = Geldi · Gelmedi nedeni: H = Hasta, S = Sakat, ${reglLegend}, T = Tatil, R = Raporlu, Y = Yarışta, Tk = Terk, X = Belirtilmedi · boş hücre = kayıt girilmedi · Pazar sütunu Yarış durumunu gösterir (4 seans için ortak)</p>`;
     }
     html += `<table class="pdf-table-sess">${sessHeaderRowHtml()}`;
     chunk.forEach(p=>{
@@ -3641,7 +3661,7 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
               let cls='matrix-sun', label='';
               if(sm){
                 if(sm.mark==='P'){ label='Y'; }
-                else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[sm.reason] || 'X'; }
+                else { cls='matrix-a'; label = reasonAbbr(sm.reason); }
               }
               html += `<td class="num matrix-day ${cls}" rowspan="4">${label}</td>`;
             }
@@ -3651,7 +3671,7 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
             let cls='', label='';
             if(dm){
               if(dm.mark==='P'){ cls='matrix-p'; label='G'; }
-              else { cls='matrix-a'; label = ATTENDANCE_REASON_ABBR[dm.reason] || 'X'; }
+              else { cls='matrix-a'; label = reasonAbbr(dm.reason); }
             }
             html += `<td class="num matrix-day ${cls}">${label}</td>`;
           }
