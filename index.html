@@ -35,6 +35,7 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
+  body{overflow-x:hidden;}
   body{
     background:#f3eee3;
     background-image:
@@ -553,16 +554,22 @@
   .pdf-doc .pdf-score-badge.pos{color:#2f8a57;} .pdf-doc .pdf-score-badge.neg{color:#c23f2e;}
 
 /* ================= SEZON PLANI MODULU (eklendi) ================= */
+/* Sezon Planı sekmesi .wrap'in 920px sınırından taşıp tam ekran genişliği
+   kullansın — ızgaraya yatayda çok daha fazla alan. */
+#modeSezonplan{margin-left:calc(-50vw + 50%);margin-right:calc(-50vw + 50%);padding:0 clamp(14px,3vw,44px);}
 .sp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 6px;flex-wrap:wrap;}
 .sp-toolbar .sp-title{font-family:'Archivo Black',sans-serif;font-size:15px;color:var(--pool-900);}
 .sp-toolbar-actions{display:flex;gap:8px;flex-wrap:wrap;}
-.sp-navgroup-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--foam-dim);text-transform:uppercase;letter-spacing:.06em;margin:10px 0 4px;}
-.sp-navscroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.sp-navscroll::-webkit-scrollbar{display:none;}
-.sp-tab{flex:0 0 auto;font-family:'Archivo',sans-serif;font-size:12px;font-weight:600;padding:6px 12px;border-radius:2px;border:1px solid rgba(26,46,53,0.25);background:#fffdf9;color:var(--foam);cursor:pointer;white-space:nowrap;}
+.sp-navgroup-label{flex:0 0 auto;align-self:center;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--foam-dim);text-transform:uppercase;letter-spacing:.05em;padding-left:10px;border-left:2px solid rgba(26,46,53,0.18);white-space:nowrap;}
+.sp-navgroup-label.first{padding-left:0;border-left:none;}
+.sp-navscroll{display:flex;align-items:center;gap:5px;overflow-x:auto;padding-bottom:3px;margin:6px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+.sp-navscroll::-webkit-scrollbar{height:5px;}
+.sp-navscroll::-webkit-scrollbar-thumb{background:rgba(26,46,53,0.2);border-radius:3px;}
+.sp-tab{flex:0 0 auto;font-family:'Archivo',sans-serif;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:2px;border:1px solid rgba(26,46,53,0.25);background:#fffdf9;color:var(--foam);cursor:pointer;white-space:nowrap;}
 .sp-tab.active{background:var(--pool-700);border-color:var(--pool-700);color:#fffdf9;}
-.sp-hint{font-size:11.5px;color:var(--foam-dim);margin:2px 0 8px;}
-.sp-tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid rgba(26,46,53,0.2);border-radius:2px;max-height:66vh;background:#fffdf9;}
+.sp-hint{font-size:10.5px;color:var(--foam-dim);margin:0 0 5px;}
+.sp-tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid rgba(26,46,53,0.2);border-radius:2px;max-height:72vh;background:#fffdf9;}
+.sp-tablewrap:has(table.sp-compact){max-height:82vh;}
 table.sp-grid{border-collapse:separate;border-spacing:0;font-size:12px;font-family:'Archivo',sans-serif;}
 table.sp-grid td{border-right:1px solid rgba(26,46,53,0.15);border-bottom:1px solid rgba(26,46,53,0.15);padding:6px 7px;vertical-align:top;white-space:pre-wrap;word-break:break-word;min-width:64px;max-width:260px;line-height:1.35;outline:none;}
 table.sp-grid td:first-child{position:sticky;left:0;z-index:2;background:#eaf3f6;font-weight:600;color:var(--pool-900);min-width:78px;}
@@ -574,6 +581,12 @@ td.sp-empty{color:#c3ccd1;}
 td.sp-computed{background:#eef3f0;color:var(--foam-dim);cursor:not-allowed;font-weight:600;font-variant-numeric:tabular-nums;}
 td.sp-computed.sp-edited{color:var(--pool-900);box-shadow:inset 3px 0 0 var(--pool-700);}
 tr.sp-synth-row td{background:#dceaed !important;color:var(--pool-900) !important;font-weight:700;border-top:2px solid var(--pool-700);}
+/* Kompakt ("Sığdır") mod: laptop ekranına sığsın */
+table.sp-grid.sp-compact td{padding:2px 5px;font-size:10.5px;line-height:1.2;min-width:36px;}
+table.sp-grid.sp-compact tr:first-child td{font-size:9px;}
+table.sp-grid.sp-compact td.sp-col-narrow{max-width:54px;}
+table.sp-grid.sp-compact td.sp-col-wide{max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+table.sp-grid.sp-compact td.sp-col-wide:focus{max-width:360px;white-space:pre-wrap;overflow:visible;}
 .pdf-doc.landscape table.pdf-table-season{border-collapse:collapse;width:100%;table-layout:fixed;font-size:9.5px;}
 .pdf-doc.landscape table.pdf-table-season td{border:1px solid rgba(26,46,53,0.35);padding:3px 4px;vertical-align:top;white-space:pre-wrap;word-break:break-word;line-height:1.2;}
 .pdf-doc.landscape table.pdf-table-season thead td{background:#f3eee3;font-weight:700;font-size:9.5px;}
@@ -1013,6 +1026,7 @@ tr.sp-synth-row td{background:#dceaed !important;color:var(--pool-900) !importan
     <div class="sp-toolbar">
       <div class="sp-title" id="spSheetTitle">Sezon Takvimi</div>
       <div class="sp-toolbar-actions">
+        <button type="button" class="btn btn-ghost" id="spCompactBtn" title="Izgarayı ekrana sığdır — küçük font, dar hücreler, açıklama sütunu kısaltılır">⊟ Sığdır</button>
         <button type="button" class="btn btn-ghost" id="spImportBtn">Excel'den Güncelle</button>
         <button type="button" class="btn btn-ghost" id="spExportBtn">⬆⬇ Excel Dosyasını Güncelle</button>
         <input type="file" id="spExportFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
@@ -4270,13 +4284,16 @@ function spLabelFor(key){
 function spBuildNav(){
   const wrap = document.getElementById('spNav');
   wrap.innerHTML = '';
-  SP_NAV.forEach(group=>{
-    const label = document.createElement('div');
-    label.className = 'sp-navgroup-label';
-    label.textContent = group.label;
-    wrap.appendChild(label);
-    const row = document.createElement('div');
-    row.className = 'sp-navscroll';
+  // Tüm gruplar tek yatay kaydırılabilir şeritte — dikey yer kaplamasın,
+  // ızgaraya daha çok alan kalsın. Grup adları küçük ayraç etiketi olur.
+  const row = document.createElement('div');
+  row.className = 'sp-navscroll';
+  SP_NAV.forEach((group, gi)=>{
+    if(!group.items.length) return;
+    const lab = document.createElement('span');
+    lab.className = 'sp-navgroup-label' + (gi===0 ? ' first' : '');
+    lab.textContent = group.label;
+    row.appendChild(lab);
     group.items.forEach(item=>{
       const b = document.createElement('button');
       b.type = 'button';
@@ -4286,8 +4303,8 @@ function spBuildNav(){
       b.onclick = ()=> spSelectSheet(item.key);
       row.appendChild(b);
     });
-    wrap.appendChild(row);
   });
+  wrap.appendChild(row);
 }
 function spRefreshNavActive(){
   document.querySelectorAll('.sp-tab').forEach(b=>{
@@ -4319,6 +4336,7 @@ async function spRenderSheet(key){
   });
   const computed = spComputedCells(key); // r_c -> otomatik hesaplanan değer
   const syns = spSyntheticTotalRows(key); // MESO: her "Others" üstüne "Genel Toplam" satırı
+  const colCls = spColClasses(sheet);     // {wide:Set, narrow:Set} — kompakt modda sütun daraltma
   const table = document.getElementById('spGrid');
   table.innerHTML = '';
   const frag = document.createDocumentFragment();
@@ -4345,6 +4363,8 @@ async function spRenderSheet(key){
         td.contentEditable = 'true';
       }
       td.dataset.r = r; td.dataset.c = c;
+      if(colCls.wide.has(c)) td.classList.add('sp-col-wide');
+      else if(colCls.narrow.has(c)) td.classList.add('sp-col-narrow');
       td.textContent = shown;
       if(bg){
         td.style.background = bg;
@@ -4406,6 +4426,50 @@ function spSyntheticTotalRows(sheetKey){
     sectionStart = o.row;
   });
   return rows;
+}
+
+// Kompakt modda daraltılacak/genişletilecek sütunları belirler.
+// wide  = uzun metin (AÇIKLAMA, başlıksız uzun-metin sütunları)
+// narrow= tek harf / kısa kod sütunları (H, T/Ç, AEC, PZT, TOTAL...)
+function spColClasses(sheet){
+  const grid = sheet.grid;
+  const wide = new Set(), narrow = new Set();
+  let hdr = 0, best = -1;
+  for(let r=0;r<Math.min(grid.length,10);r++){
+    const filled = (grid[r]||[]).filter(c=>String(Array.isArray(c)?c[0]:(c==null?'':c)).trim()).length;
+    if(filled>best){ best=filled; hdr=r; }
+  }
+  const row = grid[hdr]||[];
+  const colCount = sheet.cols || Math.max.apply(null, grid.map(r=>r.length));
+  const cellStr = (r,c)=> String(grid[r] && (Array.isArray(grid[r][c])?grid[r][c][0]:grid[r][c]) || '').trim();
+  const colMaxLen = (c)=>{
+    let maxLen=0, samples=0;
+    for(let r=hdr+1;r<grid.length && samples<60;r++){
+      const v=cellStr(r,c);
+      if(v){ samples++; if(v.length>maxLen) maxLen=v.length; }
+    }
+    return { maxLen, samples };
+  };
+  for(let c=0;c<colCount;c++){
+    const h = cellStr(hdr,c);
+    const hu = h.toLocaleUpperCase('tr');
+    const { maxLen, samples } = colMaxLen(c);
+    if(h && h.length<=15 && /(AÇIKLAMA|ACIKLAMA|DESCRIPTION|\bNOT\b)/.test(hu)){ wide.add(c); continue; }
+    // Sütun verisi uzunsa (workout açıklaması vb.) asla daraltma — genişlet.
+    if(maxLen>=25){ wide.add(c); continue; }
+    // Kısa başlık ya da hep-kısa veri → dar.
+    if((h && h.length<=5) || (!h && samples>3 && maxLen<=4)) narrow.add(c);
+  }
+  return { wide, narrow };
+}
+
+function spApplyCompact(){
+  let on = false;
+  try{ on = localStorage.getItem('sp_compact') === '1'; }catch(e){}
+  const grid = document.getElementById('spGrid');
+  if(grid) grid.classList.toggle('sp-compact', on);
+  const btn = document.getElementById('spCompactBtn');
+  if(btn) btn.textContent = on ? '⊞ Normal' : '⊟ Sığdır';
 }
 
 function spBuildSyntheticTr(syn){
@@ -4612,6 +4676,12 @@ async function spHandleCellEdit(td){
 document.getElementById('spGrid').addEventListener('focusout', (e)=>{
   const td = e.target.closest('td.sp-editable');
   if(td) spHandleCellEdit(td);
+});
+document.getElementById('spCompactBtn').addEventListener('click', ()=>{
+  let on = false;
+  try{ on = localStorage.getItem('sp_compact') === '1'; }catch(e){}
+  try{ localStorage.setItem('sp_compact', on ? '0' : '1'); }catch(e){}
+  spApplyCompact();
 });
 document.getElementById('spResetBtn').addEventListener('click', async ()=>{
   if(!confirm('Bu sayfadaki tum degisiklikleri silip orijinal plana donmek istiyor musun?')) return;
@@ -4911,6 +4981,7 @@ async function initSezonplanMode(){
   spBuildNav();
   spNavBuilt = true;
   await spSelectSheet(spCurrentSheet);
+  spApplyCompact();
 }
 /* SwimAnalyzer sekmesi: ayri swimanalyzer.html dosyasini iframe icinde
    lazy-load ile acar (sekmeye ilk tiklandiginda yuklenir, boylece ana
