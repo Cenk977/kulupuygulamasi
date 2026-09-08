@@ -3920,53 +3920,87 @@ async function testKayitRtdbSet(path, value){
   const authParam = await testKayitAuthQueryParam();
   return rtdbSetShared(TEST_KAYIT_RTDB_BASE, path, value, authParam);
 }
+// Mevcut TÜM veriyi (window.storage + Test Kayıtları bulut yolu) tek bir
+// yedek nesnesine toplar. Hem "Yedek Al" butonu hem de geri yüklemeden
+// önceki otomatik güvenlik yedeği bunu kullanır.
+async function buildBackupObject(){
+  const keys = await discoverAllStorageKeys();
+  const payload = {};
+  let okCount = 0, failCount = 0;
+  const failedKeys = [];
+  for(const key of keys){
+    try{
+      const res = await window.storage.get(key, false);
+      if(res && res.value !== undefined){
+        payload[key] = res.value; // ham string olarak sakla (zaten JSON string)
+        okCount++;
+      }
+    }catch(e){ failCount++; failedKeys.push(key); }
+  }
+  // Test Kayıtları modülü (ayrı Firebase yolu, window.storage dışında)
+  let testKayitlari = null;
+  try{
+    const [manuel, roster] = await Promise.all([
+      testKayitRtdbGet(TEST_KAYIT_DB_PATH).catch(()=>null),
+      testKayitRtdbGet(TEST_KAYIT_ROSTER_DB_PATH).catch(()=>null)
+    ]);
+    if(manuel || roster){
+      testKayitlari = { manuel, roster };
+      okCount += (manuel?1:0) + (roster?1:0);
+    }
+  }catch(e){ console.warn('Test kayıtları yedeklenemedi:', e); }
+  const obj = {
+    app: BACKUP_APP_ID,
+    formatVersion: BACKUP_FORMAT_VERSION,
+    exportedAt: new Date().toISOString(),
+    keyCount: okCount,
+    data: payload,
+    testKayitlari
+  };
+  return { obj, okCount, failCount, failedKeys };
+}
+
+function downloadBackupJson(obj, filenamePrefix){
+  const json = JSON.stringify(obj, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href = url;
+  a.download = `${filenamePrefix}_${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Test Kayıtları "manuel" nesnesindeki oturum ve sporcu-kayıt sayısını
+// çıkarır (geri yükleme onayında "kaç kayıt silinecek" göstermek için).
+function countTestKayitRecords(manuel){
+  try{
+    const payload = manuel && (manuel.payload || manuel);
+    const sessions = payload && payload.sessions;
+    if(!Array.isArray(sessions)) return null;
+    let athletes = 0;
+    sessions.forEach(s=>{ athletes += (Array.isArray(s.athletes) ? s.athletes.length : 0); });
+    return { sessions: sessions.length, athletes };
+  }catch(e){ return null; }
+}
+
 document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
   setBackupBusy('exportBackupBtn', true, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
   try{
-    const keys = await discoverAllStorageKeys();
-    const payload = {};
-    let okCount = 0, failCount = 0;
-    for(const key of keys){
-      try{
-        const res = await window.storage.get(key, false);
-        if(res && res.value !== undefined){
-          payload[key] = res.value; // ham string olarak sakla (zaten JSON string)
-          okCount++;
-        }
-      }catch(e){ failCount++; }
+    const { obj, okCount, failCount, failedKeys } = await buildBackupObject();
+    downloadBackupJson(obj, 'kolejliler-yedek');
+    if(failCount){
+      // (c) Eksik yedek gözden kaçmasın — bloklayan uyarı.
+      alert(`⚠ DİKKAT: ${failCount} kayıt okunamadı — bu yedek EKSİK olabilir.\n\n`
+        + `Okunamayanlar: ${failedKeys.slice(0,8).join(', ')}${failedKeys.length>8 ? ' …' : ''}\n\n`
+        + `İnternet bağlantını kontrol edip "Yedek Al"ı tekrar çalıştır. `
+        + `Yine de bir dosya indirildi ama tam olmayabilir.`);
+    } else {
+      showToast(`${okCount} kayıt başarıyla yedeklendi`);
     }
-    // Test Kayıtları modülü (ayrı Firebase yolu, window.storage dışında)
-    let testKayitlari = null;
-    try{
-      const [manuel, roster] = await Promise.all([
-        testKayitRtdbGet(TEST_KAYIT_DB_PATH).catch(()=>null),
-        testKayitRtdbGet(TEST_KAYIT_ROSTER_DB_PATH).catch(()=>null)
-      ]);
-      if(manuel || roster){
-        testKayitlari = { manuel, roster };
-        okCount += (manuel?1:0) + (roster?1:0);
-      }
-    }catch(e){ console.warn('Test kayıtları yedeklenemedi:', e); }
-    const backupObj = {
-      app: BACKUP_APP_ID,
-      formatVersion: BACKUP_FORMAT_VERSION,
-      exportedAt: new Date().toISOString(),
-      keyCount: okCount,
-      data: payload,
-      testKayitlari
-    };
-    const json = JSON.stringify(backupObj, null, 2);
-    const blob = new Blob([json], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-    a.href = url;
-    a.download = `kolejliler-yedek_${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast(failCount ? `${okCount} kayıt yedeklendi (${failCount} okunamadı)` : `${okCount} kayıt başarıyla yedeklendi`);
   }catch(e){
     console.error('Backup export failed', e);
     showToast('Yedek alma başarısız oldu, tekrar dene');
@@ -4005,7 +4039,44 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
     return;
   }
   const totalCount = entries.length + (hasTestKayit ? (parsed.testKayitlari.manuel?1:0) + (parsed.testKayitlari.roster?1:0) : 0);
-  const confirmMsg = `${totalCount} kayıt bu cihaza yüklenecek ve mevcut verilerin üzerine yazılacak.\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}\n\nDevam etmek istiyor musun?`;
+
+  // (a) Üzerine yazmadan ÖNCE mevcut hâlin otomatik güvenlik yedeğini indir.
+  let safetyOk = false;
+  setBackupBusy('importBackupBtn', true, 'Güvenlik yedeği alınıyor…', '⭱ Yedekten Geri Yükle');
+  try{
+    const { obj } = await buildBackupObject();
+    downloadBackupJson(obj, 'kolejliler-OTOMATIK-geri-yukleme-oncesi');
+    safetyOk = true;
+  }catch(e){ console.warn('Güvenlik yedeği alınamadı:', e); }
+  setBackupBusy('importBackupBtn', false, 'Güvenlik yedeği alınıyor…', '⭱ Yedekten Geri Yükle');
+  if(!safetyOk){
+    if(!window.confirm('Güvenlik yedeği ALINAMADI (internet sorunu olabilir).\n\n'
+      + 'Yine de devam edip mevcut verilerin üzerine yazmak istiyor musun? ÖNERİLMEZ.')) return;
+  }
+
+  // (b) Test Kayıtları ortak bulut düğümü tamamen değiştirilecek — kaç kayıt
+  // silineceğini onaydan önce sayıyla göster.
+  let cloudLine = '';
+  try{
+    const curManuel = await testKayitRtdbGet(TEST_KAYIT_DB_PATH).catch(()=>null);
+    const cur = countTestKayitRecords(curManuel);
+    const bak = countTestKayitRecords(parsed.testKayitlari && parsed.testKayitlari.manuel);
+    if(cur || bak){
+      const fmt = (x)=> x ? `${x.sessions} oturum / ${x.athletes} sporcu-kayıt` : 'yok';
+      cloudLine = `\n\nTEST KAYITLARI (ortak bulut — herkesin verisi):`
+        + `\n  Şu an bulutta: ${fmt(cur)}`
+        + `\n  Yedek dosyasında: ${fmt(bak)}`;
+      if(cur && bak && (cur.sessions > bak.sessions || cur.athletes > bak.athletes)){
+        cloudLine += `\n  ⚠ Bulutta yedekten DAHA FAZLA kayıt var — geri yükleme aradaki farkı KALICI SİLER.`;
+      }
+    }
+  }catch(e){ /* sayım yapılamadıysa onayı yine de göster */ }
+
+  const confirmMsg = `${totalCount} kayıt bu cihaza yüklenecek ve mevcut verilerin ÜZERİNE YAZILACAK.`
+    + `\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}`
+    + cloudLine
+    + (safetyOk ? `\n\n✓ Mevcut hâlin güvenlik yedeği indirildi (kolejliler-OTOMATIK-...). Sorun olursa onu geri yükleyebilirsin.` : '')
+    + `\n\nDevam etmek istiyor musun?`;
   if(!window.confirm(confirmMsg)) return;
   setBackupBusy('importBackupBtn', true, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
   let okCount = 0, failCount = 0;
