@@ -24,6 +24,7 @@
 <!-- test_kayitlari.html, sporcu_goruntule.html ve index.html ile ortak
      Firebase REST yardımcıları (rtdbGetShared/rtdbSetShared) — aynı
      klasörde bulunmalı. -->
+<script src="firebase-config.js"></script>
 <script src="firebase-rtdb-helpers.js"></script>
 <style>
   :root{
@@ -227,6 +228,7 @@
     <span class="meta" id="authStatus" style="color:#ffd7d0; font-weight:600;">Bağlanıyor...</span>
     <button class="btn btn-ghost" id="googleSignInBtn" style="display:none;">🔑 Google ile Giriş Yap</button>
     <button class="btn btn-ghost" id="googleSignOutBtn" style="display:none;">Çıkış Yap</button>
+    <button class="btn btn-ghost" id="btnDashboardOpen">📊 Dashboard</button>
     <button class="btn btn-ghost" id="btnRosterMgmt">👥 Sporcu Ekle / Çıkar</button>
     <button class="btn btn-ghost" id="btnCompareOpen">⚖ Karşılaştır</button>
     <button class="btn btn-ghost" id="btnAthleteProgressOpen">📈 Sporcu Gelişimi</button>
@@ -391,23 +393,69 @@
     </div>
   </div>
 </div>
+<!-- Dashboard Overlay -->
+<div class="overlay" id="dashboardOverlay">
+  <div class="modal" style="max-width:1000px; max-height:90vh;">
+    <h3>📊 Dashboard</h3>
+    <div style="overflow-y:auto; max-height:calc(90vh - 150px);">
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:20px;">
+        <div style="background:var(--pool-light); padding:16px; border-radius:8px; text-align:center;">
+          <div style="font-size:11px; color:#8a97a0; text-transform:uppercase; font-weight:700;">Toplam Sporcu</div>
+          <div style="font-size:28px; font-weight:700; color:var(--navy); margin-top:6px;" id="dbStatAthletes">0</div>
+        </div>
+        <div style="background:var(--pool-light); padding:16px; border-radius:8px; text-align:center;">
+          <div style="font-size:11px; color:#8a97a0; text-transform:uppercase; font-weight:700;">Toplam Kayıt</div>
+          <div style="font-size:28px; font-weight:700; color:var(--navy); margin-top:6px;" id="dbStatRecords">0</div>
+        </div>
+        <div style="background:var(--pool-light); padding:16px; border-radius:8px; text-align:center;">
+          <div style="font-size:11px; color:#8a97a0; text-transform:uppercase; font-weight:700;">Protokoller</div>
+          <div style="font-size:28px; font-weight:700; color:var(--navy); margin-top:6px;" id="dbStatProtos">0</div>
+        </div>
+        <div style="background:var(--pool-light); padding:16px; border-radius:8px; text-align:center;">
+          <div style="font-size:11px; color:#8a97a0; text-transform:uppercase; font-weight:700;">Son Test</div>
+          <div style="font-size:18px; font-weight:700; color:var(--navy); margin-top:6px;" id="dbStatLastDate">—</div>
+        </div>
+      </div>
+
+
+      <div style="border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px;">
+        <h4 style="margin:0 0 10px; color:var(--navy);">🏊 Ayak Test - En İyi 7</h4>
+        <div id="dbBestAyak" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px;"></div>
+      </div>
+
+      <div style="border-bottom:1px solid var(--line); padding-bottom:12px; margin-bottom:16px;">
+        <h4 style="margin:0 0 10px; color:var(--navy);">💨 NX100 Serbest - En İyi 7</h4>
+        <div id="dbBestNX100" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px;"></div>
+      </div>
+
+      <div>
+        <h4 style="margin:0 0 10px; color:var(--navy);">⏱️ Son Test Yapanlar</h4>
+        <div id="dbRecentAthletes" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:8px;"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-line" id="btnCloseDashboard">Kapat</button>
+    </div>
+  </div>
+</div>
+
 <!-- Printable area (populated on demand, shown only via print CSS) -->
 <div class="print-only" id="printArea"></div>
 <script>
 function $(sel){ return document.querySelector(sel); }
+// HTML kaçışı — kullanıcı metinleri (sporcu adı, not, protokol adı vb.)
+// innerHTML'e girmeden önce buradan geçmeli. Hem güvenlik hem de "&", "<",
+// tırnak içeren isimlerin ekranı bozmaması için.
+function esc(v){
+  return String(v == null ? '' : v)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 /* =========================================================
-   0) FIREBASE (opsiyonel — boş bırakılırsa localStorage kullanılır)
+   0) FIREBASE — yapılandırma firebase-config.js'ten gelir
+      (bu dosya <head>'de bu script'ten önce yükleniyor).
    ========================================================= */
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
-  authDomain:        "bursa-kolejliler.firebaseapp.com",
-  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:         "bursa-kolejliler",
-  storageBucket:     "bursa-kolejliler.firebasestorage.app",
-  messagingSenderId: "905222390930",
-  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
-};
-const RTDB_BASE = (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
+const RTDB_BASE =(FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
 const DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel"; // Realtime Database yolu
 
 /* =========================================================
@@ -510,6 +558,17 @@ function markCloudFailure(e){
     : '⚠ Buluta bağlanılamadı — veriler bu cihazda (yerel) kaydediliyor';
   el.title = e ? String(e.message || e) : '';
 }
+// Bu sekmenin en son gördüğü bulut sürümünün zaman damgası. Kayıttan
+// hemen önce buluttakiyle karşılaştırılır: başka bir cihaz araya girip
+// yazmışsa üzerine yazmayı reddederiz (bkz. Storage.save — ConflictError).
+let lastSyncedUpdatedAt = null;
+class ConflictError extends Error {
+  constructor(remoteUpdatedAt){
+    super('Bulut verisi başka bir cihazda değişmiş.');
+    this.code = 'CONFLICT';
+    this.remoteUpdatedAt = remoteUpdatedAt;
+  }
+}
 const Storage = {
   async load(){
     let local = null;
@@ -526,8 +585,10 @@ const Storage = {
         if(local && local.updatedAt && (!cloud || !cloud.updatedAt || local.updatedAt > cloud.updatedAt)){
           console.warn('Yerel kayıt buluttakinden daha yeni, yerel veri kullanılıyor ve buluta senkronize ediliyor.');
           rtdbSet(DB_PATH, local).then(()=>{ cloudOk = true; }).catch(e=> console.warn('Yerel veri buluta senkronize edilemedi (bir sonraki kayıtta tekrar denenecek):', e));
+          lastSyncedUpdatedAt = local.updatedAt || null;
           return local;
         }
+        lastSyncedUpdatedAt = (cloud && cloud.updatedAt) || null;
         return cloud || null;
       }catch(e){
         console.warn("Buluttan okuma başarısız, yerel veriye (localStorage) dönülüyor:", e);
@@ -544,10 +605,26 @@ const Storage = {
     localStorage.setItem('atk_manual_data', JSON.stringify(record));
     if (cloudEnabled){
       try{
+        // Çakışma kontrolü: kayıttan hemen önce buluttaki sürümü oku.
+        // Bu sekme yüklendiğinden/son kaydettiğinden bu yana başka bir
+        // cihaz yazmışsa üzerine yazma — kullanıcı uyarılıp yenilesin.
+        try{
+          const remote = await rtdbGet(DB_PATH);
+          const remoteAt = remote && remote.updatedAt;
+          if(remoteAt && lastSyncedUpdatedAt && remoteAt !== lastSyncedUpdatedAt && remoteAt > lastSyncedUpdatedAt){
+            throw new ConflictError(remoteAt);
+          }
+        }catch(e){
+          if(e.code === 'CONFLICT') throw e;
+          // okuma başarısızsa (ağ/izin) çakışma kontrolünü atla, kaydı dene
+          console.warn('Çakışma kontrolü yapılamadı, yine de kaydediliyor:', e);
+        }
         await rtdbSet(DB_PATH, record);
         cloudOk = true;
+        lastSyncedUpdatedAt = record.updatedAt;
         return;
       }catch(e){
+        if(e.code === 'CONFLICT') throw e;
         console.warn("Buluta kayıt başarısız, yerel olarak (localStorage) kaydedildi:", e);
         cloudOk = false;
         markCloudFailure(e);
@@ -660,7 +737,7 @@ function renderRosterMgmtModal(){
     wrap.innerHTML = `<div class="roster-empty">Henüz sporcu eklenmedi. Aşağıdan ekleyebilirsin.</div>`;
     return;
   }
-  wrap.innerHTML = sorted.map(a=>`<div class="roster-row"><span>${a.sporcuAdi}</span><span style="display:flex; gap:4px;"><button data-rmlink="${a.id}" title="Sporcuya özel paylaşım linkini kopyala" style="background:none; border:none; cursor:pointer; font-size:15px; padding:2px 6px; line-height:1;">🔗</button><button data-rmid="${a.id}" title="Listeden çıkar">×</button></span></div>`).join('');
+  wrap.innerHTML = sorted.map(a=>`<div class="roster-row"><span>${esc(a.sporcuAdi)}</span><span style="display:flex; gap:4px;"><button data-rmlink="${esc(a.id)}" title="Sporcuya özel paylaşım linkini kopyala" style="background:none; border:none; cursor:pointer; font-size:15px; padding:2px 6px; line-height:1;">🔗</button><button data-rmid="${a.id}" title="Listeden çıkar">×</button></span></div>`).join('');
   wrap.querySelectorAll('button[data-rmid]').forEach(b=>{
     b.onclick = async ()=>{
       const a = ROSTER.find(x=>x.id===b.dataset.rmid);
@@ -783,7 +860,20 @@ let entryRows = []; // {athlete, ...} geçici giriş satırları
 let draftReps = null; // tekrarli ailede, o anki giriş formunda seçilen tekrar sayısı (N)
 let editingCustomId = null;
 async function saveManual(){
-  await Storage.save(MANUAL);
+  try{
+    await Storage.save(MANUAL);
+  }catch(e){
+    if(e && e.code === 'CONFLICT'){
+      alert('⚠ Bu veriler başka bir cihazda değiştirilmiş.\n\n'
+        + 'Değişiklikleriniz bu cihaza (yerel) kaydedildi ama buluta '
+        + 'GÖNDERİLMEDİ — aksi halde diğer cihazın kaydını silerdiniz.\n\n'
+        + 'Lütfen sayfayı yenileyin, güncel veriyi alın ve değişikliğinizi '
+        + 'tekrar yapın.');
+      $('#lastUpdated').textContent = 'Yerelde kaydedildi — bulut çakışması, sayfayı yenileyin';
+      return;
+    }
+    throw e;
+  }
   $('#lastUpdated').textContent = `Son güncelleme: ${new Date().toLocaleString('tr-TR')}`;
 }
 function knownAthletes(){
@@ -816,7 +906,7 @@ function renderProtoList(){
     const active = t.id === (ACTIVE_PROTO && ACTIVE_PROTO.id) ? 'active' : '';
     const n = MANUAL.sessions.filter(s=>s.templateId===t.id).length;
     return `<button class="tpl-card ${active}" data-id="${t.id}">
-      <span class="tpl-name">${t.name}</span>
+      <span class="tpl-name">${esc(t.name)}</span>
       <span class="tpl-meta">${FAMILY_LABEL[t.family]} · ${n} kayıt</span>
     </button>`;
   }).join('');
@@ -840,7 +930,7 @@ function readyDesc(p){
 }
 function renderReadyList(){
   $('#readyList').innerHTML = READY_PROTOCOLS.map((p,i)=>`<div class="tpl-card" style="border:1px solid var(--line); margin-bottom:6px; cursor:default;">
-      <span class="tpl-name">${p.name}</span>
+      <span class="tpl-name">${esc(p.name)}</span>
       <span class="tpl-meta" style="display:block; margin:3px 0 8px;">${readyDesc(p)}</span>
       <button class="btn btn-primary" style="padding:6px 12px; font-size:12px;" data-i="${i}">＋ Bu Protokolü Ekle</button>
     </div>`).join('');
@@ -866,7 +956,7 @@ function renderCustomForm(existing){
     <div class="field-row">
       <div class="field" style="flex:1; min-width:220px;">
         <label>Protokol Adı</label>
-        <input type="text" id="cfName" value="${t.name.replace(/"/g,'&quot;')}" placeholder="ör. Hpe Endurance Set">
+        <input type="text" id="cfName" value="${esc(t.name)}" placeholder="ör. Hpe Endurance Set">
       </div>
       <div class="field">
         <label>Tip</label>
@@ -1024,7 +1114,7 @@ function renderManualMain(){
   if(layoutEl) layoutEl.classList.add('has-selection');
   let html = `<button class="btn btn-line mobile-back-btn" id="btnBackToList" style="margin-bottom:12px;">← Protokol Listesi</button>
   <div class="panel-head">
-    <div><h2>${t.name}</h2><div class="sub">${descLineFor(t)}</div></div>
+    <div><h2>${esc(t.name)}</h2><div class="sub">${descLineFor(t)}</div></div>
     <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-line" id="btnEditProto">✎ Düzenle</button>
       <button class="btn btn-danger" id="btnDelProto">🗑 Sil</button>
@@ -1314,20 +1404,20 @@ function refreshAthleteDatalist(){
   let dl = document.getElementById('athleteDatalist');
   if(!dl){ dl = document.createElement('datalist'); dl.id = 'athleteDatalist'; document.body.appendChild(dl); }
   const names = new Set([...rosterNames(), ...knownAthletes()]);
-  dl.innerHTML = Array.from(names).sort((a,b)=>a.localeCompare(b,'tr')).map(n=>`<option value="${n}">`).join('');
+  dl.innerHTML = Array.from(names).sort((a,b)=>a.localeCompare(b,'tr')).map(n=>`<option value="${esc(n)}">`).join('');
 }
 function athleteCellHtml(r){
   if(ROSTER.length){
     const names = rosterNames();
-    const opts = names.map(n=>`<option value="${n}" ${r.athlete===n?'selected':''}>${n}</option>`).join('');
+    const opts = names.map(n=>`<option value="${esc(n)}" ${r.athlete===n?'selected':''}>${esc(n)}</option>`).join('');
     const currentNotInRoster = r.athlete && !names.includes(r.athlete);
-    return `<select class="name-input" data-row="${r.id}" data-field="athlete">
+    return `<select class="name-input" data-row="${esc(r.id)}" data-field="athlete">
       <option value="">— sporcu seç —</option>
-      ${currentNotInRoster ? `<option value="${r.athlete}" selected>${r.athlete} (listede yok)</option>` : ''}
+      ${currentNotInRoster ? `<option value="${esc(r.athlete)}" selected>${esc(r.athlete)} (listede yok)</option>` : ''}
       ${opts}
     </select>`;
   }
-  return `<input class="name-input" list="athleteDatalist" placeholder="Sporcu adı" data-row="${r.id}" data-field="athlete" value="${(r.athlete||'').replace(/"/g,'&quot;')}">`;
+  return `<input class="name-input" list="athleteDatalist" placeholder="Sporcu adı" data-row="${esc(r.id)}" data-field="athlete" value="${esc(r.athlete)}">`;
 }
 function findSessionFor(templateId, date){
   return MANUAL.sessions.find(s=>s.templateId===templateId && s.date===date);
@@ -1371,12 +1461,12 @@ function renderEntryBox(){
     return `<tr>${tds}</tr>`;
   }).join('');
   wrap.innerHTML = `<div class="entry-box">
-    <h4>Kayıt — ${t.name}</h4>
+    <h4>Kayıt — ${esc(t.name)}</h4>
     ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
       ${t.family==='tekrarli' ? `<div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="entryReps" min="1" value="${repsForEntry}" style="max-width:90px;"></div>` : ''}
-      <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. 350/200/100/50, sadece kol vb." value="${existingSession && existingSession.note ? existingSession.note.replace(/"/g,'&quot;') : ''}"></div>
+      <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. 350/200/100/50, sadece kol vb." value="${existingSession && existingSession.note ? esc(existingSession.note) : ''}"></div>
     </div>
     <div style="overflow-x:auto;">
       <table class="grid">
@@ -1506,11 +1596,11 @@ function renderRpSetEntryBox(){
     return `<tr>${tds}</tr>`;
   }).join('');
   wrap.innerHTML = `<div class="entry-box">
-    <h4>Kayıt — ${t.name}</h4>
+    <h4>Kayıt — ${esc(t.name)}</h4>
     ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
-      <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. sabah antrenmanı" value="${existingSession && existingSession.note ? existingSession.note.replace(/"/g,'&quot;') : ''}"></div>
+      <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. sabah antrenmanı" value="${existingSession && existingSession.note ? esc(existingSession.note) : ''}"></div>
     </div>
     <div style="font-weight:700; color:var(--navy); font-size:13px; margin:14px 0 6px;">Set Yapısı (Basamaklar)</div>
     <div style="overflow-x:auto; margin-bottom:6px;">
@@ -1642,7 +1732,7 @@ function openQuickAdd(){
   if(!names.length){ alert('Sporcu listesi boş. Önce "Sporcu Ekle / Çıkar" ile isim ekle.'); return; }
   $('#quickAddList').innerHTML = names.map((n,i)=>`<label class="pick-row">
       <input type="checkbox" data-qa="${i}" ${used.has(n)?'checked disabled':''}>
-      <span>${n}${used.has(n)?' (zaten eklendi)':''}</span>
+      <span>${esc(n)}${used.has(n)?' (zaten eklendi)':''}</span>
     </label>`).join('');
   $('#quickAddOverlay').dataset.names = JSON.stringify(names);
   $('#quickAddOverlay').classList.add('show');
@@ -1849,7 +1939,7 @@ function renderSessionList(){
     const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${ACTIVE_PROTO.config.dist}m` : '';
     const intervalPart = s.interval ? `İnterval: ${s.interval}` : '';
     const topLine = (repsDistStr || intervalPart) ? `<div class="s-interval">${[repsDistStr, intervalPart].filter(Boolean).join(' · ')}</div>` : '';
-    const noteLine = s.note ? `<div class="s-note">${s.note}</div>` : '';
+    const noteLine = s.note ? `<div class="s-note">${esc(s.note)}</div>` : '';
     return `<div class="session-card">
       <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
       ${topLine}
@@ -1952,10 +2042,10 @@ function openManualDetail(sessionId){
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th><th class="detail-action-col"></th></tr>`;
   currentSessionAthletes.forEach(a=>{
-    html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
+    html += `<tr><td style="font-weight:600; text-align:left;">${esc(a.athlete)}</td>`;
     html += renderRowCellsHtml(cols, a);
     html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, repsN).text}</td>`;
-    html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${a.athlete.replace(/"/g,'&quot;')}" title="Sporcuyu çıkar">✕</button></td>`;
+    html += `<td class="detail-action-col"><button class="rm-row-btn" data-rmath="${esc(a.athlete)}" title="Sporcuyu çıkar">✕</button></td>`;
     html += `</tr>`;
   });
   html += `</table></div>`;
@@ -2102,7 +2192,7 @@ function populateCmpProtos(side){
     $(`#cmpAthlete${side}`).innerHTML = `<option value="">—</option>`;
     return;
   }
-  sel.innerHTML = templatesWithData.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
+  sel.innerHTML = templatesWithData.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
 }
 function populateCmpDates(side){
   const protoId = $(`#cmpProto${side}`).value;
@@ -2113,14 +2203,14 @@ function populateCmpDates(side){
     $(`#cmpAthlete${side}`).innerHTML = `<option value="">—</option>`;
     return;
   }
-  dateSel.innerHTML = sessions.map(s=>`<option value="${s.id}">${sessionLabel(s)} · ${s.athletes.length} sporcu</option>`).join('');
+  dateSel.innerHTML = sessions.map(s=>`<option value="${esc(s.id)}">${esc(sessionLabel(s))} · ${s.athletes.length} sporcu</option>`).join('');
   populateCmpAthletes(side);
 }
 function populateCmpAthletes(side){
   const s = MANUAL.sessions.find(x=>x.id===$(`#cmpDate${side}`).value);
   const athSel = $(`#cmpAthlete${side}`);
   if(!s || !s.athletes.length){ athSel.innerHTML = `<option value="">Sporcu yok</option>`; return; }
-  athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${a.athlete}</option>`).join('');
+  athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${esc(a.athlete)}</option>`).join('');
 }
 function renderSingleRowTable(t, row, label, steps, repsOverride){
   const cols = buildColumns(t, steps, repsOverride);
@@ -2128,12 +2218,12 @@ function renderSingleRowTable(t, row, label, steps, repsOverride){
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
-  html += `<tr><td class="who">${label}</td>`;
+  html += `<tr><td class="who">${esc(label)}</td>`;
   cols.forEach(c=>{
     let v = row[c.key];
     if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
     else if(v===undefined || v===''){ v = '—'; }
-    html += `<td>${v}</td>`;
+    html += `<td>${esc(v)}</td>`;
   });
   html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps,repsOverride).text}</td></tr></table></div>`;
   return html;
@@ -2291,7 +2381,7 @@ function populateApProtoChecks(){
   const protos = bulk ? allProtocolsWithData() : protocolsForAthlete($('#apAthlete').value);
   if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; $('#apDateField').style.display='none'; return; }
   box.innerHTML = protos.map(t=>`<label style="display:flex; align-items:center; gap:6px; padding:3px 0; font-size:13px; font-weight:400; cursor:pointer;">
-    <input type="checkbox" class="apProtoCheck" value="${t.id}"> ${t.name}
+    <input type="checkbox" class="apProtoCheck" value="${esc(t.id)}"> ${esc(t.name)}
   </label>`).join('');
   box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', ()=>{ populateApDateChecks(); updateApTargetFieldVisibility(); renderAthleteProgress(); }));
   populateApDateChecks();
@@ -2525,7 +2615,7 @@ function renderRowCellsHtml(cols, rowData){
       return `<td>${mainTxt}</td>`;
     }
     if(v===undefined || v===''){ v = '—'; }
-    return `<td>${v}</td>`;
+    return `<td>${esc(v)}</td>`;
   }).join('');
 }
 // Tüm tekrar/adım değerlerini gösteren çizgi grafiği: X ekseni = testin
@@ -2759,7 +2849,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
   protoEntries.forEach(pe=>{
     const t = pe.t, entries = pe.entries;
     titleParts.push(t.name);
-    html += `<h4 style="color:var(--navy); margin:18px 0 4px;">${athlete} — ${t.name}</h4>
+    html += `<h4 style="color:var(--navy); margin:18px 0 4px;">${esc(athlete)} — ${esc(t.name)}</h4>
     <div style="font-size:12px; color:#647680; margin-bottom:10px;">${entries.length} kayıt · ${new Date(entries[0].session.date).toLocaleDateString('tr-TR')} → ${new Date(entries[entries.length-1].session.date).toLocaleDateString('tr-TR')}</div>`;
     html += `<div style="overflow-x:auto; margin-top:4px;"><table class="detail-table"><tr><th>Tarih</th>`;
     if(t.family==='rpset'){
@@ -2821,20 +2911,20 @@ function renderBulkProtocols(protoIds, wrap){
       const series = names.map((name, idx)=> ({ label:name, color: AP_COLOR_PALETTE[idx % AP_COLOR_PALETTE.length], points: athleteMap.get(name) }));
       if(series.length) chartHtml = renderMultiTrendSvg(series, t.family==='kumulatif');
     }
-    html += `<h4 style="color:var(--navy); margin:16px 0 6px;">${t.name}</h4>`;
+    html += `<h4 style="color:var(--navy); margin:16px 0 6px;">${esc(t.name)}</h4>`;
     sessions.forEach(s=>{
       const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
       const sessRepsN = repsForSession(t,s);
       const cols = buildColumns(t, steps, sessRepsN);
       const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${t.config.dist}m — ` : '';
       const allAthletes = s.athletes || [];
-      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? s.note+' — ' : ''}${allAthletes.length} sporcu</div>`;
+      html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? esc(s.note)+' — ' : ''}${allAthletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);
       html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
       cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
       html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ort.' : 'Ortalama')}</th></tr>`;
       allAthletes.forEach(a=>{
-        html += `<tr><td style="font-weight:600; text-align:left;">${a.athlete}</td>`;
+        html += `<tr><td style="font-weight:600; text-align:left;">${esc(a.athlete)}</td>`;
         html += renderRowCellsHtml(cols, a);
         html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t, a, steps, sessRepsN).text}</td></tr>`;
       });
@@ -2880,6 +2970,97 @@ $('#btnAthleteProgressOpen').onclick = ()=>{
   $('#athleteProgressOverlay').classList.add('show');
 };
 $('#btnCloseAthleteProgress').onclick = ()=> $('#athleteProgressOverlay').classList.remove('show');
+
+// ========== DASHBOARD ==========
+function renderDashboard() {
+  const athletes = new Set();
+  MANUAL.sessions.forEach(s => {
+    (s.athletes || []).forEach(a => athletes.add(a.athlete));
+  });
+
+  $('#dbStatAthletes').textContent = athletes.size;
+  $('#dbStatRecords').textContent = MANUAL.sessions.length;
+  $('#dbStatProtos').textContent = MANUAL.templates.length;
+
+  const latestDate = MANUAL.sessions.map(s => new Date(s.date)).sort((a, b) => b - a)[0];
+  $('#dbStatLastDate').textContent = latestDate ? latestDate.toLocaleDateString('tr-TR') : '—';
+
+  // Ayak Test - En İyi 7
+  const ayakBest = {};
+  MANUAL.sessions.forEach(s => {
+    const proto = MANUAL.templates?.find(t => t.id === s.templateId);
+    if (proto?.family !== 'ayak') return;
+    s.athletes.forEach(a => {
+      const d400 = parseTimeStr(a.d400);
+      if (d400 !== null && (!ayakBest[a.athlete] || d400 < ayakBest[a.athlete])) {
+        ayakBest[a.athlete] = d400;
+      }
+    });
+  });
+  let html = '';
+  Object.entries(ayakBest).sort((a, b) => a[1] - b[1]).slice(0, 7).forEach(([name, time], idx) => {
+    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
+    html += `<div style="background:#f9f9f9; padding:12px; border-radius:4px; text-align:center; border-left:3px solid #0f7c8c;">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px;">${medal}</div>
+      <strong style="display:block; margin-bottom:4px; font-size:13px;">${name}</strong>
+      <div style="color:#0f7c8c; font-weight:700; font-size:14px;">${fmtTime(time)}</div>
+    </div>`;
+  });
+  $('#dbBestAyak').innerHTML = html || '<small style="color:#8a97a0;">Veri yok</small>';
+
+  // NX100 - En İyi 7
+  const nx100Best = {};
+  MANUAL.sessions.forEach(s => {
+    const proto = MANUAL.templates?.find(t => t.id === s.templateId);
+    if (proto?.family !== 'tekrarli' || proto.config.dist !== 100) return;
+    s.athletes.forEach(a => {
+      const reps = [];
+      for (let i = 1; i <= proto.config.reps; i++) {
+        const sec = parseTimeStr(a[`rep${i}`]);
+        if (sec !== null) reps.push(sec);
+      }
+      const avg = reps.length ? reps.reduce((a, b) => a + b, 0) / reps.length : null;
+      if (avg !== null && (!nx100Best[a.athlete] || avg < nx100Best[a.athlete])) {
+        nx100Best[a.athlete] = avg;
+      }
+    });
+  });
+  html = '';
+  Object.entries(nx100Best).sort((a, b) => a[1] - b[1]).slice(0, 7).forEach(([name, time], idx) => {
+    const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1);
+    html += `<div style="background:#f9f9f9; padding:12px; border-radius:4px; text-align:center; border-left:3px solid #f2941a;">
+      <div style="font-size:18px; font-weight:700; margin-bottom:4px;">${medal}</div>
+      <strong style="display:block; margin-bottom:4px; font-size:13px;">${name}</strong>
+      <div style="color:#f2941a; font-weight:700; font-size:14px;">${fmtTime(time)}</div>
+    </div>`;
+  });
+  $('#dbBestNX100').innerHTML = html || '<small style="color:#8a97a0;">Veri yok</small>';
+
+  // Son test yapanlar
+  const athleteLastDate = {};
+  MANUAL.sessions.forEach(s => {
+    const date = new Date(s.date);
+    s.athletes.forEach(a => {
+      if (!athleteLastDate[a.athlete] || date > athleteLastDate[a.athlete]) {
+        athleteLastDate[a.athlete] = date;
+      }
+    });
+  });
+  html = '';
+  Object.entries(athleteLastDate).sort((a, b) => b[1] - a[1]).slice(0, 6).forEach(([name, date]) => {
+    const daysAgo = Math.floor((Date.now() - date) / (1000 * 60 * 60 * 24));
+    const dateStr = daysAgo === 0 ? 'Bugün' : daysAgo === 1 ? 'Dün' : `${daysAgo} gün`;
+    html += `<div style="background:#f9f9f9; padding:10px; border-radius:4px; text-align:center;"><strong>${name}</strong><br><small style="color:#0f7c8c; font-weight:600;">${dateStr}</small></div>`;
+  });
+  $('#dbRecentAthletes').innerHTML = html || '<small style="color:#8a97a0;">Veri yok</small>';
+}
+
+$('#btnDashboardOpen').onclick = ()=>{
+  renderDashboard();
+  $('#dashboardOverlay').classList.add('show');
+};
+$('#btnCloseDashboard').onclick = ()=> $('#dashboardOverlay').classList.remove('show');
+
 $('#apAthlete').addEventListener('change', ()=>{ populateApProtoChecks(); renderAthleteProgress(); });
 $('#apModeAthlete').addEventListener('change', updateApModeUI);
 $('#apModeBulk').addEventListener('change', updateApModeUI);

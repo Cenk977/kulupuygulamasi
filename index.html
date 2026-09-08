@@ -1,770 +1,394 @@
 <!DOCTYPE html>
-
 <html lang="tr">
-
 <head>
-
 <meta charset="UTF-8">
-
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Kulüp Performans Sistemi</title>
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
-
 <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
 <!-- Sezon planı Excel içe aktarması -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <!-- Sezon planı degisikliklerini secilen orijinal Excel dosyasina (bicimlendirme/renkler korunarak) geri yazmak icin -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
-
 <!-- test_kayitlari.html, sporcu_goruntule.html ve index.html ile ortak
      Firebase REST yardımcıları (rtdbGetShared/rtdbSetShared) — aynı
      klasörde bulunmalı. -->
+<script src="firebase-config.js"></script>
 <script src="firebase-rtdb-helpers.js"></script>
-
 <style>
-
   :root{
-
     --pool-900:#0b2e3c;
-
     --pool-700:#114a5e;
-
     --pool-500:#1c6e88;
-
     --lane-coral:#e8551f;
-
     --lane-coral-dim:#c8441a;
-
     --foam:#1a2e35;
-
     --foam-dim:#6b6358;
-
     --ink:#1a2e35;
-
     --card-bg:#fffdf9;
-
     --good:#2f8a57;
-
     --warn:#b97c12;
-
     --bad:#c23f2e;
-
     --radius:2px;
-
   }
-
   *{box-sizing:border-box;}
-
   html,body{margin:0;padding:0;}
-
   body{
-
     background:#f3eee3;
-
     background-image:
-
       repeating-linear-gradient(180deg, rgba(11,46,60,0.025) 0px, rgba(11,46,60,0.025) 1px, transparent 1px, transparent 48px);
-
     color:var(--ink);
-
     font-family:'Archivo', sans-serif;
-
     min-height:100vh;
-
     -webkit-font-smoothing:antialiased;
-
   }
-
   .wrap{max-width:920px; margin:0 auto; padding:28px 20px 80px;}
 
-
-
   /* HEADER */
-
   header.top{
-
     display:flex; align-items:flex-end; justify-content:space-between;
-
     border-bottom:3px solid var(--lane-coral);
-
     padding-bottom:18px; margin-bottom:28px;
-
     gap:16px; flex-wrap:wrap;
-
   }
-
   .brandline{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;}
-
   .lap-no{
-
     font-family:'JetBrains Mono', monospace;
-
     font-size:13px; letter-spacing:0.12em; color:var(--lane-coral);
-
     border:1px solid var(--lane-coral); padding:3px 8px; border-radius:var(--radius);
-
   }
-
   h1{
-
     font-family:'Archivo Black', sans-serif;
-
     font-size:clamp(24px,4.2vw,34px);
-
     line-height:1.05;
-
     margin:6px 0 0;
-
     letter-spacing:-0.01em;
-
   }
-
   .sub{font-size:13px; color:var(--foam-dim); margin-top:6px; max-width:520px;}
-
   .clubmark{
-
     font-family:'JetBrains Mono', monospace; font-size:11px; text-align:right;
-
     color:var(--foam-dim); line-height:1.5; white-space:nowrap;
-
   }
-
-
 
   .backup-bar{display:flex; gap:8px; flex-wrap:wrap; width:100%; justify-content:flex-end; order:3;}
-
   .backup-btn{font-size:11px; padding:8px 12px; white-space:nowrap;}
 
-
-
-
-
   /* TABS as lane numbers */
-
   .lanes{display:flex; gap:6px; margin-bottom:22px; overflow-x:auto; padding-bottom:2px;}
-
   .lane-btn{
-
     flex:1 1 auto; min-width:fit-content;
-
     background:transparent; border:1px solid rgba(26,46,53,0.25);
-
     color:var(--foam-dim); font-family:'JetBrains Mono',monospace;
-
     font-size:11.5px; letter-spacing:0.04em; padding:10px 12px;
-
     cursor:pointer; border-radius:var(--radius); text-align:left;
-
     transition:all .15s ease; position:relative;
-
   }
-
   .lane-btn .num{
-
     display:inline-block; font-family:'Archivo Black',sans-serif; font-size:15px;
-
     color:var(--foam); margin-right:8px;
-
   }
-
   .lane-btn.active{
-
     border-color:var(--lane-coral); background:rgba(232,85,31,0.1); color:var(--foam);
-
   }
-
   .lane-btn.active .num{color:var(--lane-coral);}
-
   .lane-btn:hover:not(.active){border-color:rgba(26,46,53,0.5);}
 
-
-
   /* PANEL CARD */
-
   .panel{
-
     background:#fffdf9;
-
     border:1px solid rgba(26,46,53,0.15);
-
     box-shadow:0 1px 3px rgba(26,46,53,0.05);
-
     border-radius:var(--radius);
-
     padding:24px 22px;
-
     margin-bottom:18px;
-
   }
-
   .panel-head{display:flex; align-items:baseline; gap:10px; margin-bottom:4px;}
-
   .panel-head .tag{
-
     font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--lane-coral);
-
     letter-spacing:0.08em;
-
   }
-
   .panel h2{
-
     font-family:'Archivo Black',sans-serif; font-size:18px; margin:2px 0 4px; letter-spacing:-0.01em;
-
   }
-
   .panel .desc{font-size:12.5px; color:var(--foam-dim); margin-bottom:18px; line-height:1.5;}
 
-
-
   .field{margin-bottom:16px;}
-
   .field label{
-
     display:block; font-size:12px; font-weight:600; margin-bottom:6px;
-
     color:var(--foam); letter-spacing:0.01em;
-
   }
-
   .field .hint{font-size:11.5px; color:var(--foam-dim); margin-top:4px; line-height:1.4;}
-
   input[type=text], input[type=number], textarea, select{
-
     width:100%; background:rgba(255,255,255,0.7); border:1px solid rgba(26,46,53,0.22);
-
     color:var(--foam); font-family:'Archivo',sans-serif; font-size:13.5px;
-
     padding:9px 10px; border-radius:var(--radius); outline:none;
-
   }
-
   input::placeholder, textarea::placeholder{color:rgba(26,46,53,0.35);}
-
   textarea{resize:vertical; min-height:64px; line-height:1.5;}
-
   input:focus, textarea:focus, select:focus{border-color:var(--lane-coral); box-shadow:0 0 0 3px rgba(232,85,31,0.15);}
 
-
-
   .row2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
-
   @media (max-width:560px){.row2{grid-template-columns:1fr;}}
 
-
-
   /* checkbox grid for "geçen sezon neler yanlış gitti" */
-
   .check-grid{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;}
-
   @media (max-width:560px){.check-grid{grid-template-columns:1fr;}}
-
   .check-item{
-
     display:flex; align-items:center; gap:8px; font-size:13px;
-
     border:1px solid rgba(26,46,53,0.15); padding:8px 10px; border-radius:var(--radius);
-
     background:rgba(255,255,255,0.5); cursor:pointer;
-
   }
-
   .check-item input{width:auto; accent-color:var(--lane-coral); margin:0;}
-
   .check-item.checked{border-color:var(--lane-coral); background:rgba(232,85,31,0.08);}
 
-
-
   /* rating sliders for kondisyon/teknik/zihinsel/taktik */
-
   .rate-row{
-
     display:grid; grid-template-columns:140px 1fr 34px; align-items:center; gap:12px; margin-bottom:14px;
-
   }
-
   @media (max-width:560px){.rate-row{grid-template-columns:1fr; gap:6px;}}
-
   .rate-row label{margin-bottom:0; font-size:12.5px;}
-
   .rate-row input[type=range]{accent-color:var(--lane-coral); width:100%;}
-
   .rate-val{
-
     font-family:'JetBrains Mono',monospace; font-size:14px; text-align:center;
-
     color:var(--lane-coral); font-weight:600;
-
   }
-
-
 
   /* dynamic list (goals, strengths, weaknesses) */
-
   .dyn-list{display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
-
   .dyn-row{display:flex; gap:8px;}
-
   .dyn-row input{flex:1;}
-
   .dyn-row button{
-
     background:transparent; border:1px solid rgba(194,63,46,0.5); color:var(--bad);
-
     width:34px; border-radius:var(--radius); cursor:pointer; font-size:14px; flex-shrink:0;
-
   }
-
   .dyn-row button:hover{background:rgba(194,63,46,0.15);}
-
   .add-btn{
-
     background:transparent; border:1px dashed rgba(26,46,53,0.35); color:var(--foam-dim);
-
     padding:8px 12px; border-radius:var(--radius); cursor:pointer; font-size:12px;
-
     font-family:'JetBrains Mono',monospace; letter-spacing:0.03em; align-self:flex-start;
-
   }
-
   .add-btn:hover{border-color:var(--lane-coral); color:var(--lane-coral);}
 
-
-
   /* nav buttons */
-
   .nav-row{display:flex; justify-content:space-between; gap:10px; margin-top:8px; flex-wrap:wrap;}
-
   .btn{
-
     font-family:'Archivo',sans-serif; font-weight:700; font-size:13px;
-
     padding:11px 20px; border-radius:var(--radius); cursor:pointer; border:none;
-
     letter-spacing:0.01em;
-
   }
-
   .btn-primary{background:var(--lane-coral); color:#fffdf9;}
-
   .btn-primary:hover{background:var(--lane-coral-dim);}
-
   .btn-ghost{background:transparent; border:1px solid rgba(26,46,53,0.3); color:var(--foam);}
-
   .btn-ghost:hover{border-color:var(--foam); background:rgba(26,46,53,0.04);}
-
   .btn:disabled{opacity:0.35; cursor:not-allowed;}
 
-
-
   /* save bar */
-
   .savebar{
-
     display:flex; justify-content:flex-end; gap:10px; margin-top:6px;
-
   }
-
-
 
   /* SAVED LIST (lap board) */
-
   .board-head{
-
     display:flex; justify-content:space-between; align-items:baseline; margin:36px 0 14px;
-
     border-bottom:1px solid rgba(26,46,53,0.18); padding-bottom:10px;
-
   }
-
   .board-head h2{font-family:'Archivo Black',sans-serif; font-size:16px; margin:0;}
-
   .board-head .count{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--foam-dim);}
 
-
-
   .empty{
-
     border:1px dashed rgba(26,46,53,0.2); border-radius:var(--radius);
-
     padding:30px 20px; text-align:center; color:var(--foam-dim); font-size:13px;
-
   }
-
-
 
   .athlete-card{
-
     background:#fffdf9; border:1px solid rgba(26,46,53,0.15);
-
     box-shadow:0 1px 3px rgba(26,46,53,0.05);
-
     border-left:3px solid var(--lane-coral); border-radius:var(--radius);
-
     padding:16px 18px; margin-bottom:10px; cursor:pointer; transition:background .15s;
-
   }
-
   .athlete-card:hover{background:#fbf7ee;}
-
   .ac-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap;}
-
   .ac-name{font-family:'Archivo Black',sans-serif; font-size:16px;}
-
   .ac-meta{font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--foam-dim);}
-
   .ac-summary{display:flex; gap:16px; margin-top:10px; flex-wrap:wrap;}
-
   .ac-stat{font-size:11px; color:var(--foam-dim);}
-
   .ac-stat b{display:block; font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--foam); font-weight:600;}
-
   .ac-actions{display:flex; gap:8px; margin-top:12px;}
-
   .ac-actions button{
-
     font-family:'JetBrains Mono',monospace; font-size:11px; background:transparent;
-
     border:1px solid rgba(26,46,53,0.25); color:var(--foam-dim); padding:6px 10px;
-
     border-radius:var(--radius); cursor:pointer;
-
   }
-
   .ac-actions button:hover{border-color:var(--lane-coral); color:var(--lane-coral);}
-
   .ac-actions button.del:hover{border-color:var(--bad); color:var(--bad);}
 
-
-
   /* detail view */
-
   .detail-section{margin-bottom:16px;}
-
   .detail-section h3{
-
     font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.08em;
-
     color:var(--lane-coral); margin:0 0 8px; text-transform:uppercase;
-
   }
-
   .detail-section p, .detail-section li{font-size:13px; line-height:1.6; color:var(--foam);}
-
   .detail-section ul{margin:0; padding-left:18px;}
-
   .pill-row{display:flex; gap:8px; flex-wrap:wrap;}
-
   .pill{
-
     font-family:'JetBrains Mono',monospace; font-size:11px; border:1px solid rgba(26,46,53,0.25);
-
     padding:4px 9px; border-radius:var(--radius); color:var(--foam-dim);
-
   }
-
   .pill.bad{border-color:rgba(194,63,46,0.5); color:var(--bad);}
 
-
-
   .toast{
-
     position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px);
-
     background:var(--lane-coral); color:#fffdf9; font-weight:700; font-size:13px;
-
     padding:11px 22px; border-radius:var(--radius); opacity:0; transition:all .25s ease;
-
     pointer-events:none; z-index:50; white-space:nowrap;
-
   }
-
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
-
-
 
   .loading-note{font-size:12px; color:var(--foam-dim); text-align:center; padding:20px;}
 
-
-
   ::-webkit-scrollbar{height:6px;}
-
   ::-webkit-scrollbar-thumb{background:rgba(26,46,53,0.2); border-radius:3px;}
 
-
-
   @media (prefers-reduced-motion: reduce){
-
     *{transition:none !important;}
-
   }
 
-
-
   /* MODE TABS */
-
   .mode-tabs{display:flex; gap:0; margin-bottom:22px; border-bottom:2px solid rgba(26,46,53,0.12); overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:thin;}
   @media (max-width:720px){
     .mode-tabs{flex-wrap:wrap; overflow-x:visible;}
     .mode-tabs .mode-tab{flex:1 1 auto; text-align:center;}
   }
-
   .mode-tab{
-
     background:transparent; border:none; font-family:'Archivo Black',sans-serif;
-
     font-size:14px; padding:10px 18px 14px; cursor:pointer; color:var(--foam-dim);
-
     border-bottom:3px solid transparent; margin-bottom:-2px; letter-spacing:-0.01em;
     flex-shrink:0; white-space:nowrap;
-
   }
-
   .mode-tab.active{color:var(--lane-coral); border-bottom-color:var(--lane-coral);}
-
   .mode-tab:hover:not(.active){color:var(--ink);}
-
   .btn-ghost{margin:0 8px 8px 0;}
 
-
-
   /* CALENDAR */
-
   .att-summary{display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
-
   .att-stat-card{
-
     background:#fffdf9; border:1px solid rgba(26,46,53,0.15); border-radius:var(--radius);
-
     padding:12px 16px; min-width:120px; box-shadow:0 1px 3px rgba(26,46,53,0.05);
-
   }
-
   .att-stat-card .lbl{font-size:11px; color:var(--foam-dim); font-family:'JetBrains Mono',monospace; letter-spacing:0.03em;}
-
   .att-stat-card .val{font-family:'Archivo Black',sans-serif; font-size:22px; margin-top:2px;}
-
   .att-stat-card .val.pos{color:var(--good);}
-
   .att-stat-card .val.neg{color:var(--bad);}
 
-
-
   .calendar{
-
     display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin-bottom:18px;
-
   }
-
   .cal-dow{
-
     font-family:'JetBrains Mono',monospace; font-size:10.5px; text-align:center;
-
     color:var(--foam-dim); padding-bottom:4px; letter-spacing:0.04em;
-
   }
-
   .cal-day{
-
     aspect-ratio:1; background:#fffdf9; border:1px solid rgba(26,46,53,0.14);
-
     border-radius:var(--radius); cursor:pointer; padding:6px 5px; position:relative;
-
     display:flex; flex-direction:column; justify-content:space-between;
-
     transition:border-color .12s, background .12s;
-
   }
-
   .cal-day:hover{border-color:var(--lane-coral);}
-
   .cal-day.empty-cell{visibility:hidden; cursor:default;}
-
   .cal-day.future{opacity:0.45;}
-
   .cal-day .dnum{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--foam-dim);}
-
   .cal-day.geldi{border-left:3px solid var(--good);}
-
   .cal-day.gelmedi{border-left:3px solid var(--bad); background:rgba(194,63,46,0.05);}
-
   .cal-day .dscore{
-
     font-family:'Archivo Black',sans-serif; font-size:15px; align-self:flex-end;
-
   }
-
   .cal-day .dscore.pos{color:var(--good);}
-
   .cal-day .dscore.neg{color:var(--bad);}
-
   .cal-day .dscore.zero{color:var(--foam-dim);}
-
   .cal-day .dabsent{
-
     font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--bad);
-
     align-self:flex-end; letter-spacing:0.02em;
-
   }
-
   .cal-day .ddots{display:flex; gap:2px; flex-wrap:wrap;}
-
   .cal-day .ddot{width:5px; height:5px; border-radius:50%;}
-
   .cal-day .ddot.pos{background:var(--good);}
-
   .cal-day .ddot.neg{background:var(--bad);}
 
-
-
   .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--foam-dim);}
-
   .legend-item{display:flex; align-items:center; gap:5px;}
-
   .legend-dot{width:8px; height:8px; border-radius:50%;}
 
-
-
   /* MODAL */
-
   .modal-overlay{
-
     display:none; position:fixed; inset:0; background:rgba(26,46,53,0.55);
-
     z-index:100; align-items:center; justify-content:center; padding:16px;
-
   }
-
   .modal-overlay.show{display:flex;}
-
   .modal-box{
-
     background:#fffdf9; border-radius:var(--radius); max-width:480px; width:100%;
-
     max-height:88vh; overflow-y:auto; padding:22px 22px 24px;
-
     box-shadow:0 12px 40px rgba(26,46,53,0.25);
-
   }
-
   .modal-head{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px;}
-
   .modal-date{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--lane-coral); letter-spacing:0.04em;}
-
   .modal-name{font-family:'Archivo Black',sans-serif; font-size:18px; margin-top:2px;}
-
   .modal-close{
-
     background:transparent; border:none; font-size:22px; line-height:1; color:var(--foam-dim);
-
     cursor:pointer; padding:0 4px;
-
   }
-
   .modal-close:hover{color:var(--ink);}
 
-
-
   .modal-attend-toggle{display:flex; gap:8px; margin-bottom:18px;}
-
   .att-toggle-btn{
-
     flex:1; font-family:'Archivo',sans-serif; font-weight:700; font-size:12.5px;
-
     padding:10px 8px; border-radius:var(--radius); cursor:pointer;
-
     border:1px solid rgba(26,46,53,0.25); background:transparent; color:var(--foam-dim);
-
   }
-
   .att-toggle-btn[data-val="geldi"].active{background:var(--good); border-color:var(--good); color:#fffdf9;}
-
   .att-toggle-btn[data-val="gelmedi"].active{background:var(--bad); border-color:var(--bad); color:#fffdf9;}
-
   .att-toggle-btn[data-val=""].active{background:rgba(26,46,53,0.12); border-color:rgba(26,46,53,0.3); color:var(--ink);}
 
-
-
   .tag-grid{display:flex; flex-direction:column; gap:8px; margin-bottom:14px;}
-
   .tag-opt{
-
     display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:var(--radius);
-
     border:1px solid rgba(26,46,53,0.16); cursor:pointer; font-size:13px;
-
   }
-
   .tag-opt input{accent-color:var(--lane-coral); width:auto; margin:0; flex-shrink:0;}
-
   .tag-opt .tag-label{flex:1;}
-
   .tag-opt .tag-pts{font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600;}
-
   .tag-opt.pos{border-color:rgba(47,138,87,0.3);}
-
   .tag-opt.pos .tag-pts{color:var(--good);}
-
   .tag-opt.neg{border-color:rgba(194,63,46,0.3);}
-
   .tag-opt.neg .tag-pts{color:var(--bad);}
-
   .tag-opt.selected.pos{background:rgba(47,138,87,0.08);}
-
   .tag-opt.selected.neg{background:rgba(194,63,46,0.08);}
 
-
-
   .modal-score-line{
-
     font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600;
-
     text-align:center; padding:10px; border-radius:var(--radius); background:rgba(26,46,53,0.04);
-
   }
-
-
 
   .tag-edit-list{display:flex; flex-direction:column; gap:8px; margin-bottom:10px;}
-
   .tag-edit-row{display:flex; gap:8px; align-items:center;}
-
   .tag-edit-row select{width:90px; flex-shrink:0;}
-
   .tag-edit-row input[type=text]{flex:1;}
-
   .tag-edit-row input[type=number]{width:64px; flex-shrink:0; text-align:center;}
-
   .tag-edit-row button{
-
     background:transparent; border:1px solid rgba(194,63,46,0.5); color:var(--bad);
-
     width:32px; height:36px; border-radius:var(--radius); cursor:pointer; font-size:14px; flex-shrink:0;
-
   }
 
-
-
   /* BULK DAY ATTENDANCE (Güne Göre Toplu İşaretle) */
-
   .bulk-date-row{display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:18px;}
-
   .bulk-date-row .field{margin-bottom:0; flex:1; min-width:180px;}
-
   .bulk-daylabel{
     font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--lane-coral);
     border:1px solid var(--lane-coral); padding:8px 12px; border-radius:var(--radius);
     white-space:nowrap; letter-spacing:0.03em;
   }
-
   .session-tabs{display:flex; gap:6px; margin-bottom:16px; overflow-x:auto; flex-wrap:wrap;}
   .session-tab{
     flex:1 1 auto; min-width:fit-content; background:transparent;
@@ -777,7 +401,6 @@
     display:inline-block; margin-left:5px; font-family:'Archivo',sans-serif; font-size:10px;
     color:var(--good);
   }
-
   .bulk-athlete-row{
     display:grid; grid-template-columns:1fr auto; align-items:center; gap:12px;
     padding:11px 12px; border:1px solid rgba(26,46,53,0.14); border-radius:var(--radius);
@@ -816,136 +439,71 @@
   }
   .bulk-empty-note{font-size:12.5px; color:var(--foam-dim); text-align:center; padding:24px 0;}
 
-
-
   /* PDF EXPORT BUTTON */
-
   .pdf-btn{
-
     font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.03em;
-
     background:transparent; border:1px solid var(--pool-700); color:var(--pool-700);
-
     padding:8px 13px; border-radius:var(--radius); cursor:pointer;
-
     display:inline-flex; align-items:center; gap:6px;
-
   }
-
   .pdf-btn:hover{background:rgba(17,74,94,0.08); border-color:var(--pool-500);}
-
   .pdf-btn:disabled{opacity:0.4; cursor:not-allowed;}
-
   .pdf-btn svg{width:13px; height:13px; flex-shrink:0;}
 
-
-
   /* PDF RENDER TEMPLATE (off-screen; rendered to canvas for export) */
-
   #pdfRenderRoot{
-
     position:fixed; left:-99999px; top:0; width:780px; z-index:-1;
-
   }
-
   .pdf-doc{
-
     background:#ffffff; color:#1a2e35; font-family:'Archivo',Arial,sans-serif;
-
     width:780px; padding:46px 50px 60px;
-
   }
-
   .pdf-doc.landscape{
-
     width:1500px; padding:22px 40px 26px;
-
   }
-
   .pdf-doc .pdf-head{
-
     display:flex; justify-content:space-between; align-items:flex-start;
-
     border-bottom:3px solid #e8551f; padding-bottom:16px; margin-bottom:22px;
-
   }
-
   .pdf-doc .pdf-head h1{
-
     font-family:'Archivo Black',Arial,sans-serif; font-size:21px; margin:0 0 5px; letter-spacing:-0.01em;
-
   }
-
   .pdf-doc .pdf-head .pdf-club{font-size:11px; color:#6b6358; line-height:1.5;}
-
   .pdf-doc .pdf-head .pdf-tagbox{
-
     font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#e8551f;
-
     border:1px solid #e8551f; padding:3px 9px; border-radius:2px; white-space:nowrap;
-
   }
-
   .pdf-doc .pdf-meta{
-
     display:flex; gap:22px; flex-wrap:wrap; margin-bottom:24px;
-
     border:1px solid rgba(26,46,53,0.18); border-radius:2px; padding:12px 16px; background:#fbf9f4;
-
   }
-
   .pdf-doc .pdf-meta div{font-size:12px;}
-
   .pdf-doc .pdf-meta b{display:block; font-size:14px; font-family:'Archivo',Arial,sans-serif; font-weight:700;}
-
   .pdf-doc .pdf-meta span{color:#6b6358; font-size:10.5px; font-family:'JetBrains Mono',monospace; letter-spacing:0.03em;}
-
   .pdf-doc h2.pdf-h2{
-
     font-family:'Archivo Black',Arial,sans-serif; font-size:13px; text-transform:uppercase;
-
     letter-spacing:0.04em; color:#e8551f; border-bottom:1px solid rgba(26,46,53,0.18);
-
     padding-bottom:6px; margin:26px 0 12px;
-
   }
-
   .pdf-doc h2.pdf-h2:first-of-type{margin-top:0;}
-
   .pdf-doc p.pdf-p{font-size:12.5px; line-height:1.6; margin:0 0 8px;}
-
   .pdf-doc p.pdf-p b{font-weight:700;}
-
   .pdf-doc ul.pdf-ul{margin:0 0 8px; padding-left:18px; font-size:12.5px; line-height:1.6;}
-
   .pdf-doc table.pdf-table{width:100%; border-collapse:collapse; margin-bottom:6px; font-size:12px;}
-
   .pdf-doc table.pdf-table th, .pdf-doc table.pdf-table td{
-
     border:1px solid rgba(26,46,53,0.2); padding:7px 9px; text-align:left; vertical-align:top;
-
   }
-
   .pdf-doc table.pdf-table th{background:#f3eee3; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:0.02em;}
-
   .pdf-doc table.pdf-table td.num{font-family:'JetBrains Mono',monospace; text-align:center; white-space:nowrap;}
-
   .pdf-doc .pdf-pill-row{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;}
-
   .pdf-doc table.pdf-table-matrix{font-size:9px; table-layout:fixed;}
-
   .pdf-doc table.pdf-table-matrix th, .pdf-doc table.pdf-table-matrix td{padding:3px 1px; text-align:center;}
-
   .pdf-doc table.pdf-table-matrix th.sticky-name, .pdf-doc table.pdf-table-matrix td.sticky-name{
     width:90px; text-align:left; padding-left:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:10px;
   }
-
   .pdf-doc table.pdf-table-matrix th.matrix-day, .pdf-doc table.pdf-table-matrix td.matrix-day{width:auto;}
-
   .pdf-doc table.pdf-table-matrix td.matrix-p{background:#e6f3ea; color:#2f8a57; font-weight:700;}
-
   .pdf-doc table.pdf-table-matrix td.matrix-a{background:#fbe9e6; color:#c23f2e; font-weight:700;}
-
   /* Seans bazlı (Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme) 4 satırlı tablo */
   .pdf-doc table.pdf-table-sess{font-size:8px; table-layout:fixed; border-collapse:collapse; width:100%; line-height:1.1;}
   .pdf-doc table.pdf-table-sess th, .pdf-doc table.pdf-table-sess td{
@@ -969,39 +527,22 @@
   .pdf-doc table.pdf-table-sess tr.sess-block-start td{border-top:2px solid #1a2e35;}
   .pdf-doc table.pdf-table-sess tr.sess-row-kara td.sess-label{color:#114a5e;}
   .pdf-doc table.pdf-table-sess tr.sess-row-yuzme td.sess-label{color:#0f6b8a;}
-
   .pdf-doc .pdf-pill{
-
     font-family:'JetBrains Mono',monospace; font-size:10.5px; border:1px solid rgba(26,46,53,0.3);
-
     padding:3px 8px; border-radius:2px; color:#1a2e35;
-
   }
-
   .pdf-doc .pdf-pill.bad{border-color:#c23f2e; color:#c23f2e;}
-
   .pdf-doc .pdf-pill.good{border-color:#2f8a57; color:#2f8a57;}
-
   .pdf-doc .pdf-empty-note{font-size:12px; color:#6b6358; font-style:italic;}
-
   .pdf-doc .pdf-foot{
-
     margin-top:30px; padding-top:12px; border-top:1px solid rgba(26,46,53,0.18);
-
     font-size:10px; color:#6b6358; font-family:'JetBrains Mono',monospace; letter-spacing:0.02em;
-
     display:flex; justify-content:space-between;
-
   }
-
   .pdf-doc .pdf-score-badge{
-
     font-family:'Archivo Black',Arial,sans-serif; font-size:15px;
-
   }
-
   .pdf-doc .pdf-score-badge.pos{color:#2f8a57;} .pdf-doc .pdf-score-badge.neg{color:#c23f2e;}
-
 
 /* ================= SEZON PLANI MODULU (eklendi) ================= */
 .sp-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:18px 0 6px;flex-wrap:wrap;}
@@ -1026,560 +567,286 @@ td.sp-empty{color:#c3ccd1;}
 .pdf-doc.landscape table.pdf-table-season td{border:1px solid rgba(26,46,53,0.35);padding:3px 4px;vertical-align:top;white-space:pre-wrap;word-break:break-word;line-height:1.2;}
 .pdf-doc.landscape table.pdf-table-season thead td{background:#f3eee3;font-weight:700;font-size:9.5px;}
 </style>
-
 </head>
-
 <body>
-
-
 
 <div class="wrap">
 
-
-
   <header class="top">
-
     <div class="brandline">
-
       <div>
-
         <span class="lap-no">BURSA KOLEJLİLER SPOR KULÜBÜ</span>
-
         <h1>Kulüp<br>Performans Sistemi</h1>
-
         <p class="sub">Antrenman geçmişi, performans değerlendirmesi, yoklama ve sezon planlamasının sporcu bazında tek panoda takibi.</p>
-
       </div>
-
     </div>
-
     <div class="clubmark">BURSA KOLEJLİLER SPOR KULÜBÜ<br>2012–2013 DOĞUMLU GRUP</div>
-
     <div id="authBar" style="display:flex;align-items:center;gap:10px;margin:10px 0;flex-wrap:wrap;">
       <span id="authStatus" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--foam-dim);">Bağlanıyor...</span>
       <button type="button" class="btn btn-ghost backup-btn" id="googleSignInBtn" style="display:none;">🔑 Google ile Giriş Yap</button>
       <button type="button" class="btn btn-ghost backup-btn" id="googleSignOutBtn" style="display:none;">Çıkış Yap</button>
     </div>
-
     <div class="backup-bar">
-
       <button type="button" class="btn btn-ghost backup-btn" id="exportBackupBtn">⭳ Yedek Al (Dışa Aktar)</button>
-
       <button type="button" class="btn btn-ghost backup-btn" id="importBackupBtn">⭱ Yedekten Geri Yükle</button>
-
       <input type="file" id="importBackupFile" accept="application/json,.json" style="display:none;">
-
     </div>
-
   </header>
 
-
-
   <div class="mode-tabs" id="modeTabs">
-
     <button class="mode-tab active" data-mode="eval">Sezon Değerlendirmesi</button>
-
     <button class="mode-tab" data-mode="attendance">Yoklama &amp; Performans</button>
     <button class="mode-tab" data-mode="bulkAtt">Güne Göre Toplu İşaretle</button>
-
     <button class="mode-tab" data-mode="body">Vücut Ölçümleri</button>
-
     <button class="mode-tab" data-mode="teknik">Teknik Eksiklikler</button>
-
     <button class="mode-tab" data-mode="sezonplan">Sezon Planı</button>
-
     <button class="mode-tab" data-mode="swim">SwimAnalyzer</button>
-
     <button class="mode-tab" data-mode="testkayit">Test Kayıtları</button>
   </div>
 
-
-
   <div id="modeEval">
 
-
-
   <div class="lanes" id="lanes">
-
     <button class="lane-btn active" data-step="1"><span class="num">1</span>Antrenman Geçmişi</button>
-
     <button class="lane-btn" data-step="2"><span class="num">2</span>Mevcut Düzey</button>
-
     <button class="lane-btn" data-step="3"><span class="num">3</span>Performans Hedefleri</button>
-
     <button class="lane-btn" data-step="4"><span class="num">4</span>Özet &amp; Kaydet</button>
-
   </div>
-
-
 
   <form id="evalForm">
 
-
-
   <!-- STEP 1: Antrenman Geçmişi -->
-
   <section class="panel step-panel" data-step="1">
-
     <div class="panel-head"><span class="tag">01</span></div>
-
     <h2>Antrenman Geçmişinin Analizi</h2>
-
     <p class="desc">Geçen sezona dönük değerlendirme — Bölüm 8, Uygulama Aşaması referanslı.</p>
 
-
-
     <div class="field">
-
       <label for="evalAthleteSelect">Geçmiş Bir Değerlendirmeyi Aç (opsiyonel)</label>
-
       <select id="evalAthleteSelect">
-
         <option value="">+ Yeni değerlendirme ekle...</option>
-
       </select>
-
       <p class="hint" style="margin-top:6px;">Var olan bir değerlendirmeyi düzeltmek için listeden seç. Aynı sporcu için sezon içinde birden fazla değerlendirme yapacaksan "Yeni değerlendirme ekle" seçili bırak ve adını yaz — üzerine yazmadan ayrı bir kayıt olarak eklenir.</p>
-
     </div>
 
-
-
     <div class="field">
-
       <label for="sporcuAdi">Sporcu Adı *</label>
-
       <input type="text" id="sporcuAdi" placeholder="Örn. Atalay Bilekli">
-
     </div>
 
-
-
     <div class="row2">
-
       <div class="field">
-
         <label for="dogumYili">Doğum Yılı</label>
-
         <input type="number" id="dogumYili" placeholder="2012" min="2008" max="2016">
-
       </div>
-
       <div class="field">
-
         <label for="degerlendirmeTarihi">Değerlendirme Tarihi</label>
-
         <input type="date" id="degerlendirmeTarihi">
-
       </div>
-
     </div>
 
-
-
     <div class="field">
-
       <label>Hangi yarışma ve antrenman hedeflerine ulaşıldı?</label>
-
       <textarea id="hedeflereUlasildi" placeholder="Ulaşılan hedefleri sırala..."></textarea>
-
     </div>
 
-
-
     <div class="field">
-
       <label>Hangi hedeflere ulaşılamadı?</label>
-
       <textarea id="hedeflereUlasilamadi" placeholder="Ulaşılamayan hedefleri ve varsa sebebini not et..."></textarea>
-
     </div>
 
-
-
     <div class="field">
-
       <label>Geçen sezon neler yanlış gitti?</label>
-
       <div class="check-grid" id="yanlisGittiGrid">
-
         <label class="check-item"><input type="checkbox" value="Sakatlıklar">Sakatlıklar</label>
-
         <label class="check-item"><input type="checkbox" value="Hastalıklar">Hastalıklar</label>
-
         <label class="check-item"><input type="checkbox" value="Akademik problemler">Akademik problemler</label>
-
         <label class="check-item"><input type="checkbox" value="Kişisel problemler">Kişisel problemler</label>
-
       </div>
-
       <textarea id="yanlisGittiDiger" placeholder="Diğer (varsa)..."></textarea>
-
       <p class="hint">Seçilenler için aşağıda nedenlerini belirt.</p>
-
     </div>
 
-
-
     <div class="field">
-
       <label for="nedenleri">Bunların nedenleri neydi?</label>
-
       <textarea id="nedenleri" placeholder="Sakatlık/hastalık/problem nedenleri..."></textarea>
-
     </div>
-
-
 
     <div class="field">
-
       <label>Dış faktörler antrenman sürecini etkiledi mi?</label>
-
       <div class="check-grid">
-
         <label class="check-item"><input type="checkbox" value="Havuz kapanmaları">Havuz kapanmaları</label>
-
         <label class="check-item"><input type="checkbox" value="Sınav dönemleri">Sınav dönemleri</label>
-
         <label class="check-item"><input type="checkbox" value="Diğer kişisel sorumluluklar">Diğer kişisel sorumluluklar</label>
-
       </div>
-
     </div>
-
-
 
     <div class="row2">
-
       <div class="field">
-
         <label for="yeterliGelisim">Önceki antrenmanlar yeterli performans gelişimi sağladı mı?</label>
-
         <select id="yeterliGelisim">
-
           <option value="">Seçiniz...</option>
-
           <option value="Evet, yeterli">Evet, yeterli</option>
-
           <option value="Kısmen yeterli">Kısmen yeterli</option>
-
           <option value="Yetersiz">Yetersiz</option>
-
         </select>
-
       </div>
-
       <div class="field">
-
         <label for="farkliYaklasim">Farklı bir yaklaşım denenmeli mi?</label>
-
         <select id="farkliYaklasim">
-
           <option value="">Seçiniz...</option>
-
           <option value="Hayır, mevcut yaklaşım sürdürülmeli">Hayır, mevcut yaklaşım sürdürülmeli</option>
-
           <option value="Evet, kısmen revize edilmeli">Evet, kısmen revize edilmeli</option>
-
           <option value="Evet, köklü değişiklik gerekli">Evet, köklü değişiklik gerekli</option>
-
         </select>
-
       </div>
-
     </div>
-
-
 
     <div class="nav-row">
-
       <span></span>
-
       <button type="button" class="btn btn-primary" data-next="2">Devam — Mevcut Düzey →</button>
-
     </div>
-
   </section>
-
-
 
   <!-- STEP 2: Mevcut Performans Düzeyi -->
-
   <section class="panel step-panel" data-step="2" style="display:none;">
-
     <div class="panel-head"><span class="tag">02</span></div>
-
     <h2>Mevcut Performans Düzeyinin Analizi</h2>
-
     <p class="desc">Kondisyon, teknik, zihinsel ve taktiksel özelliklerin güncel düzeyi (1=çok zayıf, 10=çok iyi).</p>
 
-
-
     <div class="rate-row">
-
       <label for="kondisyon">Kondisyon düzeyi</label>
-
       <input type="range" id="kondisyon" min="1" max="10" value="5">
-
       <span class="rate-val" id="kondisyonVal">5</span>
-
     </div>
-
     <div class="rate-row">
-
       <label for="teknik">Teknik özellikler</label>
-
       <input type="range" id="teknik" min="1" max="10" value="5">
-
       <span class="rate-val" id="teknikVal">5</span>
-
     </div>
-
     <div class="rate-row">
-
       <label for="zihinsel">Zihinsel özellikler</label>
-
       <input type="range" id="zihinsel" min="1" max="10" value="5">
-
       <span class="rate-val" id="zihinselVal">5</span>
-
     </div>
-
     <div class="rate-row">
-
       <label for="taktiksel">Taktiksel beceriler</label>
-
       <input type="range" id="taktiksel" min="1" max="10" value="5">
-
       <span class="rate-val" id="taktikselVal">5</span>
-
     </div>
 
-
-
     <div class="field">
-
       <label>Güçlü yönler</label>
-
       <div class="dyn-list" id="gucluList"></div>
-
       <button type="button" class="add-btn" data-add="gucluList" data-placeholder="Örn. Güçlü kick, iyi nefes kontrolü">+ Güçlü yön ekle</button>
-
     </div>
 
-
-
     <div class="field">
-
       <label>Zayıf yönler</label>
-
       <div class="dyn-list" id="zayifList"></div>
-
       <button type="button" class="add-btn" data-add="zayifList" data-placeholder="Örn. Dönüş tekniği, kulaç frekansı">+ Zayıf yön ekle</button>
-
     </div>
-
-
 
     <div class="field">
-
       <label>Antrenman türleri arasında öncelik sıralaması</label>
-
       <textarea id="oncelikSiralama" placeholder="Belirlenen önceliklere göre hangi antrenman türleri (aerobik kapasite, anaerobik tolerans, teknik vb.) öne çıkarılmalı?"></textarea>
-
     </div>
-
-
 
     <div class="nav-row">
-
       <button type="button" class="btn btn-ghost" data-next="1">← Antrenman Geçmişi</button>
-
       <button type="button" class="btn btn-primary" data-next="3">Devam — Hedefler →</button>
-
     </div>
-
   </section>
-
-
 
   <!-- STEP 3: Performans Hedefleri -->
-
   <section class="panel step-panel" data-step="3" style="display:none;">
-
     <div class="panel-head"><span class="tag">03</span></div>
-
     <h2>Performans Hedeflerinin Belirlenmesi</h2>
-
     <p class="desc">Gerçekçi ve objektif olarak ölçülebilir hedefler — yıl içerisine dağıtılmış.</p>
 
-
-
     <div class="field">
-
       <label>Sezon hedefleri</label>
-
       <div class="dyn-list" id="hedefList"></div>
-
       <button type="button" class="add-btn" data-add="hedefList" data-placeholder="Örn. Kış Şampiyonasında 50m serbesti 26 saniyenin altı">+ Hedef ekle</button>
-
       <p class="hint">Her hedefi ölçülebilir biçimde yaz: yarışma/zaman dilimi + mesafe/stil + hedef değer.</p>
-
     </div>
-
-
 
     <div class="field">
-
       <label for="notlar">Ek notlar</label>
-
       <textarea id="notlar" placeholder="Antrenör değerlendirmesine dair ek notlar..."></textarea>
-
     </div>
-
-
 
     <div class="nav-row">
-
       <button type="button" class="btn btn-ghost" data-next="2">← Mevcut Düzey</button>
-
       <button type="button" class="btn btn-primary" data-next="4">Devam — Özet →</button>
-
     </div>
-
   </section>
-
-
 
   <!-- STEP 4: Özet & Kaydet -->
-
   <section class="panel step-panel" data-step="4" style="display:none;">
-
     <div class="panel-head"><span class="tag">04</span></div>
-
     <h2>Özet</h2>
-
     <p class="desc">Kaydetmeden önce kontrol et. Kaydedilen kayıtlar aşağıdaki panoda listelenecek.</p>
-
     <div id="summaryBox"></div>
-
     <div class="nav-row">
-
       <button type="button" class="btn btn-ghost" data-next="3">← Hedefler</button>
-
       <div class="savebar">
-
         <button type="button" class="btn btn-ghost" id="resetBtn">Formu Temizle</button>
-
         <button type="button" class="btn btn-primary" id="saveBtn">Kaydet</button>
-
       </div>
-
     </div>
-
   </section>
-
-
 
   </form>
 
-
-
   <div class="board-head">
-
     <h2>Kaydedilen Sporcular</h2>
-
     <span class="count" id="boardCount">0 kayıt</span>
-
   </div>
-
   <div id="board"><p class="loading-note">Yükleniyor...</p></div>
-
-
 
   </div><!-- /modeEval -->
 
-
-
   <div id="modeAttendance" style="display:none;">
 
-
-
     <div class="panel" id="attendanceSelectPanel">
-
       <div class="panel-head"><span class="tag">YOKLAMA</span></div>
-
       <h2>Aylık Yoklama &amp; Performans Takibi</h2>
-
       <p class="desc">Bir sporcu ve ay seç, takvimde güne tıklayarak yoklama ve davranış puanlaması yap.</p>
-
       <div class="row2">
-
         <div class="field">
-
           <label for="attAthleteSelect">Sporcu</label>
-
           <select id="attAthleteSelect">
-
             <option value="">Sporcu seç...</option>
-
           </select>
-
         </div>
-
         <div class="field">
-
           <label for="attMonthSelect">Ay</label>
-
           <input type="month" id="attMonthSelect">
-
         </div>
-
       </div>
-
       <button type="button" class="btn btn-ghost" id="manageRosterBtnAtt">+ Sporcu Ekle / Çıkar</button>
       <button type="button" class="btn btn-ghost" id="manageTagsBtn">+ Davranış Etiketlerini Düzenle</button>
-
     </div>
-
-
 
     <div id="attendanceBody" style="display:none;">
-
       <div class="nav-row" style="justify-content:flex-end; margin-bottom:14px; margin-top:0;">
-
         <button type="button" class="pdf-btn" id="attPdfBtn">PDF Olarak İndir</button>
-
       </div>
-
       <div class="att-summary" id="attSummary"></div>
-
       <div class="calendar" id="calendarGrid"></div>
-
       <div class="legend" id="tagLegend"></div>
-
     </div>
-
-
 
     <div class="empty" id="attendanceEmpty">Önce yukarıdan bir sporcu ve ay seç.</div>
 
-
-
   </div><!-- /modeAttendance -->
 
-
-
   <div id="modeBulkAtt" style="display:none;">
-
     <div class="panel" id="bulkAttSelectPanel">
-
       <div class="panel-head"><span class="tag">TOPLU YOKLAMA</span></div>
-
       <h2>Güne Göre Toplu İşaretle</h2>
-
       <p class="desc">Bir tarih seç; o günün antrenman seansları (sabah/akşam kara &amp; yüzme, ya da Pazar günü yarış) için tüm sporcuların yoklamasını tek ekrandan al ve kaydet.</p>
-
       <div class="bulk-date-row">
         <div class="field">
           <label for="bulkDateInput">Tarih</label>
@@ -1587,11 +854,8 @@ td.sp-empty{color:#c3ccd1;}
         </div>
         <span class="bulk-daylabel" id="bulkDayLabel">—</span>
       </div>
-
       <button type="button" class="btn btn-ghost" id="manageRosterBtnBulk">+ Sporcu Ekle / Çıkar</button>
-
     </div>
-
     <div class="panel" id="bulkPdfPanel">
       <h2 style="font-size:15px;">Aylık Toplu Yoklama Raporu (PDF)</h2>
       <p class="desc">Seçtiğin ay için tüm sporcuların yoklama/devamsızlık özetini ve gün gün katılım tablosunu tek bir PDF olarak indir.</p>
@@ -1603,186 +867,99 @@ td.sp-empty{color:#c3ccd1;}
         <button type="button" class="pdf-btn" id="bulkPdfBtn" style="align-self:flex-end;">PDF Olarak İndir (Tüm Sporcular)</button>
       </div>
     </div>
-
     <div id="bulkAttBody" style="display:none;">
-
       <div class="session-tabs" id="bulkSessionTabs"></div>
-
       <div id="bulkAthleteList"></div>
-
       <div class="bulk-save-bar">
         <span class="hint" id="bulkSaveHint" style="align-self:center; margin-right:auto;"></span>
         <button type="button" class="btn btn-primary" id="bulkSaveBtn">Tümünü Kaydet</button>
       </div>
-
     </div>
-
     <div class="empty" id="bulkAttEmpty">Önce yukarıdan bir tarih seç.</div>
-
   </div><!-- /modeBulkAtt -->
-
-
 
   <div id="modeBody" style="display:none;">
 
-
-
     <div class="panel" id="bodySelectPanel">
-
       <div class="panel-head"><span class="tag">ÖLÇÜM</span></div>
-
       <h2>Periyodik Vücut Ölçümleri</h2>
-
       <p class="desc">Bir sporcu seç; belirli tarihlerde alınan boy, kilo, kas ve yağ yüzdesi ölçümlerini kaydet ve gelişimini takip et.</p>
-
       <div class="field">
-
         <label for="bodyAthleteSelect">Sporcu</label>
-
         <select id="bodyAthleteSelect">
-
           <option value="">Sporcu seç...</option>
-
         </select>
-
       </div>
-
       <button type="button" class="btn btn-ghost" id="manageRosterBtnBody">+ Sporcu Ekle / Çıkar</button>
-
       <button type="button" class="pdf-btn" id="bodyBulkPdfBtn" style="margin-top:10px;width:100%;">Tüm Sporcular — Toplu Ölçüm Raporu (PDF)</button>
-
     </div>
-
-
 
     <div id="bodyBody" style="display:none;">
-
       <div class="panel">
-
         <h2 style="font-size:15px;">Yeni Ölçüm Ekle</h2>
-
         <div class="row2">
-
           <div class="field">
-
             <label for="bmTarih">Tarih</label>
-
             <input type="date" id="bmTarih">
-
           </div>
-
           <div class="field">
-
             <label for="bmBoy">Boy (cm)</label>
-
             <input type="number" id="bmBoy" step="0.1" placeholder="Örn. 162.5">
-
           </div>
-
         </div>
-
         <div class="row2">
-
           <div class="field">
-
             <label for="bmKilo">Kilo (kg)</label>
-
             <input type="number" id="bmKilo" step="0.1" placeholder="Örn. 52.3">
-
           </div>
-
           <div class="field">
-
             <label for="bmKas">Kas yüzdesi (%)</label>
-
             <input type="number" id="bmKas" step="0.1" placeholder="Örn. 38.0">
-
           </div>
-
         </div>
-
         <div class="field">
-
           <label for="bmYag">Yağ yüzdesi (%)</label>
-
           <input type="number" id="bmYag" step="0.1" placeholder="Örn. 14.0">
-
         </div>
-
         <div class="nav-row">
-
           <span></span>
-
           <button type="button" class="btn btn-primary" id="bmAddBtn">+ Ölçümü Kaydet</button>
-
         </div>
-
       </div>
-
-
 
       <div id="bodyChartWrap"></div>
-
       <div class="nav-row" style="justify-content:flex-end; margin-bottom:0;">
-
         <button type="button" class="pdf-btn" id="bodyPdfBtn">PDF Olarak İndir</button>
-
       </div>
-
       <div id="bodyTableWrap"></div>
-
     </div>
-
-
 
     <div class="empty" id="bodyEmpty">Önce yukarıdan bir sporcu seç.</div>
 
-
-
   </div><!-- /modeBody -->
-
-
 
   <div id="modeTeknik" style="display:none;">
 
-
-
     <div class="panel" id="teknikSelectPanel">
-
       <div class="panel-head"><span class="tag">TEKNİK</span></div>
-
       <h2>Branş Bazlı Teknik Eksiklikler</h2>
-
       <p class="desc">Bir sporcu seç, ardından branş sekmesine tıklayıp o branşa özel teknik eksiklikleri listele.</p>
-
       <div class="field">
-
         <label for="teknikAthleteSelect">Sporcu</label>
-
         <select id="teknikAthleteSelect">
-
           <option value="">Sporcu seç...</option>
-
         </select>
-
       </div>
-
       <button type="button" class="btn btn-ghost" id="manageRosterBtnTeknik">+ Sporcu Ekle / Çıkar</button>
-
       <button type="button" class="btn btn-ghost" id="manageBranchesBtn">+ Branşları Düzenle</button>
-
     </div>
 
-
-
     <div id="teknikBody" style="display:none;">
-
       <div class="panel" id="teknikRecordsPanel">
         <h2 style="font-size:15px;">Geçmiş Teknik Analizler</h2>
         <p class="hint" style="margin-bottom:10px;">Her kaydettiğin analiz, tarihiyle burada bir kart olarak listelenir. Karta tıklayıp düzenleyebilir veya PDF olarak indirebilirsin.</p>
         <div id="teknikRecordsList"></div>
       </div>
-
       <div class="panel">
         <div class="row2" style="align-items:flex-end;">
           <div class="field" style="margin-bottom:0;">
@@ -1795,7 +972,6 @@ td.sp-empty{color:#c3ccd1;}
         </div>
         <p class="hint" id="teknikEditingIndicator" style="margin-top:8px;"></p>
       </div>
-
       <div class="lanes" id="branchLanes"></div>
       <div class="panel">
         <h2 id="teknikBranchTitle" style="font-size:15px;">Branş</h2>
@@ -1810,17 +986,11 @@ td.sp-empty{color:#c3ccd1;}
           <button type="button" class="btn btn-primary" id="teknikSaveRecordBtn">Analizi Kaydet</button>
         </div>
       </div>
-
     </div>
-
-
 
     <div class="empty" id="teknikEmpty">Önce yukarıdan bir sporcu seç.</div>
 
-
-
   </div><!-- /modeTeknik -->
-
 
   <div id="modeSezonplan" style="display:none;">
     <div class="sp-toolbar">
@@ -1839,120 +1009,62 @@ td.sp-empty{color:#c3ccd1;}
     <div class="sp-tablewrap"><table class="sp-grid" id="spGrid"></table></div>
   </div><!-- /modeSezonplan -->
 
-
-
-
-
 </div>
 
-
-
 <!-- Day entry modal -->
-
 <div class="modal-overlay" id="dayModal" role="dialog" aria-modal="true" aria-labelledby="modalAthleteName">
-
   <div class="modal-box" tabindex="-1">
-
     <div class="modal-head">
-
       <div>
-
         <div class="modal-date" id="modalDate">1 Ocak</div>
-
         <div class="modal-name" id="modalAthleteName">Sporcu</div>
-
       </div>
-
       <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Pencereyi kapat">×</button>
-
     </div>
-
-
 
     <div class="session-tabs" id="modalSessionTabs"></div>
 
-
-
     <div class="modal-attend-toggle">
-
       <button type="button" class="att-toggle-btn" id="toggleGeldi" data-val="geldi">Geldi</button>
-
       <button type="button" class="att-toggle-btn" id="toggleGelmedi" data-val="gelmedi">Gelmedi</button>
-
       <button type="button" class="att-toggle-btn" id="toggleBos" data-val="">Boş bırak</button>
-
     </div>
-
-
 
     <div id="modalReasonWrap" style="margin-bottom:14px; display:none;">
       <label for="modalReasonSelect" style="display:block; font-size:12px; font-weight:600; margin-bottom:6px; color:var(--foam);">Gelmeme sebebi</label>
       <select id="modalReasonSelect" class="bulk-reason-select" style="width:100%;"></select>
     </div>
 
-
-
     <div id="modalTagsWrap">
-
       <p class="hint" style="margin-bottom:10px;">Antrenmanda gözlenen davranışlar:</p>
-
       <div class="tag-grid" id="modalTagGrid"></div>
-
     </div>
-
-
 
     <div class="modal-score-line" id="modalScoreLine">Gün puanı: 0</div>
 
-
-
     <div class="nav-row" style="margin-top:18px;">
-
       <button type="button" class="btn btn-ghost" id="modalCancelBtn">Vazgeç</button>
-
       <button type="button" class="btn btn-primary" id="modalSaveBtn">Kaydet</button>
-
     </div>
-
   </div>
-
 </div>
-
-
 
 <!-- Tag management modal -->
-
 <div class="modal-overlay" id="tagModal" role="dialog" aria-modal="true" aria-label="Davranış etiketleri">
-
   <div class="modal-box">
-
     <div class="modal-head">
-
       <div class="modal-name">Davranış Etiketleri</div>
-
       <button type="button" class="modal-close" id="tagModalCloseBtn" aria-label="Pencereyi kapat">×</button>
-
     </div>
-
     <p class="hint" style="margin-bottom:12px;">Her etiketin bir puan değeri var. Pozitif davranışlar puanı artırır, olumsuz davranışlar düşürür.</p>
-
     <div id="tagEditList" class="tag-edit-list"></div>
-
     <button type="button" class="add-btn" id="addTagBtn">+ Yeni Etiket Ekle</button>
-
     <div class="nav-row" style="margin-top:18px;">
-
       <span></span>
-
       <button type="button" class="btn btn-primary" id="tagModalDoneBtn">Tamam</button>
-
     </div>
-
   </div>
-
 </div>
-
-
 
 <!-- Branch management modal -->
 <div class="modal-overlay" id="branchModal" role="dialog" aria-modal="true" aria-label="Branşları düzenle">
@@ -1970,7 +1082,6 @@ td.sp-empty{color:#c3ccd1;}
     </div>
   </div>
 </div>
-
 <!-- Roster management modal (shared by Attendance / Body / Teknik tabs) -->
 <div class="modal-overlay" id="rosterModal" role="dialog" aria-modal="true" aria-label="Sporcu listesi">
   <div class="modal-box">
@@ -1990,29 +1101,21 @@ td.sp-empty{color:#c3ccd1;}
     </div>
   </div>
 </div>
-
 <div id="modeSwimAnalyzer" style="display:none;">
   <iframe id="swimAnalyzerFrame" title="SwimAnalyzer"
     style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
   </iframe>
 </div>
-
 <div id="modeTestKayit" style="display:none;">
   <iframe id="testKayitFrame" title="Antrenman Test Kayıtları"
     style="width:100%; height:calc(100vh - 210px); min-height:560px; border:0; border-radius:12px; display:block; background:#0d1b26;">
   </iframe>
 </div>
-
 <div class="toast" id="toast"></div>
-
-
 
 <div id="pdfRenderRoot"></div>
 
-
-
 <script>
-
 
 /* ================================================================
    FIREBASE REALTIME DATABASE STORAGE
@@ -2020,31 +1123,18 @@ td.sp-empty{color:#c3ccd1;}
    Firestore'un aksine Realtime Database ücretsiz Spark planında
    fatura hesabı gerektirmez. 1 GB depolama, 10 GB/ay indirme
    ücretsiz — bu uygulama için fazlasıyla yeterli.
-
    VERİ YAPISI:
      /users/{uid}/{key}  →  { value: "<JSON string>" }
-
    KİMLİK:
      Firebase Anonymous Auth — aynı cihaz/tarayıcı her zaman
      aynı UID ile erişir. Farklı cihazlarda senkronize için
      ileride Google girişi eklenebilir.
 ================================================================ */
-
-// ▼▼▼ BURAYA KENDİ FIREBASE YAPILANDIRMANI YAPISTIR ▼▼▼
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyDutbYjC6ysODycjv7Tqd580LckBacrmWI",
-  authDomain:        "bursa-kolejliler.firebaseapp.com",
-  databaseURL:       "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:         "bursa-kolejliler",
-  storageBucket:     "bursa-kolejliler.firebasestorage.app",
-  messagingSenderId: "905222390930",
-  appId:             "1:905222390930:web:e5980ea9076dcab0fb924b"
-};
-// ▲▲▲ BURAYA KENDİ FIREBASE YAPILANDIRMANI YAPISTIR ▲▲▲
-
+// FIREBASE_CONFIG artık firebase-config.js'ten geliyor (bu dosya
+// <head>'de bu <script> bloğundan önce yükleniyor). Değiştirmek
+// için tek yer: firebase-config.js.
 (async ()=>{
   function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
-
   function setAuthUI(user){
     window.currentAuthUser = user || null;
     const statusEl   = document.getElementById('authStatus');
@@ -2061,7 +1151,6 @@ const FIREBASE_CONFIG = {
       signOutBtn.style.display = 'none';
     }
   }
-
   function setupStorage(db, uid){
     const userRef = (key) => db.ref(`users/${uid}/${key}`);
     window.storage = {
@@ -2099,7 +1188,6 @@ const FIREBASE_CONFIG = {
     };
     console.log('Firebase bağlantısı kuruldu. UID:', uid);
   }
-
   function setupLocalStorage(){
     const P = 'sezonpano_';
     window.storage = {
@@ -2109,7 +1197,6 @@ const FIREBASE_CONFIG = {
       async list(prefix){ try{ const f=P+(prefix||''),keys=[]; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith(f))keys.push(k.slice(P.length)); } return {keys,prefix,shared:false}; }catch(e){return null;} }
     };
   }
-
   async function offerLocalDataMigration(){
     const prefix = 'sezonpano_';
     const localEntries = [];
@@ -2132,16 +1219,13 @@ const FIREBASE_CONFIG = {
       showToast(copied ? `${copied} kayıt hesabına kopyalandı` : 'Yerel kayıtlar kopyalanamadı');
     }catch(e){ console.error('Yerel veri taşıma hatası:', e); }
   }
-
   try {
     await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js');
     await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
     await loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js');
-
     firebase.initializeApp(FIREBASE_CONFIG);
     const auth = firebase.auth();
     const db   = firebase.database();
-
     // Sayfa yüklendiğinde mevcut oturumu kontrol et
     await new Promise(resolve=>{
       const unsub = auth.onAuthStateChanged(async user=>{
@@ -2159,25 +1243,37 @@ const FIREBASE_CONFIG = {
         resolve();
       });
     });
+    // Giriş sonrası sayfa TEK sefer yenilenir (veriyi Firebase'den temiz
+    // yüklemek için). Hem popup hem redirect yolu buradan geçer; bayrak
+    // aynı yüklemede ikinci reload'ı, sessionStorage ise redirect dönüşünde
+    // tekrar reload'ı engeller.
+    let authReloading = false;
+    function reloadAfterAuth(){
+      if(authReloading) return;
+      authReloading = true;
+      try{ sessionStorage.setItem('authJustReloaded', '1'); }catch(e){}
+      window.location.reload();
+    }
 
     // Google ile giriş
     document.getElementById('googleSignInBtn').addEventListener('click', async ()=>{
       try{
         const provider = new firebase.auth.GoogleAuthProvider();
-        // Önce popup dene, mobilde redirect'e düş
+        // Önce popup dene, mobilde/engelde redirect'e düş
         try{
           await auth.signInWithPopup(provider);
         } catch(popupErr){
           if(popupErr.code === 'auth/popup-blocked' || popupErr.code === 'auth/cancelled-popup-request'){
-            await auth.signInWithRedirect(provider);
-          } else { throw popupErr; }
+            await auth.signInWithRedirect(provider); // sayfadan ayrılır, dönüşte aşağıdaki blok çalışır
+            return;
+          }
+          throw popupErr;
         }
         const user = auth.currentUser;
         if(user){
           setupStorage(db, user.uid);
           setAuthUI(user);
-          // Sayfayı yenile — giriş sonrası Firebase'den veri yüklensin
-          window.location.reload();
+          reloadAfterAuth();
         }
       } catch(e){
         console.error('Google giriş hatası:', e);
@@ -2185,16 +1281,23 @@ const FIREBASE_CONFIG = {
       }
     });
 
-    // Redirect sonucunu yakala (mobilde popup yerine redirect kullanılıyorsa)
+    // Redirect sonucunu yakala (popup yerine redirect kullanıldıysa).
+    // Dönüşte onAuthStateChanged zaten storage'ı kurdu; burada sadece
+    // bir kez yeniliyoruz ve "authJustReloaded" ile o reload'dan sonra
+    // tekrar tetiklenmeyi önlüyoruz.
     try{
+      let alreadyReloaded = false;
+      try{ alreadyReloaded = sessionStorage.getItem('authJustReloaded') === '1'; }catch(e){}
       const result = await auth.getRedirectResult();
-      if(result && result.user){
+      if(result && result.user && !alreadyReloaded){
         setupStorage(db, result.user.uid);
         setAuthUI(result.user);
-        window.location.reload();
+        reloadAfterAuth();
+      } else if(alreadyReloaded){
+        // Yenileme sonrası bu yüklemede bayrağı temizle.
+        try{ sessionStorage.removeItem('authJustReloaded'); }catch(e){}
       }
     } catch(e){ /* redirect sonucu yoksa hata gelmez */ }
-
     // Çıkış
     document.getElementById('googleSignOutBtn').addEventListener('click', async ()=>{
       if(!confirm('Çıkış yapılacak. Bu cihazda giriş yapılmadan veriler localStorage\'da saklanır.')) return;
@@ -2203,7 +1306,6 @@ const FIREBASE_CONFIG = {
       setAuthUI(null);
       window.location.reload();
     });
-
   } catch(initErr) {
     console.error('Firebase başlatılamadı, localStorage\'a düşülüyor:', initErr);
     setupLocalStorage();
@@ -2212,1125 +1314,569 @@ const FIREBASE_CONFIG = {
   }
 })();
 
-
-
-
-
 const STEP_COUNT = 4;
-
 let currentStep = 1;
-
 let editingId = null;
 
-
-
 function showStep(n){
-
   currentStep = n;
-
   document.querySelectorAll('.step-panel').forEach(p=>{
-
     p.style.display = (parseInt(p.dataset.step)===n) ? '' : 'none';
-
   });
-
   document.querySelectorAll('.lane-btn').forEach(b=>{
-
     b.classList.toggle('active', parseInt(b.dataset.step)===n);
-
   });
-
   if(n===4) renderSummary();
-
   window.scrollTo({top:0, behavior:'smooth'});
-
 }
-
-
 
 document.querySelectorAll('.lane-btn').forEach(b=>{
-
   b.addEventListener('click', ()=> showStep(parseInt(b.dataset.step)));
-
 });
-
 document.querySelectorAll('[data-next]').forEach(b=>{
-
   b.addEventListener('click', ()=> showStep(parseInt(b.dataset.next)));
-
 });
-
-
 
 // checkbox visual state
-
 document.querySelectorAll('.check-item').forEach(item=>{
-
   const cb = item.querySelector('input');
-
   cb.addEventListener('change', ()=> item.classList.toggle('checked', cb.checked));
-
 });
-
-
 
 // range value display
-
 ['kondisyon','teknik','zihinsel','taktiksel'].forEach(id=>{
-
   const input = document.getElementById(id);
-
   const val = document.getElementById(id+'Val');
-
   input.addEventListener('input', ()=> val.textContent = input.value);
-
 });
-
-
 
 // dynamic list rows (güçlü, zayıf, hedef)
-
 function addDynRow(containerId, placeholder, value=''){
-
   const container = document.getElementById(containerId);
-
   const row = document.createElement('div');
-
   row.className = 'dyn-row';
-
   const input = document.createElement('input');
-
   input.type = 'text';
-
   input.placeholder = placeholder;
-
   input.value = value;
-
   const btn = document.createElement('button');
-
   btn.type = 'button';
-
   btn.textContent = '×';
-
   btn.addEventListener('click', ()=> row.remove());
-
   row.appendChild(input);
-
   row.appendChild(btn);
-
   container.appendChild(row);
-
 }
-
 document.querySelectorAll('[data-add]').forEach(btn=>{
-
   btn.addEventListener('click', ()=> addDynRow(btn.dataset.add, btn.dataset.placeholder));
-
 });
-
 // seed one empty row each on load
-
 addDynRow('gucluList', 'Örn. Güçlü kick, iyi nefes kontrolü');
-
 addDynRow('zayifList', 'Örn. Dönüş tekniği, kulaç frekansı');
-
 addDynRow('hedefList', 'Örn. Kış Şampiyonasında 50m serbesti 26 saniyenin altı');
 
-
-
 function getDynValues(containerId){
-
   return Array.from(document.querySelectorAll('#'+containerId+' input'))
-
     .map(i=>i.value.trim()).filter(v=>v.length>0);
-
 }
-
 function getCheckedValues(gridSelector){
-
   return Array.from(document.querySelectorAll(gridSelector+' input:checked')).map(i=>i.value);
-
 }
-
-
 
 function collectFormData(){
-
   return {
-
     sporcuAdi: document.getElementById('sporcuAdi').value.trim(),
-
     dogumYili: document.getElementById('dogumYili').value.trim(),
-
     degerlendirmeTarihi: document.getElementById('degerlendirmeTarihi').value.trim(),
-
     hedeflereUlasildi: document.getElementById('hedeflereUlasildi').value.trim(),
-
     hedeflereUlasilamadi: document.getElementById('hedeflereUlasilamadi').value.trim(),
-
     yanlisGitti: getCheckedValues('#yanlisGittiGrid'),
-
     yanlisGittiDiger: document.getElementById('yanlisGittiDiger').value.trim(),
-
     nedenleri: document.getElementById('nedenleri').value.trim(),
-
     disFaktorler: getCheckedValues('.step-panel[data-step="1"] .check-grid:nth-of-type(1)'),
-
     yeterliGelisim: document.getElementById('yeterliGelisim').value,
-
     farkliYaklasim: document.getElementById('farkliYaklasim').value,
-
     kondisyon: document.getElementById('kondisyon').value,
-
     teknik: document.getElementById('teknik').value,
-
     zihinsel: document.getElementById('zihinsel').value,
-
     taktiksel: document.getElementById('taktiksel').value,
-
     gucluYonler: getDynValues('gucluList'),
-
     zayifYonler: getDynValues('zayifList'),
-
     oncelikSiralama: document.getElementById('oncelikSiralama').value.trim(),
-
     hedefler: getDynValues('hedefList'),
-
     notlar: document.getElementById('notlar').value.trim(),
-
     kayitTarihi: new Date().toISOString()
-
   };
-
 }
-
-
 
 // fix dış faktörler selector (there are 2 check-grids in step1: yanlış gitti + dış faktörler)
-
 function getDisFaktorler(){
-
   const grids = document.querySelectorAll('.step-panel[data-step="1"] .check-grid');
-
   return Array.from(grids[1].querySelectorAll('input:checked')).map(i=>i.value);
-
 }
-
-
 
 function renderSummary(){
-
   const d = collectFormData();
-
   d.disFaktorler = getDisFaktorler();
-
   const box = document.getElementById('summaryBox');
-
   if(!d.sporcuAdi){
-
     box.innerHTML = '<p class="hint" style="color:var(--bad)">Sporcu adı boş — kaydetmek için Adım 1\'e dönüp adı gir.</p>';
-
     return;
-
   }
-
   const pill = (v, bad=false) => `<span class="pill ${bad?'bad':''}">${escapeHtml(v)}</span>`;
-
   box.innerHTML = `
-
     <div class="detail-section">
-
       <h3>Sporcu</h3>
-
       <p>${escapeHtml(d.sporcuAdi)} ${d.dogumYili?'· '+escapeHtml(d.dogumYili):''} ${d.degerlendirmeTarihi?'· '+escapeHtml(d.degerlendirmeTarihi):''}</p>
-
     </div>
-
     <div class="detail-section">
-
       <h3>Antrenman Geçmişi</h3>
-
       ${d.hedeflereUlasildi?`<p><b>Ulaşılan:</b> ${escapeHtml(d.hedeflereUlasildi)}</p>`:''}
-
       ${d.hedeflereUlasilamadi?`<p><b>Ulaşılamayan:</b> ${escapeHtml(d.hedeflereUlasilamadi)}</p>`:''}
-
       ${d.yanlisGitti.length||d.yanlisGittiDiger ? `<div class="pill-row" style="margin-top:6px;">${d.yanlisGitti.map(v=>pill(v,true)).join('')}${d.yanlisGittiDiger?pill(d.yanlisGittiDiger,true):''}</div>`:''}
-
       ${d.disFaktorler.length ? `<div class="pill-row" style="margin-top:6px;">${d.disFaktorler.map(v=>pill(v)).join('')}</div>`:''}
-
     </div>
-
     <div class="detail-section">
-
       <h3>Mevcut Düzey</h3>
-
       <div class="pill-row">
-
         ${pill('Kondisyon: '+d.kondisyon+'/10')}
-
         ${pill('Teknik: '+d.teknik+'/10')}
-
         ${pill('Zihinsel: '+d.zihinsel+'/10')}
-
         ${pill('Taktiksel: '+d.taktiksel+'/10')}
-
       </div>
-
       ${d.gucluYonler.length?`<p style="margin-top:8px;"><b>Güçlü:</b> ${d.gucluYonler.map(escapeHtml).join(', ')}</p>`:''}
-
       ${d.zayifYonler.length?`<p><b>Zayıf:</b> ${d.zayifYonler.map(escapeHtml).join(', ')}</p>`:''}
-
     </div>
-
     <div class="detail-section">
-
       <h3>Hedefler</h3>
-
       ${d.hedefler.length?`<ul>${d.hedefler.map(h=>`<li>${escapeHtml(h)}</li>`).join('')}</ul>`:'<p class="hint">Hedef girilmedi.</p>'}
-
     </div>
-
   `;
-
 }
 
-
-
 function escapeHtml(value){
-
   // Hem metin düğümlerinde hem de HTML niteliklerinde güvenle kullanılabilir.
   return String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
   })[char]);
-
 }
-
-
 
 function showToast(msg){
-
   const t = document.getElementById('toast');
-
   t.textContent = msg;
-
   t.classList.add('show');
-
   setTimeout(()=> t.classList.remove('show'), 2200);
-
 }
-
-
 
 function clearForm(){
-
   document.getElementById('evalForm').reset();
-
   document.querySelectorAll('.check-item').forEach(i=>i.classList.remove('checked'));
-
   ['gucluList','zayifList','hedefList'].forEach(id=>{
-
     document.getElementById(id).innerHTML='';
-
   });
-
   addDynRow('gucluList', 'Örn. Güçlü kick, iyi nefes kontrolü');
-
   addDynRow('zayifList', 'Örn. Dönüş tekniği, kulaç frekansı');
-
   addDynRow('hedefList', 'Örn. Kış Şampiyonasında 50m serbesti 26 saniyenin altı');
-
   ['kondisyon','teknik','zihinsel','taktiksel'].forEach(id=>{
-
     document.getElementById(id).value = 5;
-
     document.getElementById(id+'Val').textContent = 5;
-
   });
-
   editingId = null;
-
   const sel = document.getElementById('evalAthleteSelect');
-
   if(sel) sel.value = '';
-
 }
-
-
 
 document.getElementById('evalAthleteSelect').addEventListener('change', async (e)=>{
-
   const id = e.target.value;
-
   if(!id){
-
     clearForm();
-
     showStep(1);
-
     document.getElementById('sporcuAdi').focus();
-
     return;
-
   }
-
   const rec = await getAthleteRecord(id);
-
   if(rec) loadIntoForm(id, rec);
-
 });
-
-
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-
   clearForm();
-
   showStep(1);
-
 });
-
-
 
 // ---- Storage ----
-
 async function loadAthletes(){
-
   try{
-
     const res = await window.storage.get('athletes_index', false);
-
     if(!res) return [];
-
     return JSON.parse(res.value);
-
   }catch(e){
-
     return [];
-
   }
-
 }
-
 async function saveAthletesIndex(list){
-
   try{
-
     const result = await window.storage.set('athletes_index', JSON.stringify(list), false);
     return !!result;
-
   }catch(e){
-
     console.error('Index save failed', e);
     return false;
-
   }
-
 }
-
 async function saveAthleteRecord(id, data){
-
   try{
-
     const result = await window.storage.set('athlete_'+id, JSON.stringify(data), false);
-
     return !!result;
-
   }catch(e){
-
     console.error('Save failed', e);
-
     return false;
-
   }
-
 }
-
 async function getAthleteRecord(id){
-
   try{
-
     const res = await window.storage.get('athlete_'+id, false);
-
     return res ? JSON.parse(res.value) : null;
-
   }catch(e){
-
     return null;
-
   }
-
 }
-
 async function deleteAthleteRecord(id){
-
   try{
-
     await window.storage.delete('athlete_'+id, false);
-
   }catch(e){
-
     console.error('Delete failed', e);
-
   }
-
 }
-
-
 
 /* =========================================================
-
    ROSTER MODULE (Sporcu Listesi)
-
    Yoklama, Vücut Ölçümleri ve Teknik Eksiklikler sekmeleri bu
-
    ortak listeyi kullanır. Sezon Değerlendirmesi sekmesi (yukarıdaki
-
    athletes_index / handleSave) tamamen bağımsızdır — orada aynı
-
    sporcu için birden fazla değerlendirme kaydı oluşturulabilir,
-
    burada ise her sporcunun tek bir kimliği vardır.
-
 ========================================================= */
-
 let rosterCache = [];
 
-
-
 async function loadRoster(){
-
   try{
-
     const res = await window.storage.get('roster_v1', false);
-
     if(res){ rosterCache = JSON.parse(res.value); return rosterCache; }
-
     // İlk çalıştırma: mevcut Sezon Değerlendirmesi kayıtlarından, isim bazında
-
     // tekilleştirilerek bir başlangıç listesi oluşturulur (geçmiş ölçüm/teknik
-
     // verisi varsa aynı id korunduğu için kaybolmaz).
-
     const evalList = await loadAthletes();
-
     const seen = new Set();
-
     const seeded = [];
-
     evalList.forEach(a=>{
-
       const key = (a.sporcuAdi||'').trim().toLocaleLowerCase('tr');
-
       if(key && !seen.has(key)){ seen.add(key); seeded.push({id:a.id, sporcuAdi:a.sporcuAdi}); }
-
     });
-
     rosterCache = seeded;
-
     await saveRoster(seeded);
-
     return seeded;
-
   }catch(e){ rosterCache = []; return []; }
-
 }
-
 async function saveRoster(list){
-
   rosterCache = list;
-
   try{ await window.storage.set('roster_v1', JSON.stringify(list), false); return true; }
-
   catch(e){ console.error('Roster save failed', e); return false; }
-
 }
-
-
 
 function populateRosterSelect(selectEl){
-
   const prev = selectEl.value;
-
   const sorted = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
-
   selectEl.innerHTML = '<option value="">Sporcu seç...</option>' +
-
     sorted.map(a=>`<option value="${a.id}">${escapeHtml(a.sporcuAdi)}</option>`).join('');
-
   if(prev && sorted.find(a=>a.id===prev)) selectEl.value = prev;
-
 }
-
-
 
 async function refreshAllRosterSelects(){
-
   await loadRoster();
-
   ['attAthleteSelect','bodyAthleteSelect','teknikAthleteSelect'].forEach(id=>{
-
     const el = document.getElementById(id);
-
     if(el) populateRosterSelect(el);
-
   });
-
 }
-
-
 
 function renderRosterEditList(){
-
   const wrap = document.getElementById('rosterEditList');
-
   const sorted = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
-
   wrap.innerHTML = sorted.map(a=>`
-
     <div class="tag-edit-row" data-id="${a.id}">
-
       <input type="text" class="roster-name-inp" value="${escapeHtml(a.sporcuAdi)}" placeholder="Sporcu adı" style="flex:1;">
-
       <button type="button" class="roster-del-btn">×</button>
-
     </div>
-
   `).join('');
-
   wrap.querySelectorAll('.tag-edit-row').forEach(row=>{
-
     const id = row.dataset.id;
-
     row.querySelector('.roster-name-inp').addEventListener('input', (e)=>{
-
       const a = rosterCache.find(x=>x.id===id);
-
       if(a){ a.sporcuAdi = e.target.value; saveRoster(rosterCache); }
-
     });
-
     row.querySelector('.roster-del-btn').addEventListener('click', ()=>{
-
       if(!confirm('Bu sporcuyu listeden çıkarmak istediğine emin misin? Geçmiş yoklama/ölçüm/teknik kayıtları silinmez, sadece seçim listesinden kaldırılır.')) return;
-
       saveRoster(rosterCache.filter(x=>x.id!==id));
-
       renderRosterEditList();
-
     });
-
   });
-
 }
-
-
 
 document.getElementById('rosterAddBtn').addEventListener('click', async ()=>{
-
   const input = document.getElementById('rosterNewNameInput');
-
   const name = input.value.trim();
-
   if(!name) return;
-
   rosterCache.push({id:'r_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), sporcuAdi:name});
-
   await saveRoster(rosterCache);
-
   input.value = '';
-
   renderRosterEditList();
-
 });
-
 document.getElementById('rosterNewNameInput').addEventListener('keydown', (e)=>{
-
   if(e.key==='Enter'){ e.preventDefault(); document.getElementById('rosterAddBtn').click(); }
-
 });
-
-
 
 function openRosterModal(){
-
   renderRosterEditList();
-
   document.getElementById('rosterModal').classList.add('show');
-
 }
-
 function closeRosterModal(){
-
   document.getElementById('rosterModal').classList.remove('show');
-
 }
-
 document.getElementById('rosterModalCloseBtn').addEventListener('click', closeRosterModal);
-
 document.getElementById('rosterModal').addEventListener('click', (e)=>{
-
   if(e.target.id==='rosterModal') closeRosterModal();
-
 });
-
 document.getElementById('rosterModalDoneBtn').addEventListener('click', async ()=>{
-
   closeRosterModal();
-
   await refreshAllRosterSelects();
-
   if(currentAttAthleteId && !rosterCache.find(a=>a.id===currentAttAthleteId)){
-
     currentAttAthleteId = null;
-
     document.getElementById('attendanceBody').style.display='none';
-
     document.getElementById('attendanceEmpty').style.display='';
-
   }
-
   if(currentBodyAthleteId && !rosterCache.find(a=>a.id===currentBodyAthleteId)){
-
     currentBodyAthleteId = null;
-
     document.getElementById('bodyBody').style.display='none';
-
     document.getElementById('bodyEmpty').style.display='';
-
   }
-
   if(currentTeknikAthleteId && !rosterCache.find(a=>a.id===currentTeknikAthleteId)){
-
     currentTeknikAthleteId = null;
-
     document.getElementById('teknikBody').style.display='none';
-
     document.getElementById('teknikEmpty').style.display='';
-
   }
-
 });
-
 ['manageRosterBtnAtt','manageRosterBtnBody','manageRosterBtnTeknik','manageRosterBtnBulk'].forEach(id=>{
-
   const btn = document.getElementById(id);
-
   if(btn) btn.addEventListener('click', openRosterModal);
-
 });
-
-
 
 async function renderBoard(){
-
   const board = document.getElementById('board');
-
   const countEl = document.getElementById('boardCount');
-
   const list = await loadAthletes();
-
   countEl.textContent = list.length + (list.length===1 ? ' kayıt' : ' kayıt');
-
-
 
   const evalSel = document.getElementById('evalAthleteSelect');
 
-
-
   if(list.length===0){
-
     evalSel.innerHTML = '<option value="">+ Yeni değerlendirme ekle...</option>';
-
     board.innerHTML = '<div class="empty">Henüz kayıt yok. Yukarıdaki formu doldurup kaydedince burada listelenecek.</div>';
-
     return;
-
   }
-
   const sorted = [...list].sort((a,b)=> new Date(b.kayitTarihi) - new Date(a.kayitTarihi));
-
   const recMap = {};
-
   const cards = await Promise.all(sorted.map(async (entry)=>{
-
     const rec = await getAthleteRecord(entry.id);
-
     if(!rec) return '';
-
     recMap[entry.id] = rec;
-
     const dateStr = new Date(rec.kayitTarihi).toLocaleDateString('tr-TR');
-
     const avg = ((+rec.kondisyon + +rec.teknik + +rec.zihinsel + +rec.taktiksel)/4).toFixed(1);
-
     return `
-
       <div class="athlete-card" data-id="${entry.id}">
-
         <div class="ac-top">
-
           <span class="ac-name">${escapeHtml(rec.sporcuAdi)}</span>
-
           <span class="ac-meta">${rec.dogumYili?escapeHtml(rec.dogumYili)+' DOĞUMLU · ':''}${dateStr}</span>
-
         </div>
-
         <div class="ac-summary">
-
           <div class="ac-stat">Kondisyon<b>${rec.kondisyon}/10</b></div>
-
           <div class="ac-stat">Teknik<b>${rec.teknik}/10</b></div>
-
           <div class="ac-stat">Zihinsel<b>${rec.zihinsel}/10</b></div>
-
           <div class="ac-stat">Taktiksel<b>${rec.taktiksel}/10</b></div>
-
           <div class="ac-stat">Ortalama<b>${avg}</b></div>
-
         </div>
-
         ${rec.hedefler && rec.hedefler.length ? `<div class="pill-row" style="margin-top:10px;">${rec.hedefler.slice(0,3).map(h=>`<span class="pill">${escapeHtml(h)}</span>`).join('')}${rec.hedefler.length>3?`<span class="pill">+${rec.hedefler.length-3}</span>`:''}</div>` : ''}
-
         <div class="ac-actions">
-
           <button type="button" class="edit-btn" data-id="${entry.id}">Düzenle</button>
-
           <button type="button" class="pdf-export-btn" data-id="${entry.id}">PDF İndir</button>
-
           <button type="button" class="del" data-id="${entry.id}">Sil</button>
-
         </div>
-
       </div>
-
     `;
-
   }));
-
   board.innerHTML = cards.join('');
 
-
-
   // Dropdown: her geçmiş değerlendirme ayrı satır, isim aynı olsa bile tarihle ayırt edilir
-
   const sortedForSelect = [...sorted].sort((a,b)=>{
-
     const ra = recMap[a.id], rb = recMap[b.id];
-
     if(!ra || !rb) return 0;
-
     return ra.sporcuAdi.localeCompare(rb.sporcuAdi, 'tr') || (new Date(rb.kayitTarihi) - new Date(ra.kayitTarihi));
-
   });
-
   evalSel.innerHTML = '<option value="">+ Yeni değerlendirme ekle...</option>' +
-
     sortedForSelect.map(entry=>{
-
       const rec = recMap[entry.id];
-
       if(!rec) return '';
-
       const dStr = new Date(rec.kayitTarihi).toLocaleDateString('tr-TR');
-
       return `<option value="${entry.id}">${escapeHtml(rec.sporcuAdi)} — ${dStr}</option>`;
-
     }).join('');
-
   evalSel.value = editingId || '';
 
-
-
   board.querySelectorAll('.edit-btn').forEach(b=>{
-
     b.addEventListener('click', async (e)=>{
-
       e.stopPropagation();
-
       const id = b.dataset.id;
-
       const rec = await getAthleteRecord(id);
-
       if(rec) loadIntoForm(id, rec);
-
     });
-
   });
-
   board.querySelectorAll('.pdf-export-btn').forEach(b=>{
-
     b.addEventListener('click', async (e)=>{
-
       e.stopPropagation();
-
       const id = b.dataset.id;
-
       const rec = recMap[id] || await getAthleteRecord(id);
-
       if(rec) await exportEvalPdf(rec);
-
     });
-
   });
-
   board.querySelectorAll('.del').forEach(b=>{
-
     b.addEventListener('click', async (e)=>{
-
       e.stopPropagation();
-
       const id = b.dataset.id;
-
       if(!confirm('Bu kaydı silmek istediğine emin misin?')) return;
-
       await deleteAthleteRecord(id);
-
       const list = await loadAthletes();
-
       await saveAthletesIndex(list.filter(x=>x.id!==id));
-
       renderBoard();
-
       showToast('Kayıt silindi');
-
     });
-
   });
-
 }
-
-
 
 function loadIntoForm(id, rec){
-
   editingId = id;
-
   const sel = document.getElementById('evalAthleteSelect');
-
   if(sel) sel.value = id;
-
   document.getElementById('sporcuAdi').value = rec.sporcuAdi || '';
-
   document.getElementById('dogumYili').value = rec.dogumYili || '';
-
   document.getElementById('degerlendirmeTarihi').value = rec.degerlendirmeTarihi || '';
-
   document.getElementById('hedeflereUlasildi').value = rec.hedeflereUlasildi || '';
-
   document.getElementById('hedeflereUlasilamadi').value = rec.hedeflereUlasilamadi || '';
-
   document.getElementById('yanlisGittiDiger').value = rec.yanlisGittiDiger || '';
-
   document.getElementById('nedenleri').value = rec.nedenleri || '';
-
   document.getElementById('yeterliGelisim').value = rec.yeterliGelisim || '';
-
   document.getElementById('farkliYaklasim').value = rec.farkliYaklasim || '';
-
   document.getElementById('oncelikSiralama').value = rec.oncelikSiralama || '';
-
   document.getElementById('notlar').value = rec.notlar || '';
 
-
-
   document.querySelectorAll('.step-panel[data-step="1"] .check-grid:nth-of-type(1) input').forEach(cb=>{
-
     cb.checked = (rec.yanlisGitti||[]).includes(cb.value);
-
     cb.closest('.check-item').classList.toggle('checked', cb.checked);
-
   });
-
   document.querySelectorAll('.step-panel[data-step="1"] .check-grid:nth-of-type(2) input').forEach(cb=>{
-
     cb.checked = (rec.disFaktorler||[]).includes(cb.value);
-
     cb.closest('.check-item').classList.toggle('checked', cb.checked);
-
   });
-
-
 
   ['kondisyon','teknik','zihinsel','taktiksel'].forEach(k=>{
-
     document.getElementById(k).value = rec[k] || 5;
-
     document.getElementById(k+'Val').textContent = rec[k] || 5;
-
   });
 
-
-
   ['gucluList','zayifList','hedefList'].forEach(id=>document.getElementById(id).innerHTML='');
-
   (rec.gucluYonler && rec.gucluYonler.length ? rec.gucluYonler : ['']).forEach(v=>addDynRow('gucluList','Güçlü yön...', v));
-
   (rec.zayifYonler && rec.zayifYonler.length ? rec.zayifYonler : ['']).forEach(v=>addDynRow('zayifList','Zayıf yön...', v));
-
   (rec.hedefler && rec.hedefler.length ? rec.hedefler : ['']).forEach(v=>addDynRow('hedefList','Hedef...', v));
 
-
-
   showStep(1);
-
   showToast(rec.sporcuAdi + ' düzenleme için yüklendi');
-
 }
 
-
-
 async function handleSave(){
-
   const name = document.getElementById('sporcuAdi').value.trim();
-
   if(!name){
-
     showStep(1);
-
     document.getElementById('sporcuAdi').focus();
-
     showToast('Sporcu adı gerekli');
-
     return;
-
   }
-
   const data = collectFormData();
-
   data.disFaktorler = getDisFaktorler();
 
-
-
   const saveBtn = document.getElementById('saveBtn');
-
   saveBtn.disabled = true;
-
   saveBtn.textContent = 'Kaydediliyor...';
 
-
-
   const id = editingId || (Date.now().toString(36) + Math.random().toString(36).slice(2,7));
-
   const ok = await saveAthleteRecord(id, data);
 
-
-
   if(ok){
-
     const list = await loadAthletes();
-
     let indexSaved = true;
     if(!list.find(x=>x.id===id)){
-
       list.push({id, sporcuAdi:name, kayitTarihi: data.kayitTarihi});
-
       indexSaved = await saveAthletesIndex(list);
-
     }
-
     if(!indexSaved){
       showToast('Kayıt saklandı ancak liste güncellenemedi; sayfayı yenileyip kontrol et');
       saveBtn.disabled = false;
       saveBtn.textContent = 'Kaydet';
       return;
     }
-
     showToast('Kaydedildi: ' + name);
-
     clearForm();
-
     showStep(1);
-
     renderBoard();
-
   } else {
-
     showToast('Kayıt başarısız, tekrar dene');
-
   }
-
   saveBtn.disabled = false;
-
   saveBtn.textContent = 'Kaydet';
-
 }
 
-
-
 document.getElementById('saveBtn').addEventListener('click', handleSave);
-
 document.getElementById('evalForm').addEventListener('submit', (e)=>{
-
   e.preventDefault();
-
   handleSave();
-
 });
-
-
 
 renderBoard();
 
-
-
 /* =========================================================
-
    MODE SWITCH (Sezon Değerlendirmesi <-> Yoklama & Performans)
-
 ========================================================= */
-
 document.querySelectorAll('.mode-tab').forEach(tab=>{
-
   tab.addEventListener('click', ()=>{
-
     document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));
-
     tab.classList.add('active');
-
     const mode = tab.dataset.mode;
-
     document.getElementById('modeEval').style.display = (mode==='eval') ? '' : 'none';
-
     document.getElementById('modeAttendance').style.display = (mode==='attendance') ? '' : 'none';
-
     document.getElementById('modeBulkAtt').style.display = (mode==='bulkAtt') ? '' : 'none';
-
     document.getElementById('modeBody').style.display = (mode==='body') ? '' : 'none';
-
     document.getElementById('modeTeknik').style.display = (mode==='teknik') ? '' : 'none';
-
     document.getElementById('modeSezonplan').style.display = (mode==='sezonplan') ? '' : 'none';
-
     document.getElementById('modeSwimAnalyzer').style.display = (mode==='swim') ? '' : 'none';
-
     document.getElementById('modeTestKayit').style.display = (mode==='testkayit') ? '' : 'none';
-
     if(mode==='attendance') initAttendanceMode();
-
     if(mode==='bulkAtt') initBulkAttMode();
-
     if(mode==='body') initBodyMode();
-
     if(mode==='teknik') initTeknikMode();
-
     if(mode==='sezonplan') initSezonplanMode();
-
     if(mode==='swim') initSwimAnalyzerMode();
-
     if(mode==='testkayit') initTestKayitMode();
-
   });
-
 });
 
-
-
 /* =========================================================
-
    ATTENDANCE & PERFORMANCE MODULE
-
 ========================================================= */
-
 /* =========================================================
    SESSION DEFINITIONS — günlük çift antrenman yapısı
    (Pazar hariç her gün: sabah kara + sabah yüzme + akşam kara + akşam yüzme.
@@ -3345,7 +1891,6 @@ const SESSION_DEFS = [
 const SUNDAY_SESSION_DEFS = [
   {id:'yaris', label:'Yarış'},
 ];
-
 const ABSENCE_REASONS = [
   {id:'belirtilmedi', label:'Belirtilmedi'},
   {id:'hasta',     label:'Hasta'},
@@ -3355,14 +1900,11 @@ const ABSENCE_REASONS = [
   {id:'raporlu',   label:'Raporlu'},
   {id:'yarista',   label:'Yarışta'},
 ];
-
 function sessionDefsForDate(dateStr){
   const dow = new Date(dateStr+'T00:00:00').getDay(); // 0=Pazar
   return dow===0 ? SUNDAY_SESSION_DEFS : SESSION_DEFS;
 }
-
 function emptySessionEntry(){ return {durum:'', sebep:'', tags:[]}; }
-
 /* Eski tek-seanslı kayıtları ({attend, tags}) yeni çoklu-seans
    modeline taşır. Geriye dönük uyumluluk için: eski kayıt 'geldi'
    ise sabah_yuzme seansına, 'gelmedi' ise tüm seanslara gelmedi
@@ -3379,7 +1921,6 @@ function normalizeDayEntry(raw, dateStr){
   }
   return {sessions:{}};
 }
-
 function computeSessionScore(sessionEntry){
   if(!sessionEntry || !sessionEntry.tags) return 0;
   return sessionEntry.tags.reduce((sum, tagId)=>{
@@ -3387,752 +1928,380 @@ function computeSessionScore(sessionEntry){
     return sum + (t ? t.points : 0);
   }, 0);
 }
-
 function computeDayScore(dayEntry){
   const norm = dayEntry && dayEntry.sessions ? dayEntry : normalizeDayEntry(dayEntry, '2000-01-01');
   if(!norm.sessions) return 0;
   return Object.values(norm.sessions).reduce((sum, s)=> sum + computeSessionScore(s), 0);
 }
-
 const DEFAULT_TAGS = [
-
   {id:'tempo_ok',   label:'Tempoları doğru yaptı',            points:1,  type:'pos'},
-
   {id:'teknik_ok',  label:'Söylenen teknik düzeltmeye dikkat etti', points:1, type:'pos'},
-
   {id:'lider',      label:'Grubu olumlu yönde etkiledi / liderlik gösterdi', points:1, type:'pos'},
-
   {id:'malzeme_yok',label:'Antrenman malzemesi getirmedi',     points:-1, type:'neg'},
-
   {id:'icecek_yok', label:'İçeceğini getirmedi',                points:-1, type:'neg'},
-
   {id:'set_yarim',  label:'Zamansız ayrılıp seti yarım bıraktı', points:-3, type:'neg'},
-
   {id:'dikkatsiz',  label:'Antrenman sırasında dikkatsizdi',     points:-1, type:'neg'},
-
   {id:'gecikme',    label:'Antrenmana geç geldi',                points:-1, type:'neg'},
-
 ];
 
-
-
 let attendanceTags = [];
-
 let attAthletesCache = [];
-
 let currentAttAthleteId = null;
-
 let modalActiveDate = null; // 'YYYY-MM-DD'
-
 let modalActiveSession = null; // current session id within modal
-
 let modalSessions = {}; // {sessionId: {durum, sebep, tags}}
 
-
-
 async function loadTags(){
-
   try{
-
     const res = await window.storage.get('attendance_tags', false);
-
     if(!res) { attendanceTags = DEFAULT_TAGS.slice(); await saveTags(); return; }
-
     attendanceTags = JSON.parse(res.value);
-
   }catch(e){
-
     attendanceTags = DEFAULT_TAGS.slice();
-
   }
-
 }
-
 async function saveTags(){
-
   try{ await window.storage.set('attendance_tags', JSON.stringify(attendanceTags), false); }
-
   catch(e){ console.error('Tag save failed', e); }
-
 }
-
-
 
 async function initAttendanceMode(){
-
   await loadTags();
-
   await loadRoster();
-
   attAthletesCache = rosterCache;
-
   const sel = document.getElementById('attAthleteSelect');
-
   populateRosterSelect(sel);
-
   if(!document.getElementById('attMonthSelect').value){
-
     const now = new Date();
-
     document.getElementById('attMonthSelect').value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-
   }
-
   renderTagLegend();
-
   maybeRenderCalendar();
-
 }
-
-
 
 document.getElementById('attAthleteSelect').addEventListener('change', maybeRenderCalendar);
-
 document.getElementById('attMonthSelect').addEventListener('change', maybeRenderCalendar);
 
-
-
 function maybeRenderCalendar(){
-
   const athleteId = document.getElementById('attAthleteSelect').value;
-
   const month = document.getElementById('attMonthSelect').value;
-
   const body = document.getElementById('attendanceBody');
-
   const empty = document.getElementById('attendanceEmpty');
-
   if(!athleteId || !month){
-
     body.style.display='none'; empty.style.display='';
-
     return;
-
   }
-
   currentAttAthleteId = athleteId;
-
   body.style.display=''; empty.style.display='none';
-
   renderCalendar(athleteId, month);
-
 }
-
-
 
 function renderTagLegend(){
-
   const wrap = document.getElementById('tagLegend');
-
   wrap.innerHTML = attendanceTags.map(t=>`
-
     <span class="legend-item">
-
       <span class="legend-dot" style="background:${t.type==='pos'?'var(--good)':'var(--bad)'}"></span>
-
       ${escapeHtml(t.label)} (${t.points>0?'+':''}${t.points})
-
     </span>
-
   `).join('');
-
 }
-
-
 
 async function getAttendanceData(athleteId){
-
   try{
-
     const res = await window.storage.get('attendance_'+athleteId, false);
-
     return res ? JSON.parse(res.value) : {};
-
   }catch(e){ return {}; }
-
 }
-
 async function saveAttendanceData(athleteId, data){
-
   try{ await window.storage.set('attendance_'+athleteId, JSON.stringify(data), false); return true; }
-
   catch(e){ console.error('Attendance save failed', e); return false; }
-
 }
-
-
 
 async function renderCalendar(athleteId, monthStr){
-
   const [year, month] = monthStr.split('-').map(Number);
-
   const rawData = await getAttendanceData(athleteId);
-
   const firstDay = new Date(year, month-1, 1);
-
   const daysInMonth = new Date(year, month, 0).getDate();
-
   const startDow = (firstDay.getDay()+6)%7; // make Monday=0
-
   const todayStr = new Date().toISOString().slice(0,10);
 
-
-
   let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
-
   for(let d=1; d<=daysInMonth; d++){
-
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-
     const entry = normalizeDayEntry(rawData[dateStr], dateStr);
-
     const sessVals = Object.values(entry.sessions||{});
-
     const marked = sessVals.filter(s=>s.durum);
-
     if(marked.length){
-
       totalDays++;
-
       const anyPresent = marked.some(s=>s.durum==='geldi');
-
       if(anyPresent) presentDays++; else absentDays++;
-
       totalScore += computeDayScore(entry);
-
     }
-
   }
-
   const avgScore = presentDays>0 ? (totalScore/presentDays).toFixed(1) : '0.0';
-
   const attendanceRate = totalDays>0 ? Math.round((presentDays/totalDays)*100) : 0;
 
-
-
   document.getElementById('attSummary').innerHTML = `
-
     <div class="att-stat-card"><div class="lbl">KATILIM</div><div class="val">${presentDays}/${totalDays}</div></div>
-
     <div class="att-stat-card"><div class="lbl">DEVAM ORANI</div><div class="val">%${attendanceRate}</div></div>
-
     <div class="att-stat-card"><div class="lbl">TOPLAM PUAN</div><div class="val ${totalScore>0?'pos':totalScore<0?'neg':''}">${totalScore>0?'+':''}${totalScore}</div></div>
-
     <div class="att-stat-card"><div class="lbl">GÜNLÜK ORTALAMA</div><div class="val ${avgScore>0?'pos':avgScore<0?'neg':''}">${avgScore>0?'+':''}${avgScore}</div></div>
-
   `;
 
-
-
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
-
   let html = dows.map(d=>`<div class="cal-dow">${d}</div>`).join('');
-
   for(let i=0;i<startDow;i++) html += '<div class="cal-day empty-cell"></div>';
 
-
-
   for(let d=1; d<=daysInMonth; d++){
-
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-
     const entry = normalizeDayEntry(rawData[dateStr], dateStr);
-
     const sessDefs = sessionDefsForDate(dateStr);
-
     const sessVals = sessDefs.map(sd=>({def:sd, val:entry.sessions[sd.id]})).filter(x=>x.val && x.val.durum);
-
     const isFuture = dateStr > todayStr;
-
     let cls = 'cal-day';
-
     if(isFuture) cls += ' future';
-
     const anyPresent = sessVals.some(x=>x.val.durum==='geldi');
-
     const anyAbsent = sessVals.some(x=>x.val.durum==='gelmedi');
-
     if(anyPresent) cls += ' geldi';
-
     else if(anyAbsent) cls += ' gelmedi';
 
-
-
     let bottomHtml = '';
-
     if(sessVals.length){
-
       const score = computeDayScore(entry);
-
       const scoreCls = score>0?'pos':score<0?'neg':'zero';
-
       const sessCount = sessDefs.length;
-
       const presentCount = sessVals.filter(x=>x.val.durum==='geldi').length;
-
       bottomHtml = `<div class="ddots"><span class="dabsent" style="color:var(--foam-dim);">${presentCount}/${sessCount}</span></div><div class="dscore ${scoreCls}">${score>0?'+':''}${score}</div>`;
-
     }
 
-
-
     html += `<div class="${cls}" data-date="${dateStr}">
-
       <span class="dnum">${d}</span>
-
       ${bottomHtml}
-
     </div>`;
-
   }
-
   document.getElementById('calendarGrid').innerHTML = html;
 
-
-
   document.querySelectorAll('.cal-day[data-date]').forEach(cell=>{
-
     cell.addEventListener('click', ()=> openDayModal(cell.dataset.date));
-
   });
-
 }
-
-
 
 /* ---------- Day entry modal ---------- */
-
 async function openDayModal(dateStr){
-
   modalActiveDate = dateStr;
-
   const athlete = attAthletesCache.find(a=>a.id===currentAttAthleteId);
-
   document.getElementById('modalAthleteName').textContent = athlete ? athlete.sporcuAdi : '';
-
   const d = new Date(dateStr+'T00:00:00');
-
   const months = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-
   document.getElementById('modalDate').textContent = d.getDate()+' '+months[d.getMonth()]+' '+d.getFullYear();
 
-
-
   const data = await getAttendanceData(currentAttAthleteId);
-
   const entry = normalizeDayEntry(data[dateStr], dateStr);
-
   const sessDefs = sessionDefsForDate(dateStr);
-
   modalSessions = {};
-
   sessDefs.forEach(sd=>{
-
     const existing = entry.sessions[sd.id];
-
     modalSessions[sd.id] = existing ? {durum: existing.durum||'', sebep: existing.sebep||'', tags:(existing.tags||[]).slice()} : emptySessionEntry();
-
   });
-
   modalActiveSession = sessDefs[0].id;
 
-
-
   renderModalSessionTabs();
-
   renderModalSessionUI();
-
   document.getElementById('dayModal').classList.add('show');
-
 }
-
-
 
 function renderModalSessionTabs(){
-
   const sessDefs = sessionDefsForDate(modalActiveDate);
-
   const wrap = document.getElementById('modalSessionTabs');
-
   if(sessDefs.length<=1){ wrap.innerHTML=''; wrap.style.display='none'; return; }
-
   wrap.style.display='';
-
   wrap.innerHTML = sessDefs.map(sd=>{
-
     const s = modalSessions[sd.id];
-
     const mark = s && s.durum==='geldi' ? '✓' : s && s.durum==='gelmedi' ? '✕' : '';
-
     return `<button type="button" class="session-tab ${sd.id===modalActiveSession?'active':''}" data-sid="${sd.id}">${escapeHtml(sd.label)} ${mark?`<span class="scount" style="color:${mark==='✓'?'var(--good)':'var(--bad)'}">${mark}</span>`:''}</button>`;
-
   }).join('');
-
   wrap.querySelectorAll('.session-tab').forEach(btn=>{
-
     btn.addEventListener('click', ()=>{
-
       modalActiveSession = btn.dataset.sid;
-
       renderModalSessionTabs();
-
       renderModalSessionUI();
-
     });
-
   });
-
 }
-
-
 
 function renderModalSessionUI(){
-
   const s = modalSessions[modalActiveSession] || emptySessionEntry();
-
   document.querySelectorAll('#dayModal .att-toggle-btn').forEach(btn=>{
-
     btn.classList.toggle('active', btn.dataset.val === s.durum);
-
   });
-
   document.getElementById('modalTagsWrap').style.display = (s.durum==='geldi') ? '' : 'none';
-
   const reasonWrap = document.getElementById('modalReasonWrap');
-
   reasonWrap.style.display = (s.durum==='gelmedi') ? '' : 'none';
-
   if(s.durum==='gelmedi'){
-
     const sel = document.getElementById('modalReasonSelect');
-
     sel.innerHTML = ABSENCE_REASONS.map(r=>`<option value="${r.id}">${escapeHtml(r.label)}</option>`).join('');
-
     sel.value = s.sebep || 'belirtilmedi';
-
   }
-
   renderModalTagGrid();
-
   updateModalScoreLine();
-
 }
-
-
 
 function renderModalTagGrid(){
-
   const grid = document.getElementById('modalTagGrid');
-
   const s = modalSessions[modalActiveSession] || emptySessionEntry();
-
   grid.innerHTML = attendanceTags.map(t=>{
-
     const checked = s.tags.includes(t.id);
-
     return `
-
       <label class="tag-opt ${t.type} ${checked?'selected':''}" data-tagid="${t.id}">
-
         <input type="checkbox" value="${t.id}" ${checked?'checked':''}>
-
         <span class="tag-label">${escapeHtml(t.label)}</span>
-
         <span class="tag-pts">${t.points>0?'+':''}${t.points}</span>
-
       </label>
-
     `;
-
   }).join('');
-
   grid.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-
     cb.addEventListener('change', ()=>{
-
       const tagId = cb.value;
-
       const sess = modalSessions[modalActiveSession];
-
       if(cb.checked){ if(!sess.tags.includes(tagId)) sess.tags.push(tagId); }
-
       else { sess.tags = sess.tags.filter(id=>id!==tagId); }
-
       cb.closest('.tag-opt').classList.toggle('selected', cb.checked);
-
       updateModalScoreLine();
-
     });
-
   });
-
 }
-
-
 
 function updateModalScoreLine(){
-
   const totalScore = Object.values(modalSessions).reduce((sum,s)=> sum + computeSessionScore(s), 0);
-
   const line = document.getElementById('modalScoreLine');
-
   line.textContent = 'Gün puanı (tüm seanslar): ' + (totalScore>0?'+':'') + totalScore;
-
   line.style.color = totalScore>0 ? 'var(--good)' : totalScore<0 ? 'var(--bad)' : 'var(--ink)';
-
 }
-
-
 
 document.querySelectorAll('#dayModal .att-toggle-btn').forEach(btn=>{
-
   btn.addEventListener('click', ()=>{
-
     const sess = modalSessions[modalActiveSession];
-
     sess.durum = btn.dataset.val;
-
     if(sess.durum !== 'geldi') sess.tags = [];
-
     if(sess.durum !== 'gelmedi') sess.sebep = '';
-
     else if(!sess.sebep) sess.sebep = 'belirtilmedi';
-
     renderModalSessionTabs();
-
     renderModalSessionUI();
-
   });
-
 });
-
-
 
 document.getElementById('modalReasonSelect').addEventListener('change', (e)=>{
-
   const sess = modalSessions[modalActiveSession];
-
   sess.sebep = e.target.value;
-
 });
-
-
 
 function closeDayModal(){
-
   document.getElementById('dayModal').classList.remove('show');
-
 }
-
 document.getElementById('modalCloseBtn').addEventListener('click', closeDayModal);
-
 document.getElementById('modalCancelBtn').addEventListener('click', closeDayModal);
-
 document.getElementById('dayModal').addEventListener('click', (e)=>{
-
   if(e.target.id==='dayModal') closeDayModal();
-
 });
-
-
 
 document.getElementById('modalSaveBtn').addEventListener('click', async ()=>{
-
   const data = await getAttendanceData(currentAttAthleteId);
-
   const sessions = {};
-
   let anyMarked = false;
-
   Object.keys(modalSessions).forEach(sid=>{
-
     const s = modalSessions[sid];
-
     if(s.durum){ sessions[sid] = {durum:s.durum, sebep:s.sebep||'', tags:s.tags||[]}; anyMarked = true; }
-
   });
-
   if(!anyMarked){
-
     delete data[modalActiveDate];
-
   } else {
-
     data[modalActiveDate] = {sessions};
-
   }
-
   const ok = await saveAttendanceData(currentAttAthleteId, data);
-
   closeDayModal();
-
   if(ok){
-
     showToast('Gün kaydedildi');
-
     const month = document.getElementById('attMonthSelect').value;
-
     renderCalendar(currentAttAthleteId, month);
-
   } else {
-
     showToast('Kayıt başarısız, tekrar dene');
-
   }
-
 });
-
-
 
 /* ---------- Tag management modal ---------- */
-
 document.getElementById('manageTagsBtn').addEventListener('click', openTagModal);
 
-
-
 function openTagModal(){
-
   renderTagEditList();
-
   document.getElementById('tagModal').classList.add('show');
-
 }
-
 function closeTagModal(){
-
   document.getElementById('tagModal').classList.remove('show');
-
 }
-
 document.getElementById('tagModalCloseBtn').addEventListener('click', closeTagModal);
-
 document.getElementById('tagModal').addEventListener('click', (e)=>{
-
   if(e.target.id==='tagModal') closeTagModal();
-
 });
-
-
 
 function renderTagEditList(){
-
   const wrap = document.getElementById('tagEditList');
-
   wrap.innerHTML = attendanceTags.map((t,i)=>`
-
     <div class="tag-edit-row" data-idx="${i}">
-
       <select class="tag-type-sel">
-
         <option value="pos" ${t.type==='pos'?'selected':''}>+ Olumlu</option>
-
         <option value="neg" ${t.type==='neg'?'selected':''}>− Olumsuz</option>
-
       </select>
-
       <input type="text" class="tag-label-inp" value="${escapeHtml(t.label)}" placeholder="Davranış açıklaması">
-
       <input type="number" class="tag-pts-inp" value="${t.points}" step="1">
-
       <button type="button" class="tag-del-btn">×</button>
-
     </div>
-
   `).join('');
 
-
-
   wrap.querySelectorAll('.tag-edit-row').forEach(row=>{
-
     const idx = parseInt(row.dataset.idx);
-
     row.querySelector('.tag-type-sel').addEventListener('change', (e)=>{
-
       attendanceTags[idx].type = e.target.value;
-
       // flip sign convention automatically: pos -> positive number, neg -> negative
-
       const ptsInp = row.querySelector('.tag-pts-inp');
-
       let val = parseInt(ptsInp.value)||0;
-
       if(e.target.value==='pos' && val<0) val = Math.abs(val);
-
       if(e.target.value==='neg' && val>0) val = -Math.abs(val);
-
       ptsInp.value = val;
-
       attendanceTags[idx].points = val;
-
       saveTags();
-
     });
-
     row.querySelector('.tag-label-inp').addEventListener('input', (e)=>{
-
       attendanceTags[idx].label = e.target.value;
-
       saveTags();
-
     });
-
     row.querySelector('.tag-pts-inp').addEventListener('input', (e)=>{
-
       attendanceTags[idx].points = parseInt(e.target.value)||0;
-
       saveTags();
-
     });
-
     row.querySelector('.tag-del-btn').addEventListener('click', ()=>{
-
       attendanceTags.splice(idx,1);
-
       saveTags();
-
       renderTagEditList();
-
     });
-
   });
-
 }
 
-
-
 document.getElementById('addTagBtn').addEventListener('click', ()=>{
-
   attendanceTags.push({id:'tag_'+Date.now().toString(36), label:'', points:1, type:'pos'});
-
   saveTags();
-
   renderTagEditList();
-
 });
-
-
 
 document.getElementById('tagModalDoneBtn').addEventListener('click', async ()=>{
-
   attendanceTags = attendanceTags.filter(t=>t.label.trim().length>0);
-
   await saveTags();
-
   closeTagModal();
-
   renderTagLegend();
-
   if(currentAttAthleteId){
-
     const month = document.getElementById('attMonthSelect').value;
-
     renderCalendar(currentAttAthleteId, month);
-
   }
-
 });
-
-
 
 /* =========================================================
    BULK DAY ATTENDANCE MODULE (Güne Göre Toplu İşaretle)
@@ -4142,207 +2311,109 @@ document.getElementById('tagModalDoneBtn').addEventListener('click', async ()=>{
    attendance_{athleteId} kayıtlarını kullanır; tekli
    sporcu takviminde de aynı veriler görünür.
 ========================================================= */
-
 let bulkDateStr = null;
-
 let bulkAthletes = []; // roster snapshot
-
 let bulkActiveSession = null;
-
 let bulkDataByAthlete = {}; // {athleteId: {sessions:{...}}}  (full day entry per athlete)
-
 let bulkOpenTagsAthleteId = null; // which athlete row currently shows the tag popover
 
-
-
 const TR_MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-
 const TR_DOWS_FULL = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Pazar'];
 
-
-
 async function initBulkAttMode(){
-
   await loadTags();
-
   await loadRoster();
-
   bulkAthletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
-
   const dateInput = document.getElementById('bulkDateInput');
-
   if(!dateInput.value){
-
     dateInput.value = new Date().toISOString().slice(0,10);
-
   }
-
   const pdfMonthInput = document.getElementById('bulkPdfMonthInput');
-
   if(pdfMonthInput && !pdfMonthInput.value){
-
     const now = new Date();
-
     pdfMonthInput.value = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
-
   }
-
   await maybeRenderBulkDay();
-
 }
-
-
 
 document.getElementById('bulkDateInput').addEventListener('change', maybeRenderBulkDay);
 
-
-
 async function maybeRenderBulkDay(){
-
   const dateStr = document.getElementById('bulkDateInput').value;
-
   const body = document.getElementById('bulkAttBody');
-
   const empty = document.getElementById('bulkAttEmpty');
-
   if(!dateStr){ body.style.display='none'; empty.style.display=''; return; }
-
   bulkDateStr = dateStr;
-
   const d = new Date(dateStr+'T00:00:00');
-
   document.getElementById('bulkDayLabel').textContent = d.getDate()+' '+TR_MONTHS[d.getMonth()]+' '+d.getFullYear()+' — '+TR_DOWS_FULL[(d.getDay()+6)%7];
-
   if(!bulkAthletes.length){
-
     body.style.display='none';
-
     empty.style.display='';
-
     empty.textContent = 'Önce sporcu listesine en az bir sporcu ekle (+ Sporcu Ekle / Çıkar).';
-
     return;
-
   }
-
   body.style.display='';
-
   empty.style.display='none';
-
   await loadBulkDataForDate(dateStr);
-
   const sessDefs = sessionDefsForDate(dateStr);
-
   bulkActiveSession = sessDefs[0].id;
-
   bulkOpenTagsAthleteId = null;
-
   renderBulkSessionTabs();
-
   renderBulkAthleteList();
-
 }
-
-
 
 async function loadBulkDataForDate(dateStr){
-
   bulkDataByAthlete = {};
-
   for(const a of bulkAthletes){
-
     const raw = await getAttendanceData(a.id);
-
     const entry = normalizeDayEntry(raw[dateStr], dateStr);
-
     bulkDataByAthlete[a.id] = entry;
-
   }
-
 }
-
-
 
 function renderBulkSessionTabs(){
-
   const sessDefs = sessionDefsForDate(bulkDateStr);
-
   const wrap = document.getElementById('bulkSessionTabs');
-
   wrap.innerHTML = sessDefs.map(sd=>{
-
     const count = bulkAthletes.filter(a=>{
-
       const s = bulkDataByAthlete[a.id].sessions[sd.id];
-
       return s && s.durum==='geldi';
-
     }).length;
-
     return `<button type="button" class="session-tab ${sd.id===bulkActiveSession?'active':''}" data-sid="${sd.id}">${escapeHtml(sd.label)}<span class="scount">${count}/${bulkAthletes.length}</span></button>`;
-
   }).join('');
-
   wrap.querySelectorAll('.session-tab').forEach(btn=>{
-
     btn.addEventListener('click', ()=>{
-
       bulkActiveSession = btn.dataset.sid;
-
       bulkOpenTagsAthleteId = null;
-
       renderBulkSessionTabs();
-
       renderBulkAthleteList();
-
     });
-
   });
-
 }
 
-
-
 function renderBulkAthleteList(){
-
   const wrap = document.getElementById('bulkAthleteList');
-
   if(!bulkAthletes.length){
-
     wrap.innerHTML = `<p class="bulk-empty-note">Sporcu listesi boş.</p>`;
-
     return;
-
   }
-
   wrap.innerHTML = bulkAthletes.map(a=>{
-
     const entry = bulkDataByAthlete[a.id];
-
     const s = entry.sessions[bulkActiveSession] || emptySessionEntry();
-
     if(!entry.sessions[bulkActiveSession]) entry.sessions[bulkActiveSession] = s;
-
     const rowCls = s.durum==='geldi' ? 'is-geldi' : s.durum==='gelmedi' ? 'is-gelmedi' : '';
-
     const tagCount = (s.tags||[]).length;
-
     const score = computeSessionScore(s);
-
     const scoreNote = s.durum==='geldi' && tagCount ? ` <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:${score>0?'var(--good)':score<0?'var(--bad)':'var(--foam-dim)'};">(${score>0?'+':''}${score} puan)</span>` : '';
-
     const reasonHtml = s.durum==='gelmedi' ? `
       <select class="bulk-reason-select" data-aid="${a.id}">
         ${ABSENCE_REASONS.map(r=>`<option value="${r.id}" ${ (s.sebep||'belirtilmedi')===r.id ? 'selected':''}>${escapeHtml(r.label)}</option>`).join('')}
       </select>
     ` : '';
-
     const tagsBtnHtml = s.durum==='geldi' ? `
       <button type="button" class="bulk-tags-btn ${tagCount?'has-tags':''}" data-aid="${a.id}">Davranış${tagCount?' ('+tagCount+')':''}</button>
     ` : '';
-
     const showPopover = bulkOpenTagsAthleteId===a.id && s.durum==='geldi';
-
     return `
       <div class="bulk-athlete-row ${rowCls}" data-aid="${a.id}">
         <div>
@@ -4367,447 +2438,225 @@ function renderBulkAthleteList(){
         </div>
       </div>
     `;
-
   }).join('');
 
-
-
   wrap.querySelectorAll('.bulk-toggle-btn').forEach(btn=>{
-
     btn.addEventListener('click', ()=>{
-
       const aid = btn.dataset.aid;
-
       const entry = bulkDataByAthlete[aid];
-
       const s = entry.sessions[bulkActiveSession];
-
       const newVal = btn.dataset.val;
-
       s.durum = newVal;
-
       if(s.durum !== 'geldi') s.tags = [];
-
       if(s.durum !== 'gelmedi') s.sebep = '';
-
       else if(!s.sebep) s.sebep = 'belirtilmedi';
-
       if(s.durum !== 'geldi' && bulkOpenTagsAthleteId===aid) bulkOpenTagsAthleteId = null;
-
       renderBulkSessionTabs();
-
       renderBulkAthleteList();
-
     });
-
   });
-
-
 
   wrap.querySelectorAll('.bulk-reason-select').forEach(sel=>{
-
     sel.addEventListener('change', (e)=>{
-
       const aid = sel.dataset.aid;
-
       bulkDataByAthlete[aid].sessions[bulkActiveSession].sebep = e.target.value;
-
     });
-
   });
-
-
 
   wrap.querySelectorAll('.bulk-tags-btn').forEach(btn=>{
-
     btn.addEventListener('click', ()=>{
-
       const aid = btn.dataset.aid;
-
       bulkOpenTagsAthleteId = (bulkOpenTagsAthleteId===aid) ? null : aid;
-
       renderBulkAthleteList();
-
     });
-
   });
-
-
 
   wrap.querySelectorAll('.bulk-tags-popover input[type=checkbox]').forEach(cb=>{
-
     cb.addEventListener('change', ()=>{
-
       const aid = cb.dataset.aid;
-
       const tagId = cb.dataset.tagid;
-
       const s = bulkDataByAthlete[aid].sessions[bulkActiveSession];
-
       if(cb.checked){ if(!s.tags.includes(tagId)) s.tags.push(tagId); }
-
       else { s.tags = s.tags.filter(id=>id!==tagId); }
-
       renderBulkAthleteList();
-
     });
-
   });
-
 }
-
-
 
 document.getElementById('bulkSaveBtn').addEventListener('click', async ()=>{
-
   let savedCount = 0;
-
   for(const a of bulkAthletes){
-
     const entry = bulkDataByAthlete[a.id];
-
     const data = await getAttendanceData(a.id);
-
     const cleanSessions = {};
-
     let anyMarked = false;
-
     Object.keys(entry.sessions).forEach(sid=>{
-
       const s = entry.sessions[sid];
-
       if(s.durum){ cleanSessions[sid] = {durum:s.durum, sebep:s.sebep||'', tags:s.tags||[]}; anyMarked = true; }
-
     });
-
     if(anyMarked){ data[bulkDateStr] = {sessions: cleanSessions}; }
-
     else { delete data[bulkDateStr]; }
-
     const ok = await saveAttendanceData(a.id, data);
-
     if(ok) savedCount++;
-
   }
-
   showToast(savedCount+'/'+bulkAthletes.length+' sporcu için kayıt güncellendi');
-
   document.getElementById('bulkSaveHint').textContent = 'Son kaydedilme: az önce';
-
 });
 
-
-
-
-
 /* =========================================================
-
    BODY MEASUREMENTS MODULE (Vücut Ölçümleri)
-
 ========================================================= */
-
 let currentBodyAthleteId = null;
 
-
-
 async function getMeasurements(athleteId){
-
   try{
-
     const res = await window.storage.get('measurements_'+athleteId, false);
-
     return res ? JSON.parse(res.value) : [];
-
   }catch(e){ return []; }
-
 }
-
 async function saveMeasurements(athleteId, list){
-
   try{ await window.storage.set('measurements_'+athleteId, JSON.stringify(list), false); return true; }
-
   catch(e){ console.error('Measurement save failed', e); return false; }
-
 }
-
-
 
 async function initBodyMode(){
-
   await loadRoster();
-
   const sel = document.getElementById('bodyAthleteSelect');
-
   populateRosterSelect(sel);
-
   if(!document.getElementById('bmTarih').value){
-
     document.getElementById('bmTarih').value = new Date().toISOString().slice(0,10);
-
   }
-
   maybeRenderBody();
-
 }
-
-
 
 document.getElementById('bodyAthleteSelect').addEventListener('change', maybeRenderBody);
 
-
-
 function maybeRenderBody(){
-
   const athleteId = document.getElementById('bodyAthleteSelect').value;
-
   const body = document.getElementById('bodyBody');
-
   const empty = document.getElementById('bodyEmpty');
-
   if(!athleteId){
-
     body.style.display='none'; empty.style.display='';
-
     currentBodyAthleteId = null;
-
     return;
-
   }
-
   currentBodyAthleteId = athleteId;
-
   body.style.display=''; empty.style.display='none';
-
   renderBodyData(athleteId);
-
 }
-
-
 
 document.getElementById('bmAddBtn').addEventListener('click', async ()=>{
-
   if(!currentBodyAthleteId){ showToast('Önce sporcu seç'); return; }
-
   const tarih = document.getElementById('bmTarih').value;
-
   if(!tarih){ showToast('Tarih gerekli'); return; }
-
   const entry = {
-
     id: 'm_'+Date.now().toString(36),
-
     tarih,
-
     boy: document.getElementById('bmBoy').value.trim(),
-
     kilo: document.getElementById('bmKilo').value.trim(),
-
     kas: document.getElementById('bmKas').value.trim(),
-
     yag: document.getElementById('bmYag').value.trim()
-
   };
-
   if(!entry.boy && !entry.kilo && !entry.kas && !entry.yag){
-
     showToast('En az bir ölçüm değeri gir');
-
     return;
-
   }
-
   const list = await getMeasurements(currentBodyAthleteId);
-
   list.push(entry);
-
   const ok = await saveMeasurements(currentBodyAthleteId, list);
-
   if(ok){
-
     showToast('Ölçüm kaydedildi');
-
     ['bmBoy','bmKilo','bmKas','bmYag'].forEach(id=>document.getElementById(id).value='');
-
     renderBodyData(currentBodyAthleteId);
-
   } else {
-
     showToast('Kayıt başarısız, tekrar dene');
-
   }
-
 });
 
-
-
 function sparklineSvg(points, color){
-
   if(points.length<2) return '<p class="hint">Grafik için en az 2 ölçüm gerekli.</p>';
-
   const w=600, h=90, pad=8;
-
   const vals = points.map(p=>p.v);
-
   const min = Math.min(...vals), max = Math.max(...vals);
-
   const range = (max-min) || 1;
-
   const stepX = (w-2*pad)/(points.length-1);
-
   const coords = points.map((p,i)=>{
-
     const x = pad + i*stepX;
-
     const y = h-pad - ((p.v-min)/range)*(h-2*pad);
-
     return [x,y];
-
   });
-
   const path = coords.map((c,i)=> (i===0?'M':'L')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
-
   const dots = coords.map((c,i)=>`<circle cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" r="3" fill="${color}"><title>${escapeHtml(points[i].tarih)}: ${points[i].v}</title></circle>`).join('');
-
   return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:90px;display:block;">
-
     <path d="${path}" fill="none" stroke="${color}" stroke-width="2"/>
-
     ${dots}
-
   </svg>`;
-
 }
-
-
 
 async function renderBodyData(athleteId){
-
   const list = (await getMeasurements(athleteId)).slice().sort((a,b)=> a.tarih.localeCompare(b.tarih));
 
-
-
   const chartWrap = document.getElementById('bodyChartWrap');
-
   if(list.length===0){
-
     chartWrap.innerHTML='';
-
   } else {
-
     const kiloPts = list.filter(e=>e.kilo!=='' && e.kilo!=null).map(e=>({tarih:e.tarih, v:+e.kilo}));
-
     const yagPts = list.filter(e=>e.yag!=='' && e.yag!=null).map(e=>({tarih:e.tarih, v:+e.yag}));
-
     chartWrap.innerHTML = `
-
       <div class="panel">
-
         <h2 style="font-size:15px;">Kilo Eğilimi (kg)</h2>
-
         ${sparklineSvg(kiloPts, 'var(--lane-coral)')}
-
       </div>
-
       <div class="panel">
-
         <h2 style="font-size:15px;">Yağ Yüzdesi Eğilimi (%)</h2>
-
         ${sparklineSvg(yagPts, 'var(--pool-500)')}
-
       </div>
-
     `;
-
   }
-
-
 
   const tableWrap = document.getElementById('bodyTableWrap');
-
   if(list.length===0){
-
     tableWrap.innerHTML = '<div class="empty">Henüz ölçüm kaydı yok.</div>';
-
     return;
-
   }
-
   const rows = list.slice().reverse().map(e=>{
-
     const d = new Date(e.tarih+'T00:00:00');
-
     const dStr = d.toLocaleDateString('tr-TR');
-
     return `<div class="athlete-card" data-id="${e.id}" style="cursor:default;">
-
       <div class="ac-top">
-
         <span class="ac-name" style="font-size:13px;">${dStr}</span>
-
         <button type="button" class="bm-del" data-id="${e.id}" style="background:transparent;border:1px solid rgba(194,63,46,0.5);color:var(--bad);border-radius:2px;cursor:pointer;font-size:12px;padding:3px 8px;">Sil</button>
-
       </div>
-
       <div class="ac-summary">
-
         <div class="ac-stat">Boy<b>${e.boy?e.boy+' cm':'—'}</b></div>
-
         <div class="ac-stat">Kilo<b>${e.kilo?e.kilo+' kg':'—'}</b></div>
-
         <div class="ac-stat">Kas %<b>${e.kas?e.kas+'%':'—'}</b></div>
-
         <div class="ac-stat">Yağ %<b>${e.yag?e.yag+'%':'—'}</b></div>
-
       </div>
-
     </div>`;
-
   }).join('');
-
   tableWrap.innerHTML = rows;
-
   tableWrap.querySelectorAll('.bm-del').forEach(btn=>{
-
     btn.addEventListener('click', async ()=>{
-
       if(!confirm('Bu ölçümü silmek istediğine emin misin?')) return;
-
       const id = btn.dataset.id;
-
       const cur = await getMeasurements(athleteId);
-
       await saveMeasurements(athleteId, cur.filter(x=>x.id!==id));
-
       showToast('Ölçüm silindi');
-
       renderBodyData(athleteId);
-
     });
-
   });
-
 }
 
-
-
 /* =========================================================
-
    TECHNICAL DEFICIENCIES MODULE (Teknik Eksiklikler, branş bazlı)
-
    Start/Dönüş kontrol maddeleri, kayıttaki kaynak materyalden
-
    antrenör diline göre yeniden yazılmış (paraphrase) kısa
-
    checklist ifadeleridir; kaynaktan birebir alıntı değildir.
-
 ========================================================= */
-
 function bi(arr){ return arr.map((t,i)=>({id:'preset_'+i, text:t})); }
 
-
-
 const DEFAULT_BRANCHES = [
-
   {id:'serbest', label:'Serbest', items: bi([
     'Baş pozisyonu su yüzeyiyle hizalı/sabit değil',
     'Nefes alırken baş pozisyonu bozuluyor',
@@ -4831,7 +2680,6 @@ const DEFAULT_BRANCHES = [
     'Nefes alma ritmi düzensiz',
     'Kollar arasında gecikme (catch-up stili) var'
   ])},
-
   {id:'sirtustu', label:'Sırtüstü', items: bi([
     'Baş pozisyonu su yüzeyine göre sabit değil',
     'Omuz rotasyonu yetersiz veya fazla',
@@ -4854,7 +2702,6 @@ const DEFAULT_BRANCHES = [
     'Nefes alma ritmi düzensiz',
     'Kollar arasında gecikme (catch-up stili) var'
   ])},
-
   {id:'kurbagalama', label:'Kurbağalama', items: bi([
     'Su içindeyken baş pozisyonu hatalı',
     'Omuzlar seviyeli tutulmuyor',
@@ -4872,7 +2719,6 @@ const DEFAULT_BRANCHES = [
     'Ayakların toparlanması yavaş',
     'Kulaç ritmi eşit/düzenli değil'
   ])},
-
   {id:'kelebek', label:'Kelebek', items: bi([
     'Baş pozisyonu hatalı',
     'Omuzlarda hatalı pozisyon veya zamanlama',
@@ -4896,187 +2742,98 @@ const DEFAULT_BRANCHES = [
     'Nefes almak için yüzün kaldırılma zamanlaması hatalı',
     'Nefes sonrası başın suya dönüş zamanlaması hatalı'
   ])},
-
   {id:'karisik', label:'Karışık (4x)', items:[]},
-
   {id:'kelebek_start', label:'Kelebek Start', items: bi([
-
     'Dalış sonrası kulaca hemen başlıyor; yavaşlamaya kadar streamline korunmuyor',
-
     'İlk kulaçlar yavaş başlamıyor / hız arttıkça kulaçlar kısalıp sığlaşmıyor',
-
     'Üst gövde ilk kulaçlarda sabit ve dik tutulmuyor',
-
     'Su altı kelebek tekmesi 15 m\'yi aşıyor ya da bu mesafede yeterince yetkin değil',
-
     'Yüzeye çıkmadan önce en az iki kulaç tamamlanmıyor',
-
     'İlk kulaçtan itibaren yarış kulaç frekansına ulaşılamıyor'
-
   ])},
-
   {id:'sirtustu_start', label:'Sırtüstü Start', items: bi([
-
     'Bloğu kavrayış hatalı (parmak üstte / başparmak altta düzeni yok)',
-
     'Ayaklar omuz genişliğinde ve yüzeyin hemen altında konumlanmıyor',
-
     'Kol itişi kalçayı suyun üzerine yeterince taşımıyor',
-
     'Girişte streamline\'a geçilmiyor, bacaklar kaldırılmıyor',
-
     'Su altında baş kollar arasında sabit tutulmuyor',
-
     'Kelebek tekmeleri yavaştan hızlıya doğru kısalıp sığlaşmıyor, üst gövde sabit değil',
-
     'Streamline + su altı kelebek tekmesi 15 m sınırını aşıyor',
-
     'Yüzeye çıkışta flutter kicke geçiş gecikiyor veya bacak hareketi kesiliyor'
-
   ])},
-
   {id:'kurbagalama_start', label:'Kurbağalama Start', items: bi([
-
     'Dalış sonrası streamline\'a geçilmiyor',
-
     'Su altı çekişi erken başlatılıyor; duvardan maksimum hız/mesafe alınmadan çekişe geçiliyor',
-
     'Çekişte dirsek yüksek/sabit tutulmuyor, kum saati (keyhole) deseni uygulanmıyor',
-
     'Su altı fazında baş gövdeyle hizadan çıkıyor',
-
     'Kollar toparlanırken vücuda yakın tutulmuyor, direnç artıyor',
-
     'Bacak tekmesi kollar öne uzanırken güçlü ve streamline şekilde yapılmıyor',
-
     'Baş, dış çekiş sırasında yüzeyi kırmıyor (diskalifiye riski)'
-
   ])},
-
   {id:'serbest_start', label:'Serbest Start', items: bi([
-
     'Dalış sonrası streamline\'a geçilmiyor',
-
     'Su altı kelebek tekmesi etkin/yetkin kullanılmıyor',
-
     'Kulaca/tekmeye yavaşlamadan önce erken başlanıyor',
-
     'Streamline + su altı kelebek tekmesi 15 m sınırını aşıyor',
-
     'Dolphin kickten flutter kicke geçişte bacak hareketi kesiliyor',
-
     'Dalış ve dönüş sonrası su altı mesafesi 15 m\'yi aşıyor',
-
     'Yüzmeye ilk nefesten önce başlanmıyor'
-
   ])},
-
   {id:'kelebek_donus', label:'Kelebek Dönüş', items: bi([
-
     'Start/önceki uzunluktaki kulaç sayısı bilinmiyor; dönüşe tam kulaçla varılamıyor',
-
     'İki elle dokunuşta dizler hızlı rotasyon için gövde altına sıkıca çekilmiyor',
-
     'Dönüş sırasında bir kol su altı itişini diğeri su üstü toparlanmayla zamanlayamıyor',
-
     'Toparlanan el öne ve başın gerisine girmiyor',
-
     'Duvardan itilirken eller birleşik streamline pozisyonunda değil',
-
     'İtişten parmak ucuna kadar streamline korunmuyor, baş hizası bozuk (çok yukarı/aşağı)',
-
     'Su altı dolphin kick sayısı planlı değil; bir sonraki dönüşe/bitişe tam kulaçla varılamıyor',
-
     'Dolphin tekmeler yeterince hızlı/güçlü değil',
-
     'İlk nefesten önce yüzmeye yeniden başlanmıyor',
-
     'Sadece tek yöne dönüş yapabiliyor (her iki yönde pratik yok)'
-
   ])},
-
   {id:'sirtustu_donus', label:'Sırtüstü Dönüş', items: bi([
-
     'Dönüşe yaklaşırken kol çaprazlama girip öne dönüş başlatılmıyor',
-
     'Çene göğse çekilmiyor / mini dolphin kick ile dönüş desteklenmiyor',
-
     'Çekiş ve dolphin kick kesintisiz tek hareket olarak yapılamıyor',
-
     'Dizler hızlı rotasyon için sıkıca çekilmiyor',
-
     'Duvardan itilirken parmak ucuna kadar streamline korunmuyor',
-
     'Su altı dolphin kick sayısı planlı/kontrollü değil',
-
     'Dönüş sonrası ilk kulaçla flutter kicke geçiş gecikiyor',
-
     'İtiş sonrası baş hizası dengesiz (çok yukarı/aşağı), çalkantılı sudan kaçınılamıyor'
-
   ])},
-
   {id:'kurbagalama_donus', label:'Kurbağalama Dönüş', items: bi([
-
     'İki elle dokunuşta dizler hızlı rotasyon için gövde altına çekilmiyor',
-
     'Su altı/su üstü kol koordinasyonu (biri iter, biri toparlanır) zamanlanamıyor',
-
     'Vücut, iten kol tarafına dönmüyor',
-
     'İtiş sonrası streamline ile su altı çekişine geçiş gecikiyor',
-
     'Su altı çekişi uyluk yanında bitirilmiyor',
-
     'Kollar toparlanırken bacaklar kurbağalama tekmesine zamanında hazırlanmıyor',
-
     'Kollar uzarken baş aşağı bakmıyor / tekme-kol senkronu bozuk',
-
     'Dış kulaç sırasında baş yüzeyi kırmıyor (diskalifiye riski)'
-
   ])},
-
   {id:'serbest_donus', label:'Serbest Dönüş', items: bi([
-
     'Çene göğse çekilmiyor / mini dolphin kick ile dönüş desteklenmiyor',
-
     'Dönüş boyunca topuklar kalçaya yakın tutulmuyor',
-
     'Son kulaç bitirilmeden dönüşe erken giriliyor (itiş tamamlanmadan bırakılıyor)',
-
     'Bükülme duvarda değil, itişten sonra yapılmıyor (zamanlama hatası)',
-
     'Duvardan itilirken parmak ucuna kadar streamline korunmuyor',
-
     'İtiş sonrası baş hizası dengesiz, çalkantılı sudan kaçınılamıyor',
-
     'Dönüş sonrası ilk kulaçla flutter kicke geçiş gecikiyor'
-
   ])},
-
   {id:'genel', label:'Genel', items:[]}
-
 ];
-
 let teknikBranches = [];
-
 let currentTeknikAthleteId = null;
 let currentBranchId = null;
 let teknikDraft = {};
 let teknikEditingRecordId = null;
 let teknikRecordsCache = [];
-
 async function loadBranches(){
-
   try{
-
     const res = await window.storage.get('teknik_branslar_v2', false);
-
     if(!res){ teknikBranches = JSON.parse(JSON.stringify(DEFAULT_BRANCHES)); await saveBranches(); return; }
-
     teknikBranches = JSON.parse(res.value);
-
     teknikBranches.forEach(b=>{ if(!b.items) b.items=[]; });
-
     // Tarayıcıda önceki bir oturumdan kalan branş verisi olabilir. O sırada
     // henüz hiç madde eklenmemiş (items boş) bir branş, sonradan dosyaya
     // eklenen hazır checklist maddelerini görmüyor olabilir — bunları burada
@@ -5094,79 +2851,44 @@ async function loadBranches(){
       }
     });
     if(changed) await saveBranches();
-
   }catch(e){ teknikBranches = JSON.parse(JSON.stringify(DEFAULT_BRANCHES)); }
-
 }
-
 async function saveBranches(){
-
   try{ await window.storage.set('teknik_branslar_v2', JSON.stringify(teknikBranches), false); }
-
   catch(e){ console.error('Branch save failed', e); }
-
 }
-
-
 
 async function initTeknikMode(){
-
   await loadBranches();
-
   await loadRoster();
-
   const sel = document.getElementById('teknikAthleteSelect');
-
   populateRosterSelect(sel);
-
   renderBranchLanes();
-
   maybeRenderTeknik();
-
 }
-
-
 
 document.getElementById('teknikAthleteSelect').addEventListener('change', maybeRenderTeknik);
 
-
-
 function renderBranchLanes(){
-
   const wrap = document.getElementById('branchLanes');
-
   if(!currentBranchId && teknikBranches.length) currentBranchId = teknikBranches[0].id;
-
   wrap.innerHTML = teknikBranches.map(b=>
-
     `<button type="button" class="lane-btn ${b.id===currentBranchId?'active':''}" data-branch="${b.id}">${escapeHtml(b.label)}</button>`
-
   ).join('');
-
   wrap.querySelectorAll('.lane-btn').forEach(btn=>{
-
     btn.addEventListener('click', ()=>{
-
       currentBranchId = btn.dataset.branch;
-
       renderBranchLanes();
-
       renderTeknikList();
-
     });
-
   });
-
 }
-
-
 
 /* ---------- Tarihli kayıt (analiz) depolama ---------- */
 async function getTeknikRecords(athleteId){
   try{
     const res = await window.storage.get('teknik_records_'+athleteId, false);
     if(res) return JSON.parse(res.value);
-
     // Geriye dönük uyumluluk: bu sistemden önce tek bir "canlı" durum olarak
     // kayıtlı eski veri varsa, onu bugünün tarihiyle ilk kayıt haline getir.
     const oldRes = await window.storage.get('teknik_'+athleteId, false);
@@ -5191,7 +2913,6 @@ async function saveTeknikRecords(athleteId, records){
   try{ await window.storage.set('teknik_records_'+athleteId, JSON.stringify(records), false); return true; }
   catch(e){ console.error('Teknik kayıt başarısız', e); return false; }
 }
-
 function resetTeknikDraft(){
   teknikDraft = {};
   teknikEditingRecordId = null;
@@ -5199,7 +2920,6 @@ function resetTeknikDraft(){
   if(dateInput) dateInput.value = new Date().toISOString().slice(0,10);
   updateTeknikEditingIndicator();
 }
-
 function updateTeknikEditingIndicator(){
   const ind = document.getElementById('teknikEditingIndicator');
   if(!ind) return;
@@ -5213,7 +2933,6 @@ function updateTeknikEditingIndicator(){
     ind.style.color = '';
   }
 }
-
 function renderTeknikRecordsList(){
   const wrap = document.getElementById('teknikRecordsList');
   if(!teknikRecordsCache.length){
@@ -5239,7 +2958,6 @@ function renderTeknikRecordsList(){
       </div>
     `;
   }).join('');
-
   wrap.querySelectorAll('.teknik-rec-edit').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const rec = teknikRecordsCache.find(r=>r.id===btn.dataset.recid);
@@ -5276,21 +2994,17 @@ function renderTeknikRecordsList(){
   });
 }
 function dStrSafe(tarih){ return new Date(tarih+'T00:00:00').toLocaleDateString('tr-TR'); }
-
 document.getElementById('teknikDiscardBtn').addEventListener('click', ()=>{
   resetTeknikDraft();
   renderTeknikList();
   showToast('Yeni analiz için form temizlendi');
 });
-
 document.getElementById('teknikSaveRecordBtn').addEventListener('click', async ()=>{
   if(!currentTeknikAthleteId){ showToast('Önce sporcu seç'); return; }
   const tarih = document.getElementById('teknikAnalysisDate').value;
   if(!tarih){ showToast('Analiz tarihi gerekli'); return; }
-
   const btn = document.getElementById('teknikSaveRecordBtn');
   btn.disabled = true; btn.textContent = 'Kaydediliyor...';
-
   if(teknikEditingRecordId){
     const rec = teknikRecordsCache.find(r=>r.id===teknikEditingRecordId);
     if(rec){ rec.tarih = tarih; rec.data = JSON.parse(JSON.stringify(teknikDraft)); }
@@ -5304,7 +3018,6 @@ document.getElementById('teknikSaveRecordBtn').addEventListener('click', async (
   }
   const ok = await saveTeknikRecords(currentTeknikAthleteId, teknikRecordsCache);
   btn.disabled = false; btn.textContent = 'Analizi Kaydet';
-
   if(ok){
     showToast('Analiz kaydedildi: ' + dStrSafe(tarih));
     resetTeknikDraft();
@@ -5315,30 +3028,17 @@ document.getElementById('teknikSaveRecordBtn').addEventListener('click', async (
   }
 });
 
-
-
 function maybeRenderTeknik(){
-
   const athleteId = document.getElementById('teknikAthleteSelect').value;
-
   const body = document.getElementById('teknikBody');
-
   const empty = document.getElementById('teknikEmpty');
-
   if(!athleteId){
-
     body.style.display='none'; empty.style.display='';
-
     currentTeknikAthleteId = null;
-
     return;
-
   }
-
   currentTeknikAthleteId = athleteId;
-
   body.style.display=''; empty.style.display='none';
-
   // Sporcu değişti: her zaman boş/orijinal bir form ile başla.
   resetTeknikDraft();
   (async ()=>{
@@ -5346,425 +3046,215 @@ function maybeRenderTeknik(){
     renderTeknikRecordsList();
     renderTeknikList();
   })();
-
 }
-
-
 
 function renderTeknikList(){
-
   if(!currentTeknikAthleteId || !currentBranchId) return;
-
   const branch = teknikBranches.find(b=>b.id===currentBranchId);
-
   document.getElementById('teknikBranchTitle').textContent = branch ? branch.label + ' — Teknik Kontrol Listesi' : 'Branş';
-
   const checkedMap = teknikDraft[currentBranchId] || {};
-
   const items = branch ? (branch.items||[]) : [];
-
   const grid = document.getElementById('teknikChecklist');
 
-
-
   if(!items.length){
-
     grid.innerHTML = '<p class="hint">Bu branş için henüz kontrol maddesi yok. Aşağıdan ekleyebilirsin.</p>';
-
     return;
-
   }
-
-
 
   grid.innerHTML = items.map(it=>{
-
     const checked = !!checkedMap[it.id];
-
     return `
-
       <div class="tag-opt ${checked?'selected neg':''}" data-itemid="${it.id}" style="justify-content:space-between;">
-
         <span style="display:flex;align-items:center;gap:10px;flex:1;">
-
           <input type="checkbox" data-itemid="${it.id}" ${checked?'checked':''}>
-
           <span class="tag-label">${escapeHtml(it.text)}</span>
-
         </span>
-
         <button type="button" class="teknik-item-del" data-itemid="${it.id}" title="Maddeyi tüm sporculardan sil"
-
           style="background:transparent;border:none;color:var(--foam-dim);cursor:pointer;font-size:15px;flex-shrink:0;padding:0 2px;">×</button>
-
       </div>
-
     `;
-
   }).join('');
 
-
-
   grid.querySelectorAll('input[type=checkbox]').forEach(cb=>{
-
     cb.addEventListener('change', ()=>{
-
       const itemId = cb.dataset.itemid;
-
       if(!teknikDraft[currentBranchId]) teknikDraft[currentBranchId] = {};
-
       teknikDraft[currentBranchId][itemId] = cb.checked;
-
       const row = cb.closest('.tag-opt');
-
       row.classList.toggle('selected', cb.checked);
-
       row.classList.toggle('neg', cb.checked);
-
     });
-
   });
-
-
 
   grid.querySelectorAll('.teknik-item-del').forEach(btn=>{
-
     btn.addEventListener('click', async (e)=>{
-
       e.stopPropagation();
-
       if(!confirm('Bu kontrol maddesini bu branştan kalıcı olarak silmek istiyor musun? (Tüm sporcular için silinir)')) return;
-
       const itemId = btn.dataset.itemid;
-
       branch.items = branch.items.filter(it=>it.id!==itemId);
-
       await saveBranches();
-
       renderTeknikList();
-
     });
-
   });
-
 }
-
-
 
 document.getElementById('teknikAddItemBtn').addEventListener('click', async ()=>{
-
   const input = document.getElementById('teknikNewItemInput');
-
   const text = input.value.trim();
-
   if(!text) return;
-
   const branch = teknikBranches.find(b=>b.id===currentBranchId);
-
   if(!branch) return;
-
   if(!branch.items) branch.items = [];
-
   branch.items.push({id:'item_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), text});
-
   await saveBranches();
-
   input.value = '';
-
   renderTeknikList();
-
 });
-
 document.getElementById('teknikNewItemInput').addEventListener('keydown', (e)=>{
-
   if(e.key==='Enter'){ e.preventDefault(); document.getElementById('teknikAddItemBtn').click(); }
-
 });
-
-
 
 /* Branch management modal */
-
 document.getElementById('manageBranchesBtn').addEventListener('click', ()=>{
-
   renderBranchEditList();
-
   document.getElementById('branchModal').classList.add('show');
-
 });
-
 document.getElementById('branchModalCloseBtn').addEventListener('click', closeBranchModal);
-
 document.getElementById('branchModal').addEventListener('click', (e)=>{
-
   if(e.target.id==='branchModal') closeBranchModal();
-
 });
-
 function closeBranchModal(){
-
   document.getElementById('branchModal').classList.remove('show');
-
 }
-
-
 
 function renderBranchEditList(){
-
   const wrap = document.getElementById('branchEditList');
-
   wrap.innerHTML = teknikBranches.map((b,i)=>`
-
     <div class="tag-edit-row" data-idx="${i}">
-
       <input type="text" class="branch-label-inp" value="${escapeHtml(b.label)}" placeholder="Branş adı" style="flex:1;">
-
       <button type="button" class="branch-del-btn">×</button>
-
     </div>
-
   `).join('');
-
   wrap.querySelectorAll('.tag-edit-row').forEach(row=>{
-
     const idx = parseInt(row.dataset.idx);
-
     row.querySelector('.branch-label-inp').addEventListener('input', (e)=>{
-
       teknikBranches[idx].label = e.target.value;
-
       saveBranches();
-
     });
-
     row.querySelector('.branch-del-btn').addEventListener('click', ()=>{
-
       teknikBranches.splice(idx,1);
-
       saveBranches();
-
       renderBranchEditList();
-
     });
-
   });
-
 }
-
-
 
 document.getElementById('addBranchBtn').addEventListener('click', ()=>{
-
   teknikBranches.push({id:'b_'+Date.now().toString(36), label:''});
-
   saveBranches();
-
   renderBranchEditList();
-
 });
-
-
 
 document.getElementById('branchModalDoneBtn').addEventListener('click', async ()=>{
-
   teknikBranches = teknikBranches.filter(b=>b.label.trim().length>0);
-
   await saveBranches();
-
   closeBranchModal();
-
   if(currentBranchId && !teknikBranches.find(b=>b.id===currentBranchId)){
-
     currentBranchId = teknikBranches.length ? teknikBranches[0].id : null;
-
   }
-
   renderBranchLanes();
-
   if(currentTeknikAthleteId) renderTeknikList();
-
 });
 
-
-
 /* =========================================================
-
    PDF EXPORT MODULE
-
    Her sekme için sade/resmi bir A4 rapor üretir; veliyle
-
    paylaşılabilir tek sayfa(lar)lık çıktı. HTML şablonu ekran
-
    dışında (#pdfRenderRoot) oluşturulur, html2canvas ile
-
    görüntüye, jsPDF ile de çok sayfalı PDF'e dönüştürülür.
-
    Bu yöntem Türkçe karakterleri (ş ğ ı ö ü ç) sorunsuz basar.
-
 ========================================================= */
-
 const CLUB_NAME = 'BURSA KOLEJLİLER SPOR KULÜBÜ';
-
 const CLUB_SUB = '2012–2013 DOĞUMLU GRUP';
 
-
-
 function pdfMonthLabel(monthStr){
-
   if(!monthStr) return '';
-
   const [y,m] = monthStr.split('-').map(Number);
-
   const aylar = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-
   return aylar[m-1] + ' ' + y;
-
 }
-
 function pdfTodayLabel(){
-
   return new Date().toLocaleDateString('tr-TR');
-
 }
-
 function pdfFilenameSafe(s){
-
   return (s||'rapor').trim()
-
     .replace(/[İI]/g,'I').replace(/ı/g,'i').replace(/Ğ/g,'G').replace(/ğ/g,'g')
-
     .replace(/Ü/g,'U').replace(/ü/g,'u').replace(/Ş/g,'S').replace(/ş/g,'s')
-
     .replace(/Ö/g,'O').replace(/ö/g,'o').replace(/Ç/g,'C').replace(/ç/g,'c')
-
     .replace(/[^a-zA-Z0-9_\- ]/g,'').replace(/\s+/g,'_');
-
 }
-
-
 
 function pdfHeadHtml(title, tagText){
-
   return `
-
     <div class="pdf-head">
-
       <div>
-
         <h1>${escapeHtml(title)}</h1>
-
         <div class="pdf-club">${escapeHtml(CLUB_NAME)}<br>${escapeHtml(CLUB_SUB)}</div>
-
       </div>
-
       <div class="pdf-tagbox">${escapeHtml(tagText)}</div>
-
     </div>
-
   `;
-
 }
-
 function pdfFootHtml(){
-
   return `<div class="pdf-foot"><span>Bursa Kolejliler Spor Kulübü — Antrenör Raporu</span><span>Oluşturulma: ${pdfTodayLabel()}</span></div>`;
-
 }
-
-
 
 /* Renders `innerHtml` into the off-screen template, converts to canvas,
-
    and downloads a (possibly multi-page) PDF named `filename`. */
-
 async function renderHtmlToPdf(innerHtml, filename, triggerBtn){
-
   if(!window.jspdf || !window.html2canvas){
-
     showToast('PDF kütüphanesi yüklenemedi, internet bağlantısını kontrol et');
-
     return;
-
   }
-
   const root = document.getElementById('pdfRenderRoot');
-
   const original = triggerBtn ? triggerBtn.textContent : null;
-
   if(triggerBtn){ triggerBtn.disabled = true; triggerBtn.textContent = 'Hazırlanıyor...'; }
-
   try{
-
     root.innerHTML = `<div class="pdf-doc">${innerHtml}${pdfFootHtml()}</div>`;
-
     // fonts may still be loading the first time; give them a moment
-
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
-
     const node = root.querySelector('.pdf-doc');
-
     const canvas = await html2canvas(node, {scale:2, backgroundColor:'#ffffff', useCORS:true});
-
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
-
-
     const { jsPDF } = window.jspdf;
-
     const pdf = new jsPDF({unit:'pt', format:'a4'});
-
     const pageW = pdf.internal.pageSize.getWidth();
-
     const pageH = pdf.internal.pageSize.getHeight();
-
     const margin = 0;
-
     const imgW = pageW;
-
     const imgH = (canvas.height * imgW) / canvas.width;
 
-
-
     let heightLeft = imgH;
-
     let position = 0;
-
     pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-
     heightLeft -= pageH;
-
     while(heightLeft > 0){
-
       position = heightLeft - imgH;
-
       pdf.addPage();
-
       pdf.addImage(imgData, 'JPEG', margin, position, imgW, imgH);
-
       heightLeft -= pageH;
-
     }
-
     pdf.save(filename);
-
     showToast('PDF indirildi');
-
   }catch(e){
-
     console.error('PDF export failed', e);
-
     showToast('PDF oluşturulamadı, tekrar dene');
-
   }finally{
-
     root.innerHTML = '';
-
     if(triggerBtn){ triggerBtn.disabled = false; triggerBtn.textContent = original; }
-
   }
-
 }
-
 /* Birden fazla "sayfa" HTML parçasını sırayla ayrı ayrı canvas'a render edip
    her birini kendi PDF sayfasına basar. renderHtmlToPdf'ten farkı: tek bir
    uzun görseli piksel yüksekliğine göre körlemesine dilimlemek yerine, her
@@ -5785,13 +3275,11 @@ async function renderMultiPagePdf(pageHtmls, filename, triggerBtn, opts){
   if(triggerBtn){ triggerBtn.disabled = true; triggerBtn.textContent = 'Hazırlanıyor...'; }
   try{
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
-
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({unit:'pt', format:'a4', orientation});
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
     let firstImageAdded = false;
-
     for(const pageHtml of pageHtmls){
       root.innerHTML = `<div class="pdf-doc ${docClass}">${pageHtml}</div>`;
       const node = root.querySelector('.pdf-doc');
@@ -5799,7 +3287,6 @@ async function renderMultiPagePdf(pageHtmls, filename, triggerBtn, opts){
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const imgW = pageW;
       const imgH = (canvas.height * imgW) / canvas.width;
-
       let heightLeft = imgH;
       let position = 0;
       if(firstImageAdded) pdf.addPage();
@@ -5813,7 +3300,6 @@ async function renderMultiPagePdf(pageHtmls, filename, triggerBtn, opts){
         heightLeft -= pageH;
       }
     }
-
     pdf.save(filename);
     showToast('PDF indirildi');
   }catch(e){
@@ -5825,296 +3311,150 @@ async function renderMultiPagePdf(pageHtmls, filename, triggerBtn, opts){
   }
 }
 
-
-
 /* ---------- 1) SEZON DEĞERLENDİRMESİ PDF ---------- */
-
 async function exportEvalPdf(rec){
-
   const avg = ((+rec.kondisyon + +rec.teknik + +rec.zihinsel + +rec.taktiksel)/4).toFixed(1);
-
   const dateStr = rec.degerlendirmeTarihi ? escapeHtml(rec.degerlendirmeTarihi) : (rec.kayitTarihi ? new Date(rec.kayitTarihi).toLocaleDateString('tr-TR') : '—');
-
-
 
   const pill = (v, cls='') => `<span class="pdf-pill ${cls}">${escapeHtml(v)}</span>`;
 
-
-
   let html = pdfHeadHtml('Sezon Öncesi Değerlendirme', 'SEZON DEĞERLENDİRME');
-
   html += `
-
     <div class="pdf-meta">
-
       <div><b>${escapeHtml(rec.sporcuAdi||'—')}</b><span>SPORCU</span></div>
-
       <div><b>${rec.dogumYili?escapeHtml(rec.dogumYili):'—'}</b><span>DOĞUM YILI</span></div>
-
       <div><b>${dateStr}</b><span>DEĞERLENDİRME TARİHİ</span></div>
-
     </div>
-
   `;
-
-
 
   html += `<h2 class="pdf-h2">Antrenman Geçmişi Analizi</h2>`;
-
   html += `<p class="pdf-p"><b>Ulaşılan hedefler:</b> ${rec.hedeflereUlasildi ? escapeHtml(rec.hedeflereUlasildi) : '<i>Belirtilmedi</i>'}</p>`;
-
   html += `<p class="pdf-p"><b>Ulaşılamayan hedefler:</b> ${rec.hedeflereUlasilamadi ? escapeHtml(rec.hedeflereUlasilamadi) : '<i>Belirtilmedi</i>'}</p>`;
-
   if((rec.yanlisGitti&&rec.yanlisGitti.length) || rec.yanlisGittiDiger){
-
     html += `<p class="pdf-p"><b>Geçen sezon yaşanan zorluklar:</b></p><div class="pdf-pill-row">`;
-
     (rec.yanlisGitti||[]).forEach(v=> html += pill(v,'bad'));
-
     if(rec.yanlisGittiDiger) html += pill(rec.yanlisGittiDiger,'bad');
-
     html += `</div>`;
-
   }
-
   if(rec.nedenleri) html += `<p class="pdf-p"><b>Nedenleri:</b> ${escapeHtml(rec.nedenleri)}</p>`;
-
   if(rec.disFaktorler && rec.disFaktorler.length){
-
     html += `<p class="pdf-p"><b>Etkili dış faktörler:</b></p><div class="pdf-pill-row">`;
-
     rec.disFaktorler.forEach(v=> html += pill(v));
-
     html += `</div>`;
-
   }
-
   if(rec.yeterliGelisim) html += `<p class="pdf-p"><b>Önceki antrenmanların yeterliliği:</b> ${escapeHtml(rec.yeterliGelisim)}</p>`;
-
   if(rec.farkliYaklasim) html += `<p class="pdf-p"><b>Yaklaşım değişikliği gereksinimi:</b> ${escapeHtml(rec.farkliYaklasim)}</p>`;
 
-
-
   html += `<h2 class="pdf-h2">Mevcut Performans Düzeyi</h2>`;
-
   html += `<table class="pdf-table"><tr>
-
       <th>Kondisyon</th><th>Teknik</th><th>Zihinsel</th><th>Taktiksel</th><th>Ortalama</th>
-
     </tr><tr>
-
       <td class="num">${escapeHtml(String(rec.kondisyon))}/10</td>
-
       <td class="num">${escapeHtml(String(rec.teknik))}/10</td>
-
       <td class="num">${escapeHtml(String(rec.zihinsel))}/10</td>
-
       <td class="num">${escapeHtml(String(rec.taktiksel))}/10</td>
-
       <td class="num"><b>${avg}</b></td>
-
     </tr></table>`;
-
   if(rec.gucluYonler && rec.gucluYonler.length){
-
     html += `<p class="pdf-p"><b>Güçlü yönler:</b></p><ul class="pdf-ul">${rec.gucluYonler.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
-
   }
-
   if(rec.zayifYonler && rec.zayifYonler.length){
-
     html += `<p class="pdf-p"><b>Gelişime açık yönler:</b></p><ul class="pdf-ul">${rec.zayifYonler.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
-
   }
-
   if(rec.oncelikSiralama) html += `<p class="pdf-p"><b>Antrenman önceliği:</b> ${escapeHtml(rec.oncelikSiralama)}</p>`;
 
-
-
   html += `<h2 class="pdf-h2">Sezon Hedefleri</h2>`;
-
   if(rec.hedefler && rec.hedefler.length){
-
     html += `<ul class="pdf-ul">${rec.hedefler.map(v=>`<li>${escapeHtml(v)}</li>`).join('')}</ul>`;
-
   } else {
-
     html += `<p class="pdf-empty-note">Hedef girilmedi.</p>`;
-
   }
-
   if(rec.notlar){
-
     html += `<h2 class="pdf-h2">Ek Notlar</h2><p class="pdf-p">${escapeHtml(rec.notlar)}</p>`;
-
   }
-
-
 
   const fname = 'Sezon_Degerlendirme_' + pdfFilenameSafe(rec.sporcuAdi) + '.pdf';
-
   await renderHtmlToPdf(html, fname, null);
-
 }
 
-
-
 /* ---------- 2) YOKLAMA & PERFORMANS PDF ---------- */
-
 document.getElementById('attPdfBtn').addEventListener('click', async (e)=>{
-
   if(!currentAttAthleteId){ showToast('Önce sporcu seç'); return; }
-
   const athlete = attAthletesCache.find(a=>a.id===currentAttAthleteId);
-
   const monthStr = document.getElementById('attMonthSelect').value;
-
   const rawData = await getAttendanceData(currentAttAthleteId);
 
-
-
   const [year, month] = monthStr.split('-').map(Number);
-
   const daysInMonth = new Date(year, month, 0).getDate();
-
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
-
   const reasonLabel = (id)=> (ABSENCE_REASONS.find(r=>r.id===id)||{}).label || '—';
 
-
-
   let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
-
   const rows = [];
-
   for(let d=1; d<=daysInMonth; d++){
-
     const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-
     const entry = normalizeDayEntry(rawData[dateStr], dateStr);
-
     const sessDefs = sessionDefsForDate(dateStr);
-
     const marked = sessDefs.filter(sd=> entry.sessions[sd.id] && entry.sessions[sd.id].durum);
-
     if(!marked.length) continue;
-
     totalDays++;
-
     const dayScore = computeDayScore(entry);
-
     const anyPresent = marked.some(sd=>entry.sessions[sd.id].durum==='geldi');
-
     if(anyPresent){ presentDays++; totalScore += dayScore; } else { absentDays++; }
-
     const dObj = new Date(dateStr+'T00:00:00');
-
     const dowLabel = dows[(dObj.getDay()+6)%7];
-
     marked.forEach(sd=>{
-
       const s = entry.sessions[sd.id];
-
       const tagLabels = (s.tags||[]).map(tid=>{
-
         const t = attendanceTags.find(x=>x.id===tid);
-
         return t ? t.label : null;
-
       }).filter(Boolean);
-
       const score = computeSessionScore(s);
-
       rows.push({
-
         gun: d+' '+dowLabel,
-
         seans: sd.label,
-
         durum: s.durum==='geldi' ? 'Geldi' : 'Gelmedi ('+reasonLabel(s.sebep)+')',
-
         puan: s.durum==='geldi' ? (score>0?'+':'')+score : '—',
-
         detay: tagLabels.length ? tagLabels.join(', ') : '—'
-
       });
-
     });
-
   }
-
   const avgScore = presentDays>0 ? (totalScore/presentDays).toFixed(1) : '0.0';
-
   const attendanceRate = totalDays>0 ? Math.round((presentDays/totalDays)*100) : 0;
 
-
-
   let html = pdfHeadHtml('Aylık Yoklama ve Performans Raporu', 'YOKLAMA');
-
   html += `
-
     <div class="pdf-meta">
-
       <div><b>${escapeHtml(athlete?athlete.sporcuAdi:'—')}</b><span>SPORCU</span></div>
-
       <div><b>${pdfMonthLabel(monthStr)}</b><span>DÖNEM</span></div>
-
       <div><b>${presentDays}/${totalDays}</b><span>KATILIM (GÜN)</span></div>
-
       <div><b>%${attendanceRate}</b><span>DEVAM ORANI</span></div>
-
       <div><b class="${totalScore>0?'pdf-score-badge pos':totalScore<0?'pdf-score-badge neg':''}">${totalScore>0?'+':''}${totalScore}</b><span>TOPLAM PUAN</span></div>
-
       <div><b class="${avgScore>0?'pdf-score-badge pos':avgScore<0?'pdf-score-badge neg':''}">${avgScore>0?'+':''}${avgScore}</b><span>GÜNLÜK ORTALAMA</span></div>
-
     </div>
-
   `;
-
   html += `<h2 class="pdf-h2">Seans Bazlı Kayıtlar</h2>`;
-
   if(rows.length===0){
-
     html += `<p class="pdf-empty-note">Bu ay için kayıt girilmedi.</p>`;
-
   } else {
-
     html += `<table class="pdf-table"><tr><th style="width:70px;">Gün</th><th style="width:130px;">Seans</th><th style="width:110px;">Durum</th><th style="width:50px;">Puan</th><th>Gözlenen Davranışlar</th></tr>`;
-
     rows.forEach(r=>{
-
       html += `<tr><td class="num">${escapeHtml(r.gun)}</td><td>${escapeHtml(r.seans)}</td><td class="num">${escapeHtml(r.durum)}</td><td class="num">${escapeHtml(r.puan)}</td><td>${escapeHtml(r.detay)}</td></tr>`;
-
     });
-
     html += `</table>`;
-
   }
-
   html += `<h2 class="pdf-h2">Davranış Etiketleri ve Puan Değerleri</h2>`;
-
   html += `<table class="pdf-table"><tr><th>Davranış</th><th style="width:70px;">Puan</th></tr>`;
-
   attendanceTags.forEach(t=>{
-
     html += `<tr><td>${escapeHtml(t.label)}</td><td class="num">${t.points>0?'+':''}${t.points}</td></tr>`;
-
   });
-
   html += `</table>`;
 
-
-
   const fname = 'Yoklama_' + pdfFilenameSafe(athlete?athlete.sporcuAdi:'') + '_' + monthStr + '.pdf';
-
   await renderHtmlToPdf(html, fname, e.currentTarget);
-
 });
 
-
-
 /* ---------- 2b) TOPLU YOKLAMA — TÜM SPORCULAR İÇİN AYLIK PDF ---------- */
-
 const ATTENDANCE_REASON_ABBR = {
   belirtilmedi: 'X',
   hasta: 'H',
@@ -6124,20 +3464,15 @@ const ATTENDANCE_REASON_ABBR = {
   raporlu: 'R',
   yarista: 'Y'
 };
-
 document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
-
   const monthStr = document.getElementById('bulkPdfMonthInput').value;
   if(!monthStr){ showToast('Önce bir ay seç'); return; }
-
   await loadRoster();
   const athletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
   if(!athletes.length){ showToast('Sporcu listesi boş'); return; }
-
   const [year, month] = monthStr.split('-').map(Number);
   const daysInMonth = new Date(year, month, 0).getDate();
   const dows = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz'];
-
   // Seans satır sırası: Excel'deki Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme mantığı
   const SESS_ROWS = [
     {id:'sabah_kara',  label:'Sabah Kara',  group:'kara'},
@@ -6145,27 +3480,22 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     {id:'sabah_yuzme', label:'Sabah Yüzme', group:'yuzme'},
     {id:'aksam_yuzme', label:'Akşam Yüzme', group:'yuzme'},
   ];
-
   // Her sporcu için bu ayın verisini topla
   const perAthlete = [];
   let classTotalPresent = 0, classTotalDays = 0, classTotalScore = 0;
-
   for(const a of athletes){
     const rawData = await getAttendanceData(a.id);
     let totalDays=0, presentDays=0, absentDays=0, totalScore=0;
     const dayMarks = {}; // d -> {mark:'P'} | {mark:'A', reason:'hasta'} | null
-
     // Seans bazlı (sabah_kara / aksam_kara / sabah_yuzme / aksam_yuzme) günlük işaretler ve toplamlar
     const sessData = {};
     SESS_ROWS.forEach(r=>{ sessData[r.id] = {marks:{}, toplam:0, yapilan:0}; });
     const sundayMarks = {}; // d -> {mark:'P'|'A', reason?} sadece Pazar (Yarış) günleri için
-
     for(let d=1; d<=daysInMonth; d++){
       const dateStr = year+'-'+String(month).padStart(2,'0')+'-'+String(d).padStart(2,'0');
       const entry = normalizeDayEntry(rawData[dateStr], dateStr);
       const sessDefs = sessionDefsForDate(dateStr);
       const isSunday = new Date(dateStr+'T00:00:00').getDay() === 0;
-
       // --- Genel (özet sayfası) hesaplama: mevcut mantık korunuyor ---
       const marked = sessDefs.filter(sd=> entry.sessions[sd.id] && entry.sessions[sd.id].durum);
       if(marked.length){
@@ -6184,7 +3514,6 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
       } else {
         dayMarks[d] = null;
       }
-
       // --- Seans bazlı tablo için ayrıntı ---
       if(isSunday){
         const sVal = entry.sessions['yaris'];
@@ -6210,21 +3539,17 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
         });
       }
     }
-
     SESS_ROWS.forEach(r=>{
       const sd = sessData[r.id];
       sd.yuzde = sd.toplam>0 ? Math.round((sd.yapilan/sd.toplam)*100) : null;
     });
-
     const rate = totalDays>0 ? Math.round((presentDays/totalDays)*100) : null;
     perAthlete.push({athlete:a, totalDays, presentDays, absentDays, totalScore, rate, dayMarks, sessData, sundayMarks});
     classTotalPresent += presentDays;
     classTotalDays += totalDays;
     classTotalScore += totalScore;
   }
-
   const classRate = classTotalDays>0 ? Math.round((classTotalPresent/classTotalDays)*100) : 0;
-
   const metaHtml = `
     <div class="pdf-meta">
       <div><b>${escapeHtml(pdfMonthLabel(monthStr))}</b><span>DÖNEM</span></div>
@@ -6233,28 +3558,23 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
       <div><b class="${classTotalScore>0?'pdf-score-badge pos':classTotalScore<0?'pdf-score-badge neg':''}">${classTotalScore>0?'+':''}${classTotalScore}</b><span>TAKIM TOPLAM PUAN</span></div>
     </div>
   `;
-
   function chunkArray(arr, size){
     const out = [];
     for(let i=0; i<arr.length; i+=size) out.push(arr.slice(i, i+size));
     return out;
   }
-
   // Her sayfa kendi bağımsız canvas'ı olarak render edilir; bu sayede
   // bir sporcu satırı asla iki sayfa arasında bölünmez (önceki sürümde
   // tek bir uzun görsel piksel yüksekliğine göre dilimlendiği için
   // satırlar ortadan kesilebiliyordu).
   const SUMMARY_ROWS_PAGE1 = 20;
   const SUMMARY_ROWS_CONT = 32;
-
   const pages = [];
-
   // --- Sporcu Bazlı Özet sayfaları ---
   const summaryRemaining = perAthlete.slice();
   const summaryChunks = [];
   summaryChunks.push(summaryRemaining.splice(0, SUMMARY_ROWS_PAGE1));
   while(summaryRemaining.length) summaryChunks.push(summaryRemaining.splice(0, SUMMARY_ROWS_CONT));
-
   summaryChunks.forEach((chunk, idx)=>{
     let html = '';
     if(idx===0){
@@ -6277,7 +3597,6 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     html += `</table>`;
     pages.push(html);
   });
-
   // --- Seans Bazlı Katılım Tablosu sayfaları (Sabah Kara / Akşam Kara / Sabah Yüzme / Akşam Yüzme) ---
   function sessHeaderRowHtml(){
     let h = `<tr><th class="sess-name">Sporcu</th><th class="sess-label">Seans</th>`;
@@ -6289,7 +3608,6 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     h += `<th class="sess-sum">Top</th><th class="sess-sum">Yap</th><th class="sess-sum">%</th></tr>`;
     return h;
   }
-
   const SESS_ATHLETES_PER_PAGE = 19;
   const sessChunks = chunkArray(perAthlete, SESS_ATHLETES_PER_PAGE);
   sessChunks.forEach((chunk, idx)=>{
@@ -6338,113 +3656,60 @@ document.getElementById('bulkPdfBtn').addEventListener('click', async (e)=>{
     html += `</table>`;
     pages.push(html);
   });
-
   pages[pages.length-1] += pdfFootHtml();
-
   const fname = 'Toplu_Yoklama_' + monthStr + '.pdf';
   await renderMultiPagePdf(pages, fname, e.currentTarget, {orientation:'l', docClass:'landscape'});
 });
 
-
-
 /* ---------- 3) VÜCUT ÖLÇÜMLERİ PDF ---------- */
-
 document.getElementById('bodyPdfBtn').addEventListener('click', async (e)=>{
-
   if(!currentBodyAthleteId){ showToast('Önce sporcu seç'); return; }
-
   const athlete = rosterCache.find(a=>a.id===currentBodyAthleteId);
-
   const list = (await getMeasurements(currentBodyAthleteId)).slice().sort((a,b)=> a.tarih.localeCompare(b.tarih));
 
-
-
   let html = pdfHeadHtml('Periyodik Vücut Ölçümleri Raporu', 'ÖLÇÜM');
-
   html += `
-
     <div class="pdf-meta">
-
       <div><b>${escapeHtml(athlete?athlete.sporcuAdi:'—')}</b><span>SPORCU</span></div>
-
       <div><b>${list.length}</b><span>TOPLAM ÖLÇÜM</span></div>
-
       <div><b>${list.length?new Date(list[0].tarih+'T00:00:00').toLocaleDateString('tr-TR'):'—'}</b><span>İLK ÖLÇÜM</span></div>
-
       <div><b>${list.length?new Date(list[list.length-1].tarih+'T00:00:00').toLocaleDateString('tr-TR'):'—'}</b><span>SON ÖLÇÜM</span></div>
-
     </div>
-
   `;
-
   html += `<h2 class="pdf-h2">Ölçüm Geçmişi</h2>`;
-
   if(list.length===0){
-
     html += `<p class="pdf-empty-note">Henüz ölçüm kaydı yok.</p>`;
-
   } else {
-
     html += `<table class="pdf-table"><tr><th>Tarih</th><th>Boy (cm)</th><th>Kilo (kg)</th><th>Kas %</th><th>Yağ %</th></tr>`;
-
     list.slice().reverse().forEach(m=>{
-
       const dStr = new Date(m.tarih+'T00:00:00').toLocaleDateString('tr-TR');
-
       html += `<tr><td class="num">${escapeHtml(dStr)}</td><td class="num">${m.boy||'—'}</td><td class="num">${m.kilo||'—'}</td><td class="num">${m.kas||'—'}</td><td class="num">${m.yag||'—'}</td></tr>`;
-
     });
-
     html += `</table>`;
-
     if(list.length>=2){
-
       const first = list[0], last = list[list.length-1];
-
       const delta = (a,b)=> (a!=='' && a!=null && b!=='' && b!=null) ? (+b - +a).toFixed(1) : null;
-
       const dKilo = delta(first.kilo, last.kilo);
-
       const dYag = delta(first.yag, last.yag);
-
       const dBoy = delta(first.boy, last.boy);
-
       html += `<h2 class="pdf-h2">İlk → Son Ölçüm Değişimi</h2><div class="pdf-pill-row">`;
-
       if(dBoy!==null) html += `<span class="pdf-pill">Boy: ${dBoy>0?'+':''}${dBoy} cm</span>`;
-
       if(dKilo!==null) html += `<span class="pdf-pill">Kilo: ${dKilo>0?'+':''}${dKilo} kg</span>`;
-
       if(dYag!==null) html += `<span class="pdf-pill">Yağ %: ${dYag>0?'+':''}${dYag}</span>`;
-
       html += `</div>`;
-
     }
-
   }
 
-
-
   const fname = 'Vucut_Olcum_' + pdfFilenameSafe(athlete?athlete.sporcuAdi:'') + '.pdf';
-
   await renderHtmlToPdf(html, fname, e.currentTarget);
-
 });
 
-
-
 /* ---------- 3b) VÜCUT ÖLÇÜMLERİ — TOPLU TÜM SPORCULAR PDF ---------- */
-
 document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
-
   await loadRoster();
-
   const athletes = [...rosterCache].sort((a,b)=>a.sporcuAdi.localeCompare(b.sporcuAdi,'tr'));
-
   if(!athletes.length){ showToast('Sporcu listesi boş'); return; }
-
   const pages = [];
-
   // 1. Sayfa: Karşılaştırma tablosu (tüm sporcular, son ölçüm)
   {
     let html = pdfHeadHtml('Toplu Vücut Ölçümleri Raporu', 'ÖLÇÜM');
@@ -6452,12 +3717,10 @@ document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
       <div><b>${athletes.length}</b><span>SPORCU SAYISI</span></div>
       <div><b>${pdfTodayLabel()}</b><span>RAPOR TARİHİ</span></div>
     </div>`;
-
     html += `<h2 class="pdf-h2">Son Ölçüm Karşılaştırması</h2>`;
     html += `<table class="pdf-table"><tr>
       <th>Sporcu</th><th>Ölçüm Tarihi</th><th>Boy (cm)</th><th>Kilo (kg)</th><th>Kas %</th><th>Yağ %</th><th>Kayıt Sayısı</th>
     </tr>`;
-
     for(const a of athletes){
       const list = (await getMeasurements(a.id)).slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
       if(!list.length){
@@ -6479,16 +3742,13 @@ document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
     html += `</table>`;
     pages.push(html);
   }
-
   // Sonraki sayfalar: her sporcu için kendi ölçüm geçmişi + değişim özeti
   const ROWS_PER_PAGE = 28;
   for(const a of athletes){
     const list = (await getMeasurements(a.id)).slice().sort((a,b)=>a.tarih.localeCompare(b.tarih));
     if(!list.length) continue;
-
     const chunks = [];
     for(let i=0; i<list.length; i+=ROWS_PER_PAGE) chunks.push(list.slice(i, i+ROWS_PER_PAGE));
-
     chunks.forEach((chunk, idx)=>{
       let html = '';
       if(idx===0){
@@ -6510,7 +3770,6 @@ document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
         </tr>`;
       });
       html += `</table>`;
-
       // İlk → Son değişim özetini sadece son chunk'ın sonuna ekle
       if(idx===chunks.length-1 && list.length>=2){
         const first = list[0], last = list[list.length-1];
@@ -6529,28 +3788,19 @@ document.getElementById('bodyBulkPdfBtn').addEventListener('click', async (e)=>{
       pages.push(html);
     });
   }
-
   pages[pages.length-1] += pdfFootHtml();
-
   const fname = 'Toplu_Vucut_Olcum_' + new Date().toISOString().slice(0,10) + '.pdf';
-
   await renderMultiPagePdf(pages, fname, e.currentTarget);
-
 });
 
-
-
 async function exportTeknikRecordPdf(athleteName, record, triggerEl){
-
   let html = pdfHeadHtml('Branş Bazlı Teknik Eksiklikler Raporu', 'TEKNİK');
-
   html += `
     <div class="pdf-meta">
       <div><b>${escapeHtml(athleteName||'—')}</b><span>SPORCU</span></div>
       <div><b>${dStrSafe(record.tarih)}</b><span>ANALİZ TARİHİ</span></div>
     </div>
   `;
-
   let anyFlagged = false;
   teknikBranches.forEach(branch=>{
     const items = branch.items || [];
@@ -6565,12 +3815,9 @@ async function exportTeknikRecordPdf(athleteName, record, triggerEl){
   if(!anyFlagged){
     html += `<p class="pdf-p" style="margin-top:14px;"><i>Bu analizde hiçbir branşta işaretli teknik eksiklik bulunmuyor.</i></p>`;
   }
-
   const fname = 'Teknik_Eksiklik_' + pdfFilenameSafe(athleteName||'') + '_' + record.tarih + '.pdf';
   await renderHtmlToPdf(html, fname, triggerEl);
 }
-
-
 
 /* =========================================================
    YEDEKLEME / GERİ YÜKLEME (Backup & Restore)
@@ -6581,16 +3828,13 @@ async function exportTeknikRecordPdf(athleteName, record, triggerEl){
    (AirDrop / WhatsApp / e-posta / Drive) -> orada
    "Yedekten Geri Yükle" ile aynı veriler yüklenir.
 ========================================================= */
-
 const BACKUP_APP_ID = 'bursa-kolejliler-sezon-panosu';
 const BACKUP_FORMAT_VERSION = 1;
-
 // Sabit (içeriği önceden bilinen) tekil anahtarlar.
 // 'sezon_plani_v1' = Sezon Planı sekmesine Excel'den içe aktarılan plan verisi.
 const BACKUP_FIXED_KEYS = ['athletes_index', 'roster_v1', 'attendance_tags', 'teknik_branslar_v2', 'sezon_plani_v1'];
 // Sporcu id'sine göre türeyen anahtar önekleri.
 const BACKUP_PER_ATHLETE_PREFIXES = ['athlete_', 'attendance_', 'measurements_', 'teknik_records_', 'teknik_'];
-
 function isAllowedBackupKey(key){
   if(typeof key !== 'string' || key.length > 160) return false;
   // sp_edits_h<hash> = Sezon Planı sayfa başına hücre düzenlemeleri (spStorageKey() ile üretilir).
@@ -6599,7 +3843,6 @@ function isAllowedBackupKey(key){
     key.startsWith(prefix) && /^[a-z0-9_-]+$/i.test(key.slice(prefix.length))
   );
 }
-
 async function collectAllAthleteIds(){
   const ids = new Set();
   try{
@@ -6612,7 +3855,6 @@ async function collectAllAthleteIds(){
   }catch(e){}
   return Array.from(ids);
 }
-
 async function discoverAllStorageKeys(){
   // Önce window.storage.list() ile gerçek anahtar listesini almayı dene
   // (prefix verilmezse tüm anahtarları döndürmesi beklenir).
@@ -6622,7 +3864,6 @@ async function discoverAllStorageKeys(){
       return res.keys;
     }
   }catch(e){ /* list desteklenmiyor veya boş -> aşağıdaki yedek yönteme düş */ }
-
   // Yedek yöntem: bilinen sabit anahtarlar + tüm sporcu id'lerinden türeyen anahtarlar.
   const ids = await collectAllAthleteIds();
   const keys = new Set(BACKUP_FIXED_KEYS);
@@ -6631,14 +3872,12 @@ async function discoverAllStorageKeys(){
   });
   return Array.from(keys);
 }
-
 function setBackupBusy(btnId, busy, busyLabel, idleLabel){
   const btn = document.getElementById(btnId);
   if(!btn) return;
   btn.disabled = busy;
   btn.textContent = busy ? busyLabel : idleLabel;
 }
-
 /* ---- Antrenman Test Kayıtları (test_kayitlari.html) --------------
    Bu modül window.storage'ı HİÇ kullanmıyor: kendi verisini
    doğrudan REST ile, kullanıcıdan bağımsız sabit bir Firebase
@@ -6649,7 +3888,6 @@ function setBackupBusy(btnId, busy, busyLabel, idleLabel){
 const TEST_KAYIT_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_manuel";
 const TEST_KAYIT_ROSTER_DB_PATH = "kulup_verileri/antrenman_test_kayitlari_roster";
 const TEST_KAYIT_RTDB_BASE = (FIREBASE_CONFIG && FIREBASE_CONFIG.databaseURL) ? FIREBASE_CONFIG.databaseURL.replace(/\/$/, '') : '';
-
 // window.currentAuthUser, yukarıdaki Google giriş akışında (satır ~2052)
 // zaten set ediliyor — aynı Firebase projesi/oturumu. Test Kayıtları'na
 // yazarken de bu kullanıcının kimlik token'ını eklememiz gerekiyor,
@@ -6674,7 +3912,6 @@ async function testKayitRtdbSet(path, value){
   const authParam = await testKayitAuthQueryParam();
   return rtdbSetShared(TEST_KAYIT_RTDB_BASE, path, value, authParam);
 }
-
 document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
   setBackupBusy('exportBackupBtn', true, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
   try{
@@ -6690,7 +3927,6 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
         }
       }catch(e){ failCount++; }
     }
-
     // Test Kayıtları modülü (ayrı Firebase yolu, window.storage dışında)
     let testKayitlari = null;
     try{
@@ -6703,7 +3939,6 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
         okCount += (manuel?1:0) + (roster?1:0);
       }
     }catch(e){ console.warn('Test kayıtları yedeklenemedi:', e); }
-
     const backupObj = {
       app: BACKUP_APP_ID,
       formatVersion: BACKUP_FORMAT_VERSION,
@@ -6712,7 +3947,6 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
       data: payload,
       testKayitlari
     };
-
     const json = JSON.stringify(backupObj, null, 2);
     const blob = new Blob([json], {type:'application/json'});
     const url = URL.createObjectURL(blob);
@@ -6724,7 +3958,6 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
     showToast(failCount ? `${okCount} kayıt yedeklendi (${failCount} okunamadı)` : `${okCount} kayıt başarıyla yedeklendi`);
   }catch(e){
     console.error('Backup export failed', e);
@@ -6733,16 +3966,13 @@ document.getElementById('exportBackupBtn').addEventListener('click', async ()=>{
     setBackupBusy('exportBackupBtn', false, 'Yedek hazırlanıyor…', '⭳ Yedek Al (Dışa Aktar)');
   }
 });
-
 document.getElementById('importBackupBtn').addEventListener('click', ()=>{
   document.getElementById('importBackupFile').click();
 });
-
 document.getElementById('importBackupFile').addEventListener('change', async (e)=>{
   const file = e.target.files && e.target.files[0];
   e.target.value = ''; // aynı dosyayı tekrar seçebilmek için sıfırla
   if(!file) return;
-
   let parsed;
   try{
     const text = await file.text();
@@ -6751,14 +3981,12 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
     showToast('Dosya okunamadı: geçerli bir yedek JSON dosyası seç');
     return;
   }
-
   if(!parsed || typeof parsed !== 'object' || parsed.app !== BACKUP_APP_ID ||
      parsed.formatVersion !== BACKUP_FORMAT_VERSION || !parsed.data || typeof parsed.data !== 'object' ||
      Array.isArray(parsed.data)){
     showToast('Bu dosya geçerli bir yedek dosyası değil');
     return;
   }
-
   const entries = Object.entries(parsed.data).filter(([key, value]) =>
     isAllowedBackupKey(key) && (typeof value === 'string' || (value && typeof value === 'object'))
   );
@@ -6768,11 +3996,9 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
     showToast('Yedek dosyası boş görünüyor');
     return;
   }
-
   const totalCount = entries.length + (hasTestKayit ? (parsed.testKayitlari.manuel?1:0) + (parsed.testKayitlari.roster?1:0) : 0);
   const confirmMsg = `${totalCount} kayıt bu cihaza yüklenecek ve mevcut verilerin üzerine yazılacak.\n\nYedek tarihi: ${parsed.exportedAt || 'bilinmiyor'}\n\nDevam etmek istiyor musun?`;
   if(!window.confirm(confirmMsg)) return;
-
   setBackupBusy('importBackupBtn', true, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
   let okCount = 0, failCount = 0;
   for(const [key, value] of entries){
@@ -6782,7 +4008,6 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
       okCount++;
     }catch(err){ failCount++; }
   }
-
   if(hasTestKayit){
     try{
       if(parsed.testKayitlari.manuel){ await testKayitRtdbSet(TEST_KAYIT_DB_PATH, parsed.testKayitlari.manuel); okCount++; }
@@ -6791,16 +4016,10 @@ document.getElementById('importBackupFile').addEventListener('change', async (e)
       if(parsed.testKayitlari.roster){ await testKayitRtdbSet(TEST_KAYIT_ROSTER_DB_PATH, parsed.testKayitlari.roster); okCount++; }
     }catch(err){ failCount++; }
   }
-
   setBackupBusy('importBackupBtn', false, 'Geri yükleniyor…', '⭱ Yedekten Geri Yükle');
-
   showToast(failCount ? `${okCount} kayıt yüklendi (${failCount} başarısız)` : `${okCount} kayıt başarıyla yüklendi, sayfa yenileniyor…`);
   setTimeout(()=> window.location.reload(), 1400);
 });
-
-
-
-
 
 /* ================================================================
    SEZON PLANI MODULU (2026-2027 Excel'den aktarildi)
@@ -6813,7 +4032,6 @@ const SP_DATA = {"KARA ANTRENMAN":{"grid":[["MOTOR ÖZELLKLERİN PLANLANMASI",""
    silinip/eklenince kod otomatik uyum saglar. */
 let SP_ORDER = [];
 let SP_NAV = [];
-
 function spGuessGroupAndLabel(key){
   const norm = key.trim();
   const upper = norm.toUpperCase();
@@ -6827,7 +4045,6 @@ function spGuessGroupAndLabel(key){
   if(/KARA ANTRENMAN|ANTRENMAN/.test(upper)) return {group:'Referans', label: norm};
   return {group:'Diğer Sayfalar', label: norm};
 }
-
 function spBuildOrderAndNav(dataObj){
   const keys = Object.keys(dataObj);
   SP_ORDER = keys;
@@ -6840,28 +4057,23 @@ function spBuildOrderAndNav(dataObj){
   });
   SP_NAV = groupOrder.map(g => ({label: g, items: groups[g]}));
 }
-
 spBuildOrderAndNav(SP_DATA);
-
 let spCurrentSheet = SP_ORDER[0];
 let spEditsCache = {};
 let spNavBuilt = false;
 let spRemotePlanLoaded = false;
 const SP_REMOTE_PLAN_KEY = 'sezon_plani_v1';
-
 function spNormalizeColor(color){
   const raw = color && (color.rgb || color.indexed || color.theme);
   if(typeof raw !== 'string') return null;
   const hex = raw.replace(/^FF/i, '').replace('#', '');
   return /^[0-9A-F]{6}$/i.test(hex) ? '#'+hex.toUpperCase() : null;
 }
-
 function spCellValue(cell){
   if(!cell || cell.v === undefined || cell.v === null) return '';
   if(cell.t === 'd' && cell.v instanceof Date) return cell.v.toLocaleDateString('tr-TR');
   return cell.w !== undefined ? String(cell.w) : String(cell.v);
 }
-
 function spWorkbookToPlan(workbook){
   /* Sabit bir sayfa listesi ARANMAZ: Excel'deki tum sayfalar (workbook.SheetNames
      sirasiyla) otomatik olarak plana dahil edilir. Bos sayfalar sessizce atlanir,
@@ -6890,7 +4102,6 @@ function spWorkbookToPlan(workbook){
   if(!Object.keys(plan).length) throw new Error('Excel dosyasinda okunabilir sayfa bulunamadi');
   return plan;
 }
-
 async function spLoadRemotePlan(){
   if(spRemotePlanLoaded) return;
   spRemotePlanLoaded = true;
@@ -6907,27 +4118,23 @@ async function spLoadRemotePlan(){
     if(!SP_ORDER.includes(spCurrentSheet)) spCurrentSheet = SP_ORDER[0];
   }catch(e){ console.error('Sezon planı yüklenemedi:', e); showToast('Kaydedilmiş sezon planı yüklenemedi'); }
 }
-
 async function spClearCellEdits(){
   spEditsCache = {};
   for(const key of SP_ORDER){
     try{ await window.storage.delete(spStorageKey(key), false); }catch(e){}
   }
 }
-
 function spHashKey(str){
   let h = 5381;
   for(let i=0;i<str.length;i++){ h = ((h*33) ^ str.charCodeAt(i)) >>> 0; }
   return h.toString(36);
 }
-
 function spStorageKey(sheetKey){
   /* Index yerine sayfa adinin hash'i kullanilir: boylece Excel'de sayfa
      silinip/eklenip sira degisince eski duzenlemeler yanlis sayfaya
      karismaz. */
   return 'sp_edits_h' + spHashKey(sheetKey);
 }
-
 async function spLoadEdits(sheetKey){
   try{
     const res = await window.storage.get(spStorageKey(sheetKey), false);
@@ -6939,7 +4146,6 @@ async function spLoadEdits(sheetKey){
     return {};
   }
 }
-
 async function spSaveEdits(sheetKey){
   try{
     await window.storage.set(spStorageKey(sheetKey), JSON.stringify(spEditsCache[sheetKey] || {}), false);
@@ -6948,21 +4154,17 @@ async function spSaveEdits(sheetKey){
     showToast('Kaydedilemedi, tekrar dene');
   }
 }
-
 function spLuminance(hex){
   hex = hex.replace('#','');
   const r=parseInt(hex.substr(0,2),16), g=parseInt(hex.substr(2,2),16), b=parseInt(hex.substr(4,2),16);
   return (0.299*r+0.587*g+0.114*b)/255;
 }
-
 function spIsMeso(key){ return key.trim().toUpperCase().startsWith('MESO'); }
 function spCanExportPdf(key){ const s = SP_DATA[key]; return !!(s && Array.isArray(s.grid) && s.grid.length); }
-
 function spLabelFor(key){
   const meta = SP_NAV.flatMap(g=>g.items).find(i=>i.key===key);
   return meta ? meta.label : key;
 }
-
 function spBuildNav(){
   const wrap = document.getElementById('spNav');
   wrap.innerHTML = '';
@@ -6985,13 +4187,11 @@ function spBuildNav(){
     wrap.appendChild(row);
   });
 }
-
 function spRefreshNavActive(){
   document.querySelectorAll('.sp-tab').forEach(b=>{
     b.classList.toggle('active', b.dataset.key === spCurrentSheet);
   });
 }
-
 async function spSelectSheet(key){
   spCurrentSheet = key;
   spRefreshNavActive();
@@ -7001,7 +4201,6 @@ async function spSelectSheet(key){
   const wrap = document.querySelector('.sp-tablewrap');
   if(wrap){ wrap.scrollTop = 0; wrap.scrollLeft = 0; }
 }
-
 async function spRenderSheet(key){
   const sheet = SP_DATA[key];
   const edits = await spLoadEdits(key);
@@ -7016,7 +4215,6 @@ async function spRenderSheet(key){
       skip.add(r+'_'+c);
     }
   });
-
   const table = document.getElementById('spGrid');
   table.innerHTML = '';
   const frag = document.createDocumentFragment();
@@ -7049,7 +4247,6 @@ async function spRenderSheet(key){
   });
   table.appendChild(frag);
 }
-
 /* ---- MESO sayfalarinda TOTAL sütunu otomatik toplama -------------
    Orijinal Excel'de TOTAL hucreleri muhtemelen =SUM(...) formuluydu,
    ama disa aktarilirken (SheetJS) sadece hesaplanmis SONUC deger
@@ -7074,13 +4271,11 @@ function spMesoTotalBlocks(sheet){
   }
   return [];
 }
-
 function spFormatNumber(n){
   if(!isFinite(n)) return '';
   const rounded = Math.round(n*1000)/1000;
   return String(rounded);
 }
-
 async function spRecomputeRowTotal(sheetKey, r, editedCol){
   if(!/^MESO/i.test(sheetKey.trim())) return;
   const sheet = SP_DATA[sheetKey];
@@ -7091,7 +4286,6 @@ async function spRecomputeRowTotal(sheetKey, r, editedCol){
   const blocks = spMesoTotalBlocks(sheet);
   const block = blocks.find(b => b.dayCols.includes(Number(editedCol)));
   if(!block) return;
-
   const edits = spEditsCache[sheetKey] || {};
   let sum = 0;
   block.dayCols.forEach(c=>{
@@ -7110,7 +4304,6 @@ async function spRecomputeRowTotal(sheetKey, r, editedCol){
   else edits[totalKey] = totalStr;
   spEditsCache[sheetKey] = edits;
   await spSaveEdits(sheetKey);
-
   if(sheetKey === spCurrentSheet){
     const totalTd = document.querySelector(`#spGrid td[data-r="${r}"][data-c="${block.totalCol}"]`);
     if(totalTd){
@@ -7120,7 +4313,6 @@ async function spRecomputeRowTotal(sheetKey, r, editedCol){
     }
   }
 }
-
 async function spHandleCellEdit(td){
   const r = td.dataset.r, c = td.dataset.c;
   const editKey = r+'_'+c;
@@ -7141,12 +4333,10 @@ async function spHandleCellEdit(td){
   await spSaveEdits(spCurrentSheet);
   await spRecomputeRowTotal(spCurrentSheet, Number(r), Number(c));
 }
-
 document.getElementById('spGrid').addEventListener('focusout', (e)=>{
   const td = e.target.closest('td.sp-editable');
   if(td) spHandleCellEdit(td);
 });
-
 document.getElementById('spResetBtn').addEventListener('click', async ()=>{
   if(!confirm('Bu sayfadaki tum degisiklikleri silip orijinal plana donmek istiyor musun?')) return;
   spEditsCache[spCurrentSheet] = {};
@@ -7154,7 +4344,6 @@ document.getElementById('spResetBtn').addEventListener('click', async ()=>{
   await spRenderSheet(spCurrentSheet);
   showToast('Sayfa sifirlandi');
 });
-
 document.getElementById('spImportBtn').addEventListener('click', ()=>{
   if(!window.currentAuthUser){
     showToast('Excel yüklemek için önce Google ile giriş yapmalısın');
@@ -7162,7 +4351,6 @@ document.getElementById('spImportBtn').addEventListener('click', ()=>{
   }
   document.getElementById('spImportFile').click();
 });
-
 document.getElementById('spImportFile').addEventListener('change', async event=>{
   const input = event.target;
   const file = input.files && input.files[0];
@@ -7202,7 +4390,6 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
     button.textContent = "Excel'den Güncelle";
   }
 });
-
 /* ---- Excel Dosyasini Guncelle -----------------------------------
    "Excel'den Güncelle" bunun tersini yapar (Excel -> uygulama).
    Bu fonksiyon ise uygulamada yapilan hucre duzenlemelerini SECILEN
@@ -7212,7 +4399,6 @@ document.getElementById('spImportFile').addEventListener('change', async event=>
    Bunun icin SheetJS degil ExcelJS kullanilir, cunku SheetJS'in
    ucretsiz surumu yazarken bicimlendirmeyi siler; ExcelJS okurken
    de yazarken de orijinal stili korur.
-
    Dosyanin kendisinin ustune yazma: Chrome/Edge (ve diger Chromium
    tabanli tarayicilar) File System Access API'yi destekler --
    window.showOpenFilePicker() ile secilen dosya icin bir "handle"
@@ -7243,7 +4429,6 @@ async function pickExcelHandleForWrite(){
     return null;
   }
 }
-
 async function runSpExcelUpdate({ file, handle }){
   if(!window.ExcelJS){ showToast('Excel güncelleme kütüphanesi yüklenemedi; sayfayı yenileyip tekrar dene'); return; }
   const sourceFile = file || await handle.getFile();
@@ -7255,16 +4440,13 @@ async function runSpExcelUpdate({ file, handle }){
     const buffer = await sourceFile.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-
     let totalCells = 0;
     const matchedSheets = [];
     const missingSheets = [];
-
     for(const key of SP_ORDER){
       const edits = spEditsCache[key] !== undefined ? spEditsCache[key] : await spLoadEdits(key);
       const editKeys = Object.keys(edits);
       if(!editKeys.length) continue; // bu sayfada duzenleme yoksa dosyaya dokunma
-
       // Once tam isim eslesmesi dene, olmazsa bosluk-farkli eslesme dene
       let ws = workbook.getWorksheet(key);
       if(!ws){
@@ -7272,7 +4454,6 @@ async function runSpExcelUpdate({ file, handle }){
         ws = workbook.worksheets.find(s => s.name.trim().toLocaleLowerCase('tr') === target);
       }
       if(!ws){ missingSheets.push(key); continue; }
-
       editKeys.forEach(editKey=>{
         const [rStr, cStr] = editKey.split('_');
         const r = parseInt(rStr, 10), c = parseInt(cStr, 10);
@@ -7284,7 +4465,6 @@ async function runSpExcelUpdate({ file, handle }){
       });
       matchedSheets.push(key);
     }
-
     if(!totalCells){
       showToast('Güncellenecek bir değişiklik bulunamadı.');
       return;
@@ -7292,10 +4472,8 @@ async function runSpExcelUpdate({ file, handle }){
     if(missingSheets.length){
       console.warn('Eslesmeyen sayfalar (dosyada bulunamadi):', missingSheets.join(', '));
     }
-
     const outBuffer = await workbook.xlsx.writeBuffer();
     const missingNote = missingSheets.length ? ` (${missingSheets.length} sayfa dosyada bulunamadı, atlandı)` : '';
-
     if(handle){
       // Secilen dosyanin USTUNE dogrudan yaz — yeni dosya inmez.
       const perm = await handle.requestPermission({ mode: 'readwrite' });
@@ -7325,7 +4503,6 @@ async function runSpExcelUpdate({ file, handle }){
     button.textContent = "⬆⬇ Excel Dosyasını Güncelle";
   }
 }
-
 document.getElementById('spExportBtn').addEventListener('click', async ()=>{
   const handle = await pickExcelHandleForWrite();
   if(handle === undefined) return; // kullanici iptal etti
@@ -7335,7 +4512,6 @@ document.getElementById('spExportBtn').addEventListener('click', async ()=>{
     document.getElementById('spExportFile').click(); // API yok -> klasik dosya secici + indirme
   }
 });
-
 document.getElementById('spExportFile').addEventListener('change', async event=>{
   const input = event.target;
   const file = input.files && input.files[0];
@@ -7343,7 +4519,6 @@ document.getElementById('spExportFile').addEventListener('change', async event=>
   if(!file) return;
   await runSpExcelUpdate({ file });
 });
-
 /* ---- PDF export: her Meso sayfasi 3 mantiksal bloga ayrilir -----
    1) Ana program (3 mikrosiklus, gunluk icerik) -- basliktan bir
       sonraki "Mesocycle ... " tekrarina kadar
@@ -7376,7 +4551,6 @@ function spFindBlockRanges(grid){
     {start:block3, end:grid.length, headRows:1, label:'Antrenman Kodlari'}
   ].filter(b => b.end > b.start);
 }
-
 function spBuildBlockTableHtml(grid, merges, range, edits){
   const {start, end, headRows} = range;
   /* Cok sutunlu sayfalar (ornegin MF gunleri, 40+ sutun) sabit genislikli
@@ -7425,7 +4599,6 @@ function spBuildBlockTableHtml(grid, merges, range, edits){
   tbodyHtml += '</tbody>';
   return '<table class="pdf-table-season" style="font-size:'+fontPx+'px;">'+theadHtml+tbodyHtml+'</table>';
 }
-
 function spBuildPrintPagesHtml(key){
   const sheet = SP_DATA[key];
   const grid = sheet.grid;
@@ -7445,20 +4618,17 @@ function spBuildPrintPagesHtml(key){
     `;
   });
 }
-
 document.getElementById('spPdfBtn').addEventListener('click', function(){
   const pages = spBuildPrintPagesHtml(spCurrentSheet);
   const fname = pdfFilenameSafe(spLabelFor(spCurrentSheet) + '_2026-2027') + '.pdf';
   renderMultiPagePdf(pages, fname, this, {orientation:'l', docClass:'landscape'});
 });
-
 async function initSezonplanMode(){
   await spLoadRemotePlan();
   spBuildNav();
   spNavBuilt = true;
   await spSelectSheet(spCurrentSheet);
 }
-
 /* SwimAnalyzer sekmesi: ayri swimanalyzer.html dosyasini iframe icinde
    lazy-load ile acar (sekmeye ilk tiklandiginda yuklenir, boylece ana
    uygulama acilisinda gereksiz yuk binmez). swimanalyzer.html'in bu
@@ -7469,7 +4639,6 @@ function initSwimAnalyzerMode(){
   const frame = document.getElementById('swimAnalyzerFrame');
   if(frame){ frame.src = 'swimanalyzer.html'; swimAnalyzerLoaded = true; }
 }
-
 /* Antrenman Test Kayıtları sekmesi: aynı lazy-load iframe deseni.
    test_kayitlari.html bu index.html ile AYNI klasörde olmalı. Sporcu
    listesini (roster_v1) ve ölçüm kayıtlarını bu ana uygulamanın
@@ -7481,13 +4650,11 @@ function initTestKayitMode(){
   const frame = document.getElementById('testKayitFrame');
   if(frame){ frame.src = 'test_kayitlari.html'; testKayitLoaded = true; }
 }
-
 /* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
 function getFocusableElements(root){
   return Array.from(root.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
     .filter(el => el.offsetParent !== null);
 }
-
 document.addEventListener('keydown', event => {
   const modal = document.querySelector('.modal-overlay.show');
   if(!modal) return;
@@ -7503,7 +4670,6 @@ document.addEventListener('keydown', event => {
   if(event.shiftKey && document.activeElement === first){ event.preventDefault(); last.focus(); }
   else if(!event.shiftKey && document.activeElement === last){ event.preventDefault(); first.focus(); }
 });
-
 new MutationObserver(mutations => {
   for(const mutation of mutations){
     const modal = mutation.target;
@@ -7512,9 +4678,6 @@ new MutationObserver(mutations => {
     }
   }
 }).observe(document.body, {subtree:true, attributes:true, attributeFilter:['class']});
-
 </script>
-
 </body>
-
 </html>

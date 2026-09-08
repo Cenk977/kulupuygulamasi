@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Antrenman Dashboard</title>
+  <script src="firebase-rtdb-helpers.js"></script>
+  <style>
+    :root {
+      --navy: #0b2942;
+      --navy-2: #123a5c;
+      --pool: #0f7c8c;
+      --pool-light: #e4f4f5;
+      --lane: #f2941a;
+      --ink: #16232e;
+      --paper: #f7f9fa;
+      --line: #d9e2e6;
+      --white: #ffffff;
+      --danger: #c0392b;
+      --ok: #1a8a4a;
+      --warn: #e67e22;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    header {
+      background: linear-gradient(120deg, var(--navy) 0%, var(--navy-2) 65%, var(--pool) 130%);
+      color: #fff;
+      padding: 20px 24px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header .meta {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 8px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      border-left: 4px solid var(--pool);
+    }
+
+    .card.stat {
+      border-left-color: var(--lane);
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #8a97a0;
+      margin: 0 0 12px;
+    }
+
+    .card-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 0;
+    }
+
+    .card-sub {
+      font-size: 12px;
+      color: #8a97a0;
+      margin-top: 6px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      margin: 30px 0 16px;
+      border-bottom: 2px solid var(--lane);
+      padding-bottom: 8px;
+    }
+
+    .record-list {
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .record-item {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .record-item:last-child {
+      border-bottom: none;
+    }
+
+    .record-item:hover {
+      background: var(--pool-light);
+    }
+
+    .record-left {
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .record-athlete {
+      font-weight: 600;
+      color: var(--navy);
+      font-size: 14px;
+    }
+
+    .record-proto {
+      font-size: 12px;
+      color: #8a97a0;
+      margin-top: 3px;
+    }
+
+    .record-date {
+      font-size: 11px;
+      color: #b0bcc4;
+    }
+
+    .record-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .record-value {
+      font-weight: 700;
+      color: var(--navy-2);
+      min-width: 70px;
+      text-align: right;
+    }
+
+    .trend {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .trend.up {
+      background: #d4f4dd;
+      color: var(--ok);
+    }
+
+    .trend.down {
+      background: #fdeceb;
+      color: var(--danger);
+    }
+
+    .trend.neutral {
+      background: #f0f0f0;
+      color: #8a97a0;
+    }
+
+    .athlete-card {
+      background: white;
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .athlete-card:hover {
+      border-color: var(--pool);
+      box-shadow: 0 4px 12px rgba(15, 124, 140, 0.1);
+    }
+
+    .athlete-name {
+      font-weight: 600;
+      color: var(--navy);
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .athlete-stat {
+      font-size: 12px;
+      color: #8a97a0;
+      margin: 4px 0;
+    }
+
+    .athlete-best {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--pool);
+      margin-top: 8px;
+    }
+
+    .empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #8a97a0;
+    }
+
+    .empty svg {
+      width: 60px;
+      height: 60px;
+      opacity: 0.3;
+      margin-bottom: 12px;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--pool-light);
+      color: var(--navy-2);
+      margin-right: 6px;
+    }
+
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .record-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .record-right {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🏊 Antrenman Dashboard</h1>
+  <div class="meta">
+    <span id="lastUpdate">Güncelleniyor...</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- İstatistikler -->
+  <div class="stat-row">
+    <div class="card stat">
+      <h3 class="card-title">👥 Toplam Sporcu</h3>
+      <p class="card-value" id="statAthletes">0</p>
+    </div>
+    <div class="card stat">
+      <h3 class="card-title">📊 Toplam Kayıt</h3>
+      <p class="card-value" id="statRecords">0</p>
+    </div>
+    <div class="card stat">
+      <h3 class="card-title">📈 Protokoller</h3>
+      <p class="card-value" id="statProtos">0</p>
+    </div>
+    <div class="card stat">
+      <h3 class="card-title">📅 Son Güncelleme</h3>
+      <p class="card-value" id="statLastDate" style="font-size: 16px;">—</p>
+    </div>
+  </div>
+
+  <!-- En Son 10 Test Kaydı -->
+  <h2 class="section-title">📋 En Son Test Kayıtları</h2>
+  <div class="record-list" id="latestRecordsWrap">
+    <div class="empty">Veri yükleniyor...</div>
+  </div>
+
+  <!-- En Hızlı Sporcular (24×100) -->
+  <h2 class="section-title">🚀 En Hızlı Sporcular (24×100 Serbest)</h2>
+  <div class="grid" id="fastestAthletesWrap">
+    <div class="empty">Veri yükleniyor...</div>
+  </div>
+
+  <!-- Son Test Yapan Sporcular -->
+  <h2 class="section-title">⏱️ Son Test Yapanlar</h2>
+  <div class="grid" id="recentAthletesWrap">
+    <div class="empty">Veri yükleniyor...</div>
+  </div>
+
+</div>
+
+<script>
+  let MANUAL = { templates: [], sessions: [] };
+
+  // test_kayitlari.html ile AYNI bulut yolu — o sayfa buraya yazıyor.
+  const RTDB_BASE = "https://bursa-kolejliler-default-rtdb.europe-west1.firebasedatabase.app";
+  const DB_PATH   = "kulup_verileri/antrenman_test_kayitlari_manuel";
+
+  // Storage: önce buluttan (salt-okunur, auth'suz — yol herkese açık),
+  // olmazsa localStorage'a düş. Dönen kayıt { payload, updatedAt } sarmalı
+  // olabilir ya da doğrudan veri.
+  const Storage = {
+    _unwrap(data) {
+      if (!data || typeof data !== 'object') return null;
+      const inner = data.payload || data;
+      if (!inner || typeof inner !== 'object') return null;
+      return { templates: inner.templates || [], sessions: inner.sessions || [] };
+    },
+    async load() {
+      try {
+        const cloud = await rtdbGetShared(RTDB_BASE, DB_PATH, '');
+        const parsed = this._unwrap(cloud);
+        if (parsed) return parsed;
+      } catch (e) {
+        console.warn('Buluttan okunamadı, localStorage denenecek:', e);
+      }
+      try {
+        const raw = localStorage.getItem('atk_manual_data');
+        if (!raw) return null;
+        return this._unwrap(JSON.parse(raw));
+      } catch (e) {
+        console.error('Storage yükleme hatası:', e);
+        return null;
+      }
+    }
+  };
+
+  function escapeHtml(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // test_kayitlari.html / sporcu_goruntule.html ile aynı ayrıştırma:
+  // "M:SS.cc", "SS.cc", virgüllü ve dakikasız girişleri de kabul eder.
+  function parseTimeStr(str) {
+    if (str === null || str === undefined) return null;
+    str = str.toString().trim().replace(',', '.');
+    if (str === '') return null;
+    const p = str.split(':');
+    let sec = p.length === 2 ? parseFloat(p[0]) * 60 + parseFloat(p[1]) : parseFloat(p[0]);
+    return isFinite(sec) && sec > 0 ? sec : null;
+  }
+
+  function fmtTime(sec) {
+    if (sec === null) return '—';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    const cs = Math.round((sec % 1) * 100);
+    return `${m}:${s.toString().padStart(2, '0')}${cs > 0 ? '.' + cs.toString().padStart(2, '0') : ''}`;
+  }
+
+  async function loadData() {
+    try {
+      MANUAL = await Storage.load() || { templates: [], sessions: [] };
+      renderDashboard();
+    } catch (err) {
+      console.error('Veri yüklenemedi:', err);
+      document.getElementById('latestRecordsWrap').innerHTML = '<div class="empty">⚠️ Veri yükleme hatası</div>';
+    }
+  }
+
+  function renderDashboard() {
+    if (!MANUAL || !MANUAL.sessions || MANUAL.sessions.length === 0) {
+      document.getElementById('latestRecordsWrap').innerHTML = '<div class="empty">Henüz test kaydı yok</div>';
+      return;
+    }
+
+    // İstatistikler
+    const athletes = new Set();
+    MANUAL.sessions.forEach(s => {
+      (s.athletes || []).forEach(a => athletes.add(a.athlete));
+    });
+
+    document.getElementById('statAthletes').textContent = athletes.size;
+    document.getElementById('statRecords').textContent = MANUAL.sessions.length;
+    document.getElementById('statProtos').textContent = MANUAL.templates.length;
+
+    const latestDate = MANUAL.sessions
+      .map(s => new Date(s.date))
+      .sort((a, b) => b - a)[0];
+    document.getElementById('statLastDate').textContent = latestDate
+      ? latestDate.toLocaleDateString('tr-TR')
+      : '—';
+
+    document.getElementById('lastUpdate').textContent = `Son güncelleme: ${new Date().toLocaleTimeString('tr-TR')}`;
+
+    // En Son 10 Kayıt
+    renderLatestRecords();
+
+    // En Hızlı Sporcular (24×100)
+    renderFastestAthletes();
+
+    // Son Test Yapanlar
+    renderRecentAthletes();
+  }
+
+  function renderLatestRecords() {
+    const sessions = MANUAL.sessions
+      .slice()
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 10);
+
+    let html = '';
+    sessions.forEach((s, idx) => {
+      const proto = MANUAL.templates?.find(t => t.id === s.templateId);
+      const protoName = proto?.name || 'Bilinmeyen';
+
+      (s.athletes || []).forEach(a => {
+        let value = '';
+        let trend = '';
+
+        if (proto?.family === 'ayak') {
+          const d400 = parseTimeStr(a.d400);
+          value = `400m: ${fmtTime(d400)}`;
+        } else if (proto?.family === 'tekrarli') {
+          const reps = [];
+          const repCount = proto.config?.reps || 24;
+          for (let i = 1; i <= repCount; i++) {
+            const sec = parseTimeStr(a[`rep${i}`]);
+            if (sec !== null) reps.push(sec);
+          }
+          const avg = reps.length ? reps.reduce((a, b) => a + b, 0) / reps.length : null;
+          value = `Ort: ${fmtTime(avg)}`;
+        }
+
+        html += `
+          <div class="record-item">
+            <div class="record-left">
+              <div class="record-athlete">${escapeHtml(a.athlete)}</div>
+              <div class="record-proto">${escapeHtml(protoName)}</div>
+              <div class="record-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
+            </div>
+            <div class="record-right">
+              <div class="record-value">${value}</div>
+            </div>
+          </div>
+        `;
+      });
+    });
+
+    document.getElementById('latestRecordsWrap').innerHTML = html || '<div class="empty">Veri yok</div>';
+  }
+
+  function renderFastestAthletes() {
+    const athleteTimes = {};
+
+    MANUAL.sessions.forEach(s => {
+      const proto = MANUAL.templates?.find(t => t.id === s.templateId);
+      if (proto?.family !== 'tekrarli' || proto.config?.dist !== 100) return;
+
+      (s.athletes || []).forEach(a => {
+        const reps = [];
+        for (let i = 1; i <= (proto.config?.reps || 24); i++) {
+          const sec = parseTimeStr(a[`rep${i}`]);
+          if (sec !== null) reps.push(sec);
+        }
+        const avg = reps.length ? reps.reduce((a, b) => a + b, 0) / reps.length : null;
+
+        if (avg !== null) {
+          if (!athleteTimes[a.athlete] || avg < athleteTimes[a.athlete]) {
+            athleteTimes[a.athlete] = avg;
+          }
+        }
+      });
+    });
+
+    const sorted = Object.entries(athleteTimes)
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, 8);
+
+    let html = '';
+    sorted.forEach(([name, time], idx) => {
+      const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '•';
+      html += `
+        <div class="athlete-card">
+          <div style="font-size: 20px; margin-bottom: 6px;">${medal}</div>
+          <div class="athlete-name">${escapeHtml(name)}</div>
+          <div class="athlete-best">${fmtTime(time)}</div>
+          <div class="athlete-stat">En hızlı 24×100</div>
+        </div>
+      `;
+    });
+
+    document.getElementById('fastestAthletesWrap').innerHTML = html || '<div class="empty">Veri yok</div>';
+  }
+
+  function renderRecentAthletes() {
+    const athleteLastDate = {};
+
+    MANUAL.sessions.forEach(s => {
+      const date = new Date(s.date);
+      (s.athletes || []).forEach(a => {
+        if (!athleteLastDate[a.athlete] || date > athleteLastDate[a.athlete].date) {
+          athleteLastDate[a.athlete] = { date, proto: s };
+        }
+      });
+    });
+
+    const sorted = Object.entries(athleteLastDate)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.date - a.date)
+      .slice(0, 8);
+
+    let html = '';
+    sorted.forEach(item => {
+      const proto = MANUAL.templates?.find(t => t.id === item.proto.templateId);
+      const daysAgo = Math.floor((Date.now() - item.date) / (1000 * 60 * 60 * 24));
+      const dateStr = daysAgo === 0 ? 'Bugün' : daysAgo === 1 ? 'Dün' : `${daysAgo} gün önce`;
+
+      html += `
+        <div class="athlete-card">
+          <div class="athlete-name">${escapeHtml(item.name)}</div>
+          <div class="athlete-stat">${escapeHtml(proto?.name || 'Test')}</div>
+          <div class="athlete-stat" style="color: #0f7c8c; font-weight: 600;">${dateStr}</div>
+        </div>
+      `;
+    });
+
+    document.getElementById('recentAthletesWrap').innerHTML = html || '<div class="empty">Veri yok</div>';
+  }
+
+  // Sayfa açıldığında veri yükle
+  loadData();
+
+  // Her 30 saniyede otomatik yenile
+  setInterval(loadData, 30000);
+</script>
+
+</body>
+</html>
