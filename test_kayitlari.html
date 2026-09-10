@@ -900,6 +900,9 @@ let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
 let protoSearchQuery = ''; // sol menüdeki protokol arama kutusunun geçerli değeri
 let entryRows = []; // {athlete, ...} geçici giriş satırları
+// null = "yeni ayrı kayıt" modu (Kaydet her zaman yeni oturum push eder);
+// dolu = şu id'li var olan oturum düzenleniyor (Detay > + Sporcu Ekle).
+let EDIT_SESSION_ID = null;
 let draftReps = null; // tekrarli ailede, o anki giriş formunda seçilen tekrar sayısı (N)
 let draftDist = null; // tekrarli + distPerSession: o anki giriş formunda seçilen mesafe
 let editingCustomId = null;
@@ -1225,18 +1228,18 @@ function renderManualMain(){
   <div id="entryBoxWrap"></div>
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
-  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; draftDist=null; renderProtoList(); renderManualMain(); };
+  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; draftDist=null; EDIT_SESSION_ID=null; renderProtoList(); renderManualMain(); };
   $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
-    const today = todayLocalStr();
+    // Her zaman boş, ayrı bir yeni kayıt — o tarihte kayıt olsa bile.
+    EDIT_SESSION_ID = null;
     if(t.family==='rpset'){
-      const loaded = loadStepsAndRowsForDate(t, today);
-      draftSteps = loaded.steps; entryRows = loaded.rows;
+      draftSteps = [newStep()]; entryRows = [newEntryRow()];
       renderRpSetEntryBox();
     } else {
       draftReps = null; draftDist = null;
-      entryRows = loadRowsForDate(t, today);
+      entryRows = [newEntryRow()];
       renderEntryBox();
     }
   };
@@ -1520,6 +1523,21 @@ function athleteCellHtml(r){
 function findSessionFor(templateId, date){
   return MANUAL.sessions.find(s=>s.templateId===templateId && s.date===date);
 }
+function sessionsForDate(templateId, date){
+  return MANUAL.sessions.filter(s=>s.templateId===templateId && s.date===date);
+}
+// Giriş kutusunun üstündeki bilgi şeridi — düzenleme mi, ayrı yeni kayıt mı.
+function entryBannerHtml(t, date){
+  const box = (txt)=> `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">${txt}</div>`;
+  if(EDIT_SESSION_ID){
+    return box('Bu kaydı düzenliyorsun — değişiklikler bu kayda yazılır.');
+  }
+  const n = sessionsForDate(t.id, date).length;
+  if(n>0){
+    return box(`Bu tarihte bu protokolde zaten ${n} kayıt var — bunu <b>ayrı bir yeni kayıt</b> olarak ekliyorsun.`);
+  }
+  return '';
+}
 function loadRowsForDate(t, date){
   const existing = findSessionFor(t.id, date);
   if(existing && existing.athletes.length){
@@ -1531,8 +1549,10 @@ function renderEntryBox(){
   const t = ACTIVE_PROTO;
   refreshAthleteDatalist();
   const wrap = $('#entryBoxWrap');
-  const currentDate = $('#entryDate') ? $('#entryDate').value : todayLocalStr();
-  const existingSession = findSessionFor(t.id, currentDate);
+  // Yalnızca düzenleme modunda var olan bir kayıttan ön-doldurma yapılır;
+  // yeni kayıt modunda tablo boştur, o tarihte başka kayıt olsa bile.
+  const existingSession = EDIT_SESSION_ID ? MANUAL.sessions.find(s=>s.id===EDIT_SESSION_ID) : null;
+  const currentDate = ($('#entryDate') && $('#entryDate').value) || (existingSession && existingSession.date) || todayLocalStr();
   const repsForEntry = t.family==='tekrarli' ? (draftReps || repsForSession(t, existingSession)) : null;
   const distForEntry = (t.family==='tekrarli' && t.config.distPerSession) ? (draftDist || distForSession(t, existingSession)) : null;
   let cols = buildColumns(t, undefined, repsForEntry, distForEntry);
@@ -1561,7 +1581,7 @@ function renderEntryBox(){
   }).join('');
   wrap.innerHTML = `<div class="entry-box">
     <h4>Kayıt — ${esc(t.name)}</h4>
-    ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
+    ${entryBannerHtml(t, currentDate)}
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
       ${t.family==='tekrarli' ? `<div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="entryReps" min="1" value="${repsForEntry}" style="max-width:90px;"></div>` : ''}
@@ -1582,8 +1602,8 @@ function renderEntryBox(){
     </div>
   </div>`;
   $('#entryDate').addEventListener('change', ()=>{
-    draftReps = null; draftDist = null;
-    entryRows = loadRowsForDate(t, $('#entryDate').value);
+    // Tarih değişince başka bir kaydın verisi ÇEKİLMEZ — girilenler kalır,
+    // yalnızca bilgi şeridi/sütunlar yeniden çizilir.
     renderEntryBox();
   });
   if(t.family==='tekrarli'){
@@ -1617,7 +1637,7 @@ function renderEntryBox(){
     b.onclick = ()=>{ entryRows = entryRows.filter(r=>r.id!==b.dataset.rm); renderEntryBox(); };
   });
   $('#btnAddRow').onclick = ()=>{ entryRows.push(newEntryRow()); renderEntryBox(); };
-  $('#btnCancelEntry').onclick = ()=>{ entryRows=[]; $('#entryBoxWrap').innerHTML=''; };
+  $('#btnCancelEntry').onclick = ()=>{ entryRows=[]; EDIT_SESSION_ID=null; $('#entryBoxWrap').innerHTML=''; };
   $('#btnSaveSession').onclick = saveSession;
   const quickBtn = $('#btnQuickAdd');
   if(quickBtn) quickBtn.onclick = openQuickAdd;
@@ -1638,8 +1658,9 @@ function renderRpSetEntryBox(){
   const t = ACTIVE_PROTO;
   refreshAthleteDatalist();
   const wrap = $('#entryBoxWrap');
-  const currentDate = $('#entryDate') ? $('#entryDate').value : todayLocalStr();
-  const existingSession = findSessionFor(t.id, currentDate);
+  // Yeni kayıt modunda ön-doldurma yok; sadece düzenlenen kayıttan.
+  const existingSession = EDIT_SESSION_ID ? MANUAL.sessions.find(s=>s.id===EDIT_SESSION_ID) : null;
+  const currentDate = ($('#entryDate') && $('#entryDate').value) || (existingSession && existingSession.date) || todayLocalStr();
   const cols = buildColumns(t, draftSteps);
   const stepTypeSelect = (s,i)=>{
     const type = s.type || 'basit';
@@ -1717,7 +1738,7 @@ function renderRpSetEntryBox(){
   }).join('');
   wrap.innerHTML = `<div class="entry-box">
     <h4>Kayıt — ${esc(t.name)}</h4>
-    ${existingSession ? `<div style="font-size:12px; background:var(--pool-light); color:var(--navy-2); padding:7px 10px; border-radius:6px; margin-bottom:12px;">Bu tarihte zaten ${existingSession.athletes.length} sporcu için kayıt var — üzerine ekliyorsun, aynı isimdeki sporcunun verisi güncellenir.</div>` : ''}
+    ${entryBannerHtml(t, currentDate)}
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
       <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. sabah antrenmanı" value="${existingSession && existingSession.note ? esc(existingSession.note) : ''}"></div>
@@ -1745,8 +1766,7 @@ function renderRpSetEntryBox(){
     </div>
   </div>`;
   $('#entryDate').addEventListener('change', ()=>{
-    const loaded = loadStepsAndRowsForDate(t, $('#entryDate').value);
-    draftSteps = loaded.steps; entryRows = loaded.rows;
+    // Tarih değişince başka bir kaydın basamak/verisi ÇEKİLMEZ.
     renderRpSetEntryBox();
   });
   wrap.querySelectorAll('#stepBuilderTbody [data-step]').forEach(inp=>{
@@ -1813,7 +1833,7 @@ function renderRpSetEntryBox(){
     b.onclick = ()=>{ entryRows = entryRows.filter(r=>r.id!==b.dataset.rm); renderRpSetEntryBox(); };
   });
   $('#btnAddRow').onclick = ()=>{ entryRows.push(newEntryRow()); renderRpSetEntryBox(); };
-  $('#btnCancelEntry').onclick = ()=>{ entryRows=[]; draftSteps=[]; $('#entryBoxWrap').innerHTML=''; };
+  $('#btnCancelEntry').onclick = ()=>{ entryRows=[]; draftSteps=[]; EDIT_SESSION_ID=null; $('#entryBoxWrap').innerHTML=''; };
   $('#btnSaveSession').onclick = saveRpSetSession;
   const quickBtn = $('#btnQuickAdd');
   if(quickBtn) quickBtn.onclick = openQuickAdd;
@@ -1832,7 +1852,8 @@ async function saveRpSetSession(){
     return o;
   });
   const stepsToSave = JSON.parse(JSON.stringify(draftSteps));
-  const existing = findSessionFor(ACTIVE_PROTO.id, date);
+  // Düzenleme modunda o id'li kayda yazılır; aksi halde HER ZAMAN yeni ayrı kayıt.
+  const existing = EDIT_SESSION_ID ? MANUAL.sessions.find(s=>s.id===EDIT_SESSION_ID) : null;
   if(existing){
     clean.forEach(newA=>{
       const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
@@ -1844,7 +1865,7 @@ async function saveRpSetSession(){
     MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, steps: stepsToSave, athletes: clean });
   }
   await saveManual();
-  entryRows = []; draftSteps = [];
+  entryRows = []; draftSteps = []; EDIT_SESSION_ID = null;
   $('#entryBoxWrap').innerHTML = '';
   renderProtoList();
   renderSessionList();
@@ -2046,7 +2067,8 @@ async function saveSession(){
     return o;
   });
   console.log('saveSession: clean=', clean);
-  const existing = findSessionFor(ACTIVE_PROTO.id, date);
+  // Düzenleme modunda o id'li kayda yazılır; aksi halde HER ZAMAN yeni ayrı kayıt.
+  const existing = EDIT_SESSION_ID ? MANUAL.sessions.find(s=>s.id===EDIT_SESSION_ID) : null;
   const repsInp = $('#entryReps');
   const repsToSave = (ACTIVE_PROTO.family==='tekrarli' && repsInp) ? Math.max(1, parseInt(repsInp.value)||1) : undefined;
   const distInp = $('#entryDist');
@@ -2065,6 +2087,7 @@ async function saveSession(){
   console.log('saveSession: saved session athletes=', existing ? existing.athletes : clean);
   await saveManual();
   entryRows = [];
+  EDIT_SESSION_ID = null;
   draftReps = null; draftDist = null;
   $('#entryBoxWrap').innerHTML = '';
   renderProtoList();
@@ -2200,13 +2223,15 @@ function openManualDetail(sessionId){
   };
   $('#btnAddAthleteToSession').onclick = ()=>{
     $('#manualDetailOverlay').classList.remove('show');
+    // Bu, var olan BU kaydın düzenlenmesidir — id'ye göre bu kayda yazılır.
+    EDIT_SESSION_ID = s.id;
     if(t.family==='rpset'){
-      const loaded = loadStepsAndRowsForDate(t, s.date);
-      draftSteps = loaded.steps; entryRows = loaded.rows;
+      draftSteps = (s.steps && s.steps.length) ? JSON.parse(JSON.stringify(s.steps)) : [newStep()];
+      entryRows = s.athletes.length ? s.athletes.map(a=>({ id: uid(), ...a })) : [newEntryRow()];
       renderRpSetEntryBox();
     } else {
       draftReps = null; draftDist = null;
-      entryRows = loadRowsForDate(t, s.date);
+      entryRows = s.athletes.length ? s.athletes.map(a=>({ id: uid(), ...a })) : [newEntryRow()];
       renderEntryBox();
     }
     const box = document.getElementById('entryBoxWrap');
