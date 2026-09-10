@@ -2077,8 +2077,9 @@ function renderSessionList(){
   if(!sessions.length){ wrap.innerHTML = `<div class="empty-side" style="padding:10px 0;">Bu protokol için henüz kayıt yok.</div>`; return; }
   wrap.innerHTML = sessions.map(s=>{
     const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${distForSession(ACTIVE_PROTO, s)}m` : '';
+    const stepStr = ACTIVE_PROTO.family==='rpset' ? stepSummaryCompact(s.steps) : '';
     const intervalPart = s.interval ? `İnterval: ${s.interval}` : '';
-    const topLine = (repsDistStr || intervalPart) ? `<div class="s-interval">${[repsDistStr, intervalPart].filter(Boolean).join(' · ')}</div>` : '';
+    const topLine = (repsDistStr || stepStr || intervalPart) ? `<div class="s-interval">${esc([repsDistStr, stepStr, intervalPart].filter(Boolean).join(' · '))}</div>` : '';
     const noteLine = s.note ? `<div class="s-note">${esc(s.note)}</div>` : '';
     return `<div class="session-card">
       <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
@@ -2103,6 +2104,22 @@ let currentSessionAthletes = null;
 // RP Set (basamaklı) protokollerde "Gönderme" (interval) bilgisi hiçbir
 // sütunda görünmediği için — set-seviyesinde bir bilgi olduğu için —
 // detay/PDF/yazdırma çıktısının en üstüne kısa bir basamak özeti ekliyoruz.
+// Kayıt listesi kartında, içine girmeden ne yapıldığını gösteren kısa özet:
+// her basamak "Nx Dm Branş" (kümülatifte son mesafe). Tek yüzüşte "Dm Branş".
+function stepSummaryCompact(steps){
+  if(!steps || !steps.length) return '';
+  return steps.map(s=>{
+    const b = s.branch || s.desc || 'Serbest';
+    const type = s.type || 'basit';
+    if(type==='kumulatif'){
+      const cps = stepCheckpoints(s);
+      const d = cps.length ? cps[cps.length-1] : (parseInt(s.dist)||'');
+      return `${d}m ${b}`;
+    }
+    const n = parseInt(s.reps)||1;
+    return (n>1 ? `${n}x${s.dist}m` : `${s.dist}m`) + ` ${b}`;
+  }).join(' · ');
+}
 function stepSummaryHtml(steps){
   if(!steps || !steps.length) return '';
   const lines = steps.map((s,si)=>{
@@ -2153,6 +2170,8 @@ function openManualDetail(sessionId){
       : '';
   $('#manualDetailIntervalBar').innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">Tarih</label>
+      <input type="date" id="mdDateInput" value="${s.date||''}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px;">
       <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">İnterval</label>
       <input type="text" id="mdIntervalInput" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 1'30&quot;" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:110px;">
       ${repsField}
@@ -2165,9 +2184,19 @@ function openManualDetail(sessionId){
     if(repsInp) s.reps = Math.max(1, parseInt(repsInp.value)||1);
     const distInp = $('#mdDistInput');
     if(distInp) s.dist = Math.max(1, parseInt(distInp.value)||1);
+    const dateInp = $('#mdDateInput');
+    const newDate = dateInp && dateInp.value ? dateInp.value : s.date;
+    if(newDate && newDate !== s.date){
+      const clash = MANUAL.sessions.find(x=> x!==s && x.templateId===s.templateId && x.date===newDate);
+      if(clash && !confirm('Bu tarihte bu protokol için zaten bir kayıt var. Yine de bu kaydın tarihini değiştir? (İki ayrı kayıt olarak kalır.)')){
+        // tarihi değiştirme, diğer alanları kaydet
+      } else {
+        s.date = newDate;
+      }
+    }
     await saveManual();
     renderSessionList();
-    openManualDetail(sessionId); // tekrar sayısı değişmiş olabilir, tabloyu tazele
+    openManualDetail(sessionId);
   };
   $('#btnAddAthleteToSession').onclick = ()=>{
     $('#manualDetailOverlay').classList.remove('show');
