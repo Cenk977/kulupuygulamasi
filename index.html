@@ -5249,7 +5249,7 @@ let swimAnalyzerLoaded = false;
 function initSwimAnalyzerMode(){
   if(swimAnalyzerLoaded) return;
   const frame = document.getElementById('swimAnalyzerFrame');
-  if(frame){ frame.src = 'swimanalyzer.html'; swimAnalyzerLoaded = true; }
+  if(frame){ frame.src = 'swimanalyzer.html?v=20260910'; swimAnalyzerLoaded = true; }
 }
 /* Antrenman Test Kayıtları sekmesi: aynı lazy-load iframe deseni.
    test_kayitlari.html bu index.html ile AYNI klasörde olmalı. Sporcu
@@ -5260,7 +5260,7 @@ let testKayitLoaded = false;
 function initTestKayitMode(){
   if(testKayitLoaded) return;
   const frame = document.getElementById('testKayitFrame');
-  if(frame){ frame.src = 'test_kayitlari.html'; testKayitLoaded = true; }
+  if(frame){ frame.src = 'test_kayitlari.html?v=20260910'; testKayitLoaded = true; }
 }
 /* Modal pencereleri klavye ile de tam kullanılabilir kıl. */
 function getFocusableElements(root){
