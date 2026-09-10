@@ -160,6 +160,14 @@
   .tpl-card .tpl-name{font-weight:700; display:block;}
   .tpl-card .tpl-meta{font-size:11px; opacity:.75;}
   .tpl-card.active .tpl-meta{opacity:.85;}
+  .proto-group{margin-bottom:4px;}
+  .proto-group-head{width:100%; text-align:left; background:none; border:none; cursor:pointer;
+    font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#7a8a94;
+    padding:6px 8px 4px; display:flex; align-items:center; gap:6px; font-family:inherit;}
+  .proto-group-head .pg-arrow{transition:transform .12s; display:inline-block;}
+  .proto-group-head.open .pg-arrow{transform:rotate(90deg);}
+  .proto-group-head .pg-count{margin-left:auto; background:var(--line); color:#556; border-radius:9px; padding:1px 7px; font-size:10px;}
+  .proto-group-body{padding-left:4px;}
   .entry-box{
     background:#fff; border:1px solid var(--line); border-radius:10px; padding:18px 20px;
     margin-bottom:20px; box-shadow:0 1px 3px rgba(0,0,0,.05);
@@ -865,12 +873,35 @@ const REP_OPTIONS = Array.from({length:40}, (_,i)=>i+1);
 const RP_REF_OPTIONS = ['Yok','50 RP','100 RP','200 RP','400 RP','800 RP','1500 RP'];
 const BRANCH_OPTIONS = ['Serbest','Sırt','Kurbağalama','Kelebek','Karışık'];
 function newStep(){ return { type:'basit', reps:4, dist:50, interval:'', rpRef:'Yok', branch:'Serbest' }; }
+// Kümülatif basamak için split noktaları.
+//   splitEvery = 0  -> "Yok": tek nokta (sadece bitiş derecesi)
+//   splitEvery = 25/50/100 -> o aralıkla otomatik (mesafeye kadar)
+//   splitEvery = 'ozel' -> s.checkpoints listesi kullanılır
+//   splitEvery yok (eski kayıt) -> checkpoints varsa o, yoksa [dist]
+function stepCheckpoints(s){
+  const dist = parseInt(s.dist) || 0;
+  const se = s.splitEvery;
+  if(se === 'ozel'){
+    return (Array.isArray(s.checkpoints) && s.checkpoints.length) ? s.checkpoints : (dist ? [dist] : [50,100,150,200]);
+  }
+  const ev = parseInt(se) || 0;
+  if(ev > 0 && dist > 0){
+    const cps = [];
+    for(let d = ev; d < dist; d += ev) cps.push(d);
+    cps.push(dist);
+    return cps;
+  }
+  if(se === 0 && dist > 0) return [dist];
+  if(Array.isArray(s.checkpoints) && s.checkpoints.length) return s.checkpoints;
+  return dist ? [dist] : [50,100,150,200];
+}
 let draftSteps = []; // rpset ailesi: o günün basamak yapısı (geçici)
 let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
 let protoSearchQuery = ''; // sol menüdeki protokol arama kutusunun geçerli değeri
 let entryRows = []; // {athlete, ...} geçici giriş satırları
 let draftReps = null; // tekrarli ailede, o anki giriş formunda seçilen tekrar sayısı (N)
+let draftDist = null; // tekrarli + distPerSession: o anki giriş formunda seçilen mesafe
 let editingCustomId = null;
 async function saveManual(){
   try{
@@ -915,16 +946,59 @@ function renderProtoList(){
     el.innerHTML = `<div class="empty-side">Aramayla eşleşen protokol yok.</div>`;
     return;
   }
-  el.innerHTML = list.map(t=>{
+  const cardHtml = (t)=>{
     const active = t.id === (ACTIVE_PROTO && ACTIVE_PROTO.id) ? 'active' : '';
     const n = MANUAL.sessions.filter(s=>s.templateId===t.id).length;
     return `<button class="tpl-card ${active}" data-id="${t.id}">
       <span class="tpl-name">${esc(t.name)}</span>
       <span class="tpl-meta">${FAMILY_LABEL[t.family]} · ${n} kayıt</span>
     </button>`;
-  }).join('');
+  };
+  // Gruba göre böl: önce gruplu protokoller (grup adına göre sıralı),
+  // sonra "Gruplanmamış". Arama aktifken düz liste (gruplama kapalı).
+  if(q){
+    el.innerHTML = list.map(cardHtml).join('');
+  } else {
+    const groups = new Map(); // grup -> [t]
+    const NOGROUP = ' ';
+    list.forEach(t=>{
+      const g = (t.group||'').trim() || NOGROUP;
+      if(!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(t);
+    });
+    const order = Array.from(groups.keys()).filter(g=>g!==NOGROUP).sort((a,b)=>a.localeCompare(b,'tr'));
+    if(groups.has(NOGROUP)) order.push(NOGROUP);
+    let openState = {};
+    try{ openState = JSON.parse(localStorage.getItem('atk_proto_groups_open')||'{}'); }catch(e){}
+    el.innerHTML = order.map(g=>{
+      if(g===NOGROUP && order.length===1){
+        // Hiç grup yoksa başlıksız düz liste
+        return groups.get(g).map(cardHtml).join('');
+      }
+      const label = g===NOGROUP ? 'Gruplanmamış' : g;
+      const isOpen = openState[label] !== false;
+      return `<div class="proto-group" data-group="${esc(label)}">
+        <button class="proto-group-head${isOpen?' open':''}" data-ggl="${esc(label)}">
+          <span class="pg-arrow">▸</span> ${esc(label)} <span class="pg-count">${groups.get(g).length}</span>
+        </button>
+        <div class="proto-group-body"${isOpen?'':' hidden'}>${groups.get(g).map(cardHtml).join('')}</div>
+      </div>`;
+    }).join('');
+    el.querySelectorAll('.proto-group-head').forEach(h=>{
+      h.onclick = ()=>{
+        const body = h.nextElementSibling;
+        const nowOpen = body.hasAttribute('hidden');
+        body.hidden = !nowOpen;
+        h.classList.toggle('open', nowOpen);
+        let st = {};
+        try{ st = JSON.parse(localStorage.getItem('atk_proto_groups_open')||'{}'); }catch(e){}
+        st[h.dataset.ggl] = nowOpen;
+        try{ localStorage.setItem('atk_proto_groups_open', JSON.stringify(st)); }catch(e){}
+      };
+    });
+  }
   el.querySelectorAll('.tpl-card').forEach(b=>{
-    b.onclick = ()=>{ ACTIVE_PROTO = MANUAL.templates.find(t=>t.id===b.dataset.id); entryRows=[]; draftReps=null; renderProtoList(); renderManualMain(); };
+    b.onclick = ()=>{ ACTIVE_PROTO = MANUAL.templates.find(t=>t.id===b.dataset.id); entryRows=[]; draftReps=null; draftDist=null; renderProtoList(); renderManualMain(); };
   });
 }
 /* ---------- Ready protocol modal ---------- */
@@ -953,7 +1027,7 @@ function renderReadyList(){
       const t = { id: uid(), name:p.name, family:p.family, config: JSON.parse(JSON.stringify(p.config)) };
       MANUAL.templates.push(t);
       await saveManual();
-      ACTIVE_PROTO = t; entryRows=[]; draftReps=null;
+      ACTIVE_PROTO = t; entryRows=[]; draftReps=null; draftDist=null;
       renderProtoList(); renderManualMain();
       $('#readyOverlay').classList.remove('show');
     };
@@ -965,11 +1039,17 @@ $('#btnCloseReady').onclick = ()=> $('#readyOverlay').classList.remove('show');
 function renderCustomForm(existing){
   const t = existing || { name:'', family:'tekrarli', config:{ reps:8, dist:100, interval:'', perRepNabiz:false, setNabiz:true, kolMode:'none', kolLabels:['KS1','KS2'], branch:false, checkpoints:[100,200,300,400], perCpKol:false, perCpNabiz:false, extraBranch:false } };
   $('#customModalTitle').textContent = existing ? 'Protokolü Düzenle' : 'Özel Protokol Oluştur';
+  const knownGroups = Array.from(new Set((MANUAL.templates||[]).map(x=>(x.group||'').trim()).filter(Boolean))).sort((a,b)=>a.localeCompare(b,'tr'));
   $('#customForm').innerHTML = `
+    <datalist id="cfGroupList">${knownGroups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist>
     <div class="field-row">
       <div class="field" style="flex:1; min-width:220px;">
         <label>Protokol Adı</label>
         <input type="text" id="cfName" value="${esc(t.name)}" placeholder="ör. Hpe Endurance Set">
+      </div>
+      <div class="field" style="min-width:150px;">
+        <label>Grup (opsiyonel)</label>
+        <input type="text" id="cfGroup" list="cfGroupList" value="${esc(t.group||'')}" placeholder="ör. HPE, Deneme">
       </div>
       <div class="field">
         <label>Tip</label>
@@ -993,6 +1073,9 @@ function renderCustomForm(existing){
         <div class="field-row">
           <div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="cfReps" min="1" value="${t.config.reps||8}"></div>
           <div class="field"><label>Mesafe (m)</label><input type="number" id="cfDist" min="1" value="${t.config.dist||100}"></div>
+        </div>
+        <div class="field-row">
+          <label class="checkfield"><input type="checkbox" id="cfDistPerSession" ${t.config.distPerSession?'checked':''}> Mesafe her kayıtta seçilsin (ör. "HPE Set" — bazen 8x100, bazen 6x150)</label>
         </div>
         <div style="font-size:11.5px; color:#8a97a0; margin:-8px 0 12px;">Dinlenme (interval) günden güne değişebildiği için artık her kayıtta ayrı ayrı, "Detaylar" ekranından girilir.</div>
         <div class="field-row">
@@ -1056,6 +1139,7 @@ $('#btnSaveCustom').onclick = async ()=>{
     config = {
       reps: Math.max(1, parseInt($('#cfReps').value)||1),
       dist: Math.max(1, parseInt($('#cfDist').value)||100),
+      distPerSession: $('#cfDistPerSession').checked,
       perRepNabiz: $('#cfPerRepNabiz').checked,
       setNabiz: $('#cfSetNabiz').checked,
       branch: $('#cfBranchT').checked,
@@ -1074,12 +1158,13 @@ $('#btnSaveCustom').onclick = async ()=>{
       extraBranch: $('#cfExtraBranch').checked
     };
   }
+  const group = ($('#cfGroup').value || '').trim();
   if(editingCustomId){
     const t = MANUAL.templates.find(x=>x.id===editingCustomId);
-    t.name = name; t.family = fam; t.config = config;
+    t.name = name; t.family = fam; t.config = config; t.group = group;
     if(ACTIVE_PROTO && ACTIVE_PROTO.id===t.id) ACTIVE_PROTO = t;
   } else {
-    const t = { id: uid(), name, family: fam, config };
+    const t = { id: uid(), name, family: fam, config, group };
     MANUAL.templates.push(t);
     ACTIVE_PROTO = t; entryRows = [];
   }
@@ -1140,7 +1225,7 @@ function renderManualMain(){
   <div id="entryBoxWrap"></div>
   <div id="sessionListWrap"></div>`;
   main.innerHTML = html;
-  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; renderProtoList(); renderManualMain(); };
+  $('#btnBackToList').onclick = ()=>{ ACTIVE_PROTO = null; entryRows=[]; draftSteps=[]; draftReps=null; draftDist=null; renderProtoList(); renderManualMain(); };
   $('#btnEditProto').onclick = ()=>{ renderCustomForm(t); $('#customOverlay').classList.add('show'); };
   $('#btnDelProto').onclick = ()=> deleteProtocol(t.id);
   $('#btnNewSession').onclick = ()=>{
@@ -1150,7 +1235,7 @@ function renderManualMain(){
       draftSteps = loaded.steps; entryRows = loaded.rows;
       renderRpSetEntryBox();
     } else {
-      draftReps = null;
+      draftReps = null; draftDist = null;
       entryRows = loadRowsForDate(t, today);
       renderEntryBox();
     }
@@ -1449,7 +1534,8 @@ function renderEntryBox(){
   const currentDate = $('#entryDate') ? $('#entryDate').value : todayLocalStr();
   const existingSession = findSessionFor(t.id, currentDate);
   const repsForEntry = t.family==='tekrarli' ? (draftReps || repsForSession(t, existingSession)) : null;
-  let cols = buildColumns(t, undefined, repsForEntry);
+  const distForEntry = (t.family==='tekrarli' && t.config.distPerSession) ? (draftDist || distForSession(t, existingSession)) : null;
+  let cols = buildColumns(t, undefined, repsForEntry, distForEntry);
   let head = `<tr><th>Sporcu</th>`;
   cols.forEach(c=> head += `<th>${c.label}${c.sub?`<span class="col-sub">${c.sub}</span>`:''}</th>`);
   head += `<th>Ort.</th><th></th></tr>`;
@@ -1479,6 +1565,7 @@ function renderEntryBox(){
     <div class="field-row">
       <div class="field"><label>Tarih</label><input type="date" id="entryDate" value="${currentDate}"></div>
       ${t.family==='tekrarli' ? `<div class="field"><label>Tekrar Sayısı (N)</label><input type="number" id="entryReps" min="1" value="${repsForEntry}" style="max-width:90px;"></div>` : ''}
+      ${(t.family==='tekrarli' && t.config.distPerSession) ? `<div class="field"><label>Mesafe (m)</label><input type="number" id="entryDist" min="1" step="25" value="${distForEntry}" style="max-width:90px;"></div>` : ''}
       <div class="field" style="flex:1; min-width:200px;"><label>Not (opsiyonel)</label><input type="text" id="entryNote" placeholder="ör. 350/200/100/50, sadece kol vb." value="${existingSession && existingSession.note ? esc(existingSession.note) : ''}"></div>
     </div>
     <div style="overflow-x:auto;">
@@ -1495,13 +1582,17 @@ function renderEntryBox(){
     </div>
   </div>`;
   $('#entryDate').addEventListener('change', ()=>{
-    draftReps = null;
+    draftReps = null; draftDist = null;
     entryRows = loadRowsForDate(t, $('#entryDate').value);
     renderEntryBox();
   });
   if(t.family==='tekrarli'){
     $('#entryReps').addEventListener('change', ()=>{
       draftReps = Math.max(1, parseInt($('#entryReps').value)||1);
+      renderEntryBox();
+    });
+    if($('#entryDist')) $('#entryDist').addEventListener('change', ()=>{
+      draftDist = Math.max(1, parseInt($('#entryDist').value)||1);
       renderEntryBox();
     });
   }
@@ -1561,12 +1652,28 @@ function renderRpSetEntryBox(){
   const stepRows = draftSteps.map((s,i)=>{
     const type = s.type || 'basit';
     if(type==='kumulatif'){
-      // Kumulatif split basamak: N tekrar/mesafe yerine checkpoint listesi
-      // (ör. 50,100,150,200) + o basamak icin tek Kol Sayisi/Nabiz secenegi.
+      // Kümülatif split basamak = tek yüzüş: mesafe + split aralığı seçilir,
+      // split noktaları otomatik üretilir (stepCheckpoints). "Özel" seçilirse
+      // serbest checkpoint listesi girilir.
+      const seStr = (s.splitEvery === 'ozel') ? 'ozel'
+        : (s.splitEvery !== undefined) ? String(parseInt(s.splitEvery)||0)
+        : (Array.isArray(s.checkpoints) && s.checkpoints.length) ? 'ozel'
+        : '50';
+      const splitSel = `<select data-step="${i}" data-sf="splitEvery" style="width:120px;">
+        <option value="0" ${seStr==='0'?'selected':''}>Split yok</option>
+        <option value="25" ${seStr==='25'?'selected':''}>Her 25m</option>
+        <option value="50" ${seStr==='50'?'selected':''}>Her 50m</option>
+        <option value="100" ${seStr==='100'?'selected':''}>Her 100m</option>
+        <option value="ozel" ${seStr==='ozel'?'selected':''}>Özel liste</option>
+      </select>`;
+      const customCp = seStr==='ozel'
+        ? `<input type="text" data-step="${i}" data-sf="checkpoints" value="${(s.checkpoints||[50,100,150,200]).join(',')}" placeholder="ör. 50,100,150,200" style="width:130px; margin-top:4px;">`
+        : `<div style="font-size:10.5px; color:#8a97a0; margin-top:3px;">${stepCheckpoints(s).join(' · ')}m</div>`;
       return `<tr>
         <td style="font-weight:700; text-align:center;">${i+1}</td>
         <td>${stepTypeSelect(s,i)}</td>
-        <td colspan="3"><input type="text" data-step="${i}" data-sf="checkpoints" value="${(s.checkpoints||[50,100,150,200]).join(',')}" placeholder="ör. 50,100,150,200" style="width:150px;"></td>
+        <td colspan="2" style="text-align:center;">1 x</td>
+        <td><input type="number" data-step="${i}" data-sf="dist" min="25" step="25" value="${parseInt(s.dist)||200}" style="width:70px;">m<br>${splitSel}${customCp}</td>
         <td><input type="text" data-step="${i}" data-sf="interval" value="${(s.interval||'').replace(/"/g,'&quot;')}" placeholder="ör. 5:00" style="width:80px;"></td>
         <td>
           <label style="font-size:11px; white-space:nowrap; display:block;"><input type="checkbox" data-step="${i}" data-sf="kolSayisi" ${s.kolSayisi?'checked':''}> Kol Sayısı</label>
@@ -1651,9 +1758,13 @@ function renderRpSetEntryBox(){
       if(inp.type==='checkbox') val = inp.checked;
       else if(field==='checkpoints') val = inp.value.split(',').map(x=>parseInt(x.trim(),10)).filter(n=>!isNaN(n) && n>0);
       else if(field==='reps' || field==='dist') val = parseInt(inp.value);
+      else if(field==='splitEvery') val = (inp.value==='ozel') ? 'ozel' : (parseInt(inp.value)||0);
       else val = inp.value;
       draftSteps[si][field] = val;
-      if(field==='type' && val==='kumulatif' && !draftSteps[si].checkpoints) draftSteps[si].checkpoints = [50,100,150,200];
+      if(field==='type' && val==='kumulatif' && draftSteps[si].splitEvery===undefined && !draftSteps[si].checkpoints){
+        draftSteps[si].splitEvery = 50;
+        if(!draftSteps[si].dist) draftSteps[si].dist = 200;
+      }
       renderRpSetEntryBox();
     });
   });
@@ -1764,7 +1875,7 @@ $('#btnQuickAddConfirm').onclick = ()=>{
   if(ACTIVE_PROTO && ACTIVE_PROTO.family==='rpset') renderRpSetEntryBox(); else renderEntryBox();
 };
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
-function buildColumns(t, steps, repsOverride){
+function buildColumns(t, steps, repsOverride, distOverride){
   const cols = [];
   if(t.family==='ayak'){
     [400,200,100,50].forEach(d=> cols.push({ key:`d${d}`, label:`${d}m`, type:'time', ph:'ör. 1:17' }));
@@ -1777,7 +1888,7 @@ function buildColumns(t, steps, repsOverride){
         // checkpoint'ler + o basamak icin TEK (checkpoint basina degil)
         // Kol Sayisi / Nabiz. 7x200 Step Test gibi setlerin duz 200'leri
         // icin kullanilir.
-        const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+        const cps = stepCheckpoints(s);
         cps.forEach(d=> cols.push({ key:`s${si}_cp${d}`, label:`${branchName} ${d}m`, sub: `B${si+1} · kümülatif`, type:'time', ph:'ör. 1:16' }));
         if(s.kolSayisi) cols.push({ key:`s${si}_kol`, label:`B${si+1} Kol Sayısı`, type:'num', ph:'#' });
         if(s.nabiz) cols.push({ key:`s${si}_nabiz`, label:`B${si+1} Nabız`, type:'num', ph:'#' });
@@ -1802,8 +1913,9 @@ function buildColumns(t, steps, repsOverride){
     });
   } else if(t.family==='tekrarli'){
     const N = repsOverride || t.config.reps;
+    const D = distOverride || t.config.dist;
     for(let i=1;i<=N;i++){
-      cols.push({ key:`rep${i}`, label:`${i}`, sub:`${t.config.dist}m`, type:'time', ph:'ör. 38.60' });
+      cols.push({ key:`rep${i}`, label:`${i}`, sub:`${D}m`, type:'time', ph:'ör. 38.60' });
       if(t.config.kolMode==='tek') cols.push({ key:`kol${i}`, label:'KS', type:'num', ph:'#' });
       if(t.config.kolMode==='iki'){
         cols.push({ key:`kolA${i}`, label:t.config.kolLabels[0]||'KS1', type:'num', ph:'#' });
@@ -1841,15 +1953,27 @@ function maxRepsForProtocol(t){
 // arasında tekrar sayısı değişiyorsa (ör. bazen 24x100, bazen 20x100)
 // bunu bir aralık olarak gösterir.
 function repsRangeLabel(t){
-  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps).filter(Boolean);
-  if(!sessReps.length) return `${t.config.reps} x ${t.config.dist}m`;
-  const mn = Math.min(...sessReps, t.config.reps), mx = Math.max(...sessReps, t.config.reps);
-  if(mn===mx) return `${mn} x ${t.config.dist}m`;
-  return `${mn}–${mx} x ${t.config.dist}m (kayda göre değişir)`;
+  const rangeStr = (vals, def)=>{
+    const list = vals.filter(Boolean);
+    if(!list.length) return String(def);
+    const mn = Math.min(...list, def), mx = Math.max(...list, def);
+    return mn===mx ? String(mn) : `${mn}–${mx}`;
+  };
+  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps);
+  const repsStr = rangeStr(sessReps, t.config.reps);
+  let distStr = `${t.config.dist}m`;
+  let note = (sessReps.filter(Boolean).length && repsStr.indexOf('–')>=0) ? ' (kayda göre değişir)' : '';
+  if(t.config.distPerSession){
+    const sessDist = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.dist);
+    distStr = `${rangeStr(sessDist, t.config.dist)}m`;
+    if(sessDist.filter(Boolean).length && distStr.indexOf('–')>=0) note = ' (kayda göre değişir)';
+  }
+  return `${repsStr} x ${distStr}${note}`;
 }
-// Bir kaydın (session) gerçek tekrar sayısını döndürür — kayıtta
-// belirtilmemişse şablonun varsayılanına düşer.
+// Bir kaydın (session) gerçek tekrar sayısını / mesafesini döndürür —
+// kayıtta belirtilmemişse şablonun varsayılanına düşer.
 function repsForSession(t, s){ return (s && s.reps) || (t && t.config && t.config.reps) || null; }
+function distForSession(t, s){ return (s && s.dist) || (t && t.config && t.config.dist) || null; }
 // Bir satırın ortalama/pace değerini hesaplar — hem DOM güncellemesinde
 // hem de karşılaştırma tablosunda ortak kullanılır (yalnızca gerçekten
 // girilmiş tekrarlar sayılır, boş tekrarlar ortalamayı bozmaz).
@@ -1877,7 +2001,7 @@ function computeAvg(t, row, steps, repsOverride){
     (steps||[]).forEach((s,si)=>{
       const stype = s.type || 'basit';
       if(stype==='kumulatif'){
-        const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+        const cps = stepCheckpoints(s);
         const lastCp = cps[cps.length-1];
         const sec = parseTimeStr(row[`s${si}_cp${lastCp}`]);
         if(sec!==null) parts.push(`B${si+1}: ${fmtTime(sec)}`);
@@ -1925,6 +2049,8 @@ async function saveSession(){
   const existing = findSessionFor(ACTIVE_PROTO.id, date);
   const repsInp = $('#entryReps');
   const repsToSave = (ACTIVE_PROTO.family==='tekrarli' && repsInp) ? Math.max(1, parseInt(repsInp.value)||1) : undefined;
+  const distInp = $('#entryDist');
+  const distToSave = (ACTIVE_PROTO.family==='tekrarli' && ACTIVE_PROTO.config.distPerSession && distInp) ? Math.max(1, parseInt(distInp.value)||1) : undefined;
   if(existing){
     clean.forEach(newA=>{
       const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
@@ -1932,13 +2058,14 @@ async function saveSession(){
     });
     if(note) existing.note = note;
     if(repsToSave) existing.reps = repsToSave;
+    if(distToSave) existing.dist = distToSave;
   } else {
-    MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, reps: repsToSave, athletes: clean });
+    MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, reps: repsToSave, dist: distToSave, athletes: clean });
   }
   console.log('saveSession: saved session athletes=', existing ? existing.athletes : clean);
   await saveManual();
   entryRows = [];
-  draftReps = null;
+  draftReps = null; draftDist = null;
   $('#entryBoxWrap').innerHTML = '';
   renderProtoList();
   renderSessionList();
@@ -1949,7 +2076,7 @@ function renderSessionList(){
   const sessions = MANUAL.sessions.filter(s=>s.templateId===ACTIVE_PROTO.id).sort((a,b)=> b.date.localeCompare(a.date));
   if(!sessions.length){ wrap.innerHTML = `<div class="empty-side" style="padding:10px 0;">Bu protokol için henüz kayıt yok.</div>`; return; }
   wrap.innerHTML = sessions.map(s=>{
-    const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${ACTIVE_PROTO.config.dist}m` : '';
+    const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${distForSession(ACTIVE_PROTO, s)}m` : '';
     const intervalPart = s.interval ? `İnterval: ${s.interval}` : '';
     const topLine = (repsDistStr || intervalPart) ? `<div class="s-interval">${[repsDistStr, intervalPart].filter(Boolean).join(' · ')}</div>` : '';
     const noteLine = s.note ? `<div class="s-note">${esc(s.note)}</div>` : '';
@@ -1983,7 +2110,7 @@ function stepSummaryHtml(steps){
     const type = s.type || 'basit';
     let bits;
     if(type==='kumulatif'){
-      const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+      const cps = stepCheckpoints(s);
       bits = [`<b>B${si+1}:</b> Kümülatif ${cps.join('/')}m ${branchName}`];
       if(s.kolSayisi) bits.push('Kol Sayısı');
       if(s.nabiz) bits.push('Nabız');
@@ -2004,7 +2131,7 @@ function stepSummaryHtml(steps){
 }
 function detailTitleFor(t, s){
   const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
-  const repsDistStr = t.family==='tekrarli' ? ` — ${repsForSession(t,s)}x${t.config.dist}m` : '';
+  const repsDistStr = t.family==='tekrarli' ? ` — ${repsForSession(t,s)}x${distForSession(t,s)}m` : '';
   const intervalStr = s.interval ? ` · İnterval: ${s.interval}` : '';
   const noteStr = s.note ? ` · ${s.note}` : '';
   return `${t.name} — ${dateStr}${repsDistStr}${intervalStr}${noteStr}`;
@@ -2014,12 +2141,16 @@ function openManualDetail(sessionId){
   const t = MANUAL.templates.find(x=>x.id===s.templateId);
   const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
   const repsN = repsForSession(t, s);
-  const cols = buildColumns(t, steps, repsN);
+  const distN = distForSession(t, s);
+  const cols = buildColumns(t, steps, repsN, (t.family==='tekrarli' && t.config.distPerSession) ? distN : undefined);
   currentSessionAthletes = s.athletes.map((a,i)=>({...a, id:'v'+i}));
   $('#manualDetailTitle').textContent = detailTitleFor(t, s);
-  // İnterval + tekrar sayısı düzenleme + sporcu ekleme çubuğu (modalın en üstünde)
+  // İnterval + tekrar sayısı (+ distPerSession ise mesafe) düzenleme çubuğu
   const repsField = t.family==='tekrarli' ? `<label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">Tekrar Sayısı (N)</label>
-      <input type="number" id="mdRepsInput" min="1" value="${repsN}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:70px;">` : '';
+      <input type="number" id="mdRepsInput" min="1" value="${repsN}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:70px;">`
+      + ((t.family==='tekrarli' && t.config.distPerSession) ? `<label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">Mesafe (m)</label>
+      <input type="number" id="mdDistInput" min="1" step="25" value="${distN}" style="border:1px solid var(--line); border-radius:6px; padding:6px 9px; font-size:13px; width:70px;">` : '')
+      : '';
   $('#manualDetailIntervalBar').innerHTML = `
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <label style="font-size:11px; font-weight:700; color:#647680; text-transform:uppercase; letter-spacing:.4px;">İnterval</label>
@@ -2032,6 +2163,8 @@ function openManualDetail(sessionId){
     s.interval = $('#mdIntervalInput').value.trim();
     const repsInp = $('#mdRepsInput');
     if(repsInp) s.reps = Math.max(1, parseInt(repsInp.value)||1);
+    const distInp = $('#mdDistInput');
+    if(distInp) s.dist = Math.max(1, parseInt(distInp.value)||1);
     await saveManual();
     renderSessionList();
     openManualDetail(sessionId); // tekrar sayısı değişmiş olabilir, tabloyu tazele
@@ -2043,7 +2176,7 @@ function openManualDetail(sessionId){
       draftSteps = loaded.steps; entryRows = loaded.rows;
       renderRpSetEntryBox();
     } else {
-      draftReps = null;
+      draftReps = null; draftDist = null;
       entryRows = loadRowsForDate(t, s.date);
       renderEntryBox();
     }
@@ -2225,19 +2358,14 @@ function populateCmpAthletes(side){
   if(!s || !s.athletes.length){ athSel.innerHTML = `<option value="">Sporcu yok</option>`; return; }
   athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${esc(a.athlete)}</option>`).join('');
 }
-function renderSingleRowTable(t, row, label, steps, repsOverride){
-  const cols = buildColumns(t, steps, repsOverride);
+function renderSingleRowTable(t, row, label, steps, repsOverride, distOverride){
+  const cols = buildColumns(t, steps, repsOverride, distOverride);
   let html = stepSummaryHtml(steps);
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   html += `<tr><td class="who">${esc(label)}</td>`;
-  cols.forEach(c=>{
-    let v = row[c.key];
-    if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-    else if(v===undefined || v===''){ v = '—'; }
-    html += `<td>${esc(v)}</td>`;
-  });
+  html += renderRowCellsHtml(cols, row);
   html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps,repsOverride).text}</td></tr></table></div>`;
   return html;
 }
@@ -2303,9 +2431,9 @@ function renderCompareResult(){
     html += `</tr></table></div>
     <div style="font-size:11px; color:#8a97a0; margin-top:6px;">Yeşil: B daha hızlı/erken. Kırmızı: B daha yavaş.</div>`;
   } else {
-    html = renderSingleRowTable(tA, rowA, labelA, stepsA, repsForSession(tA,sA)) +
+    html = renderSingleRowTable(tA, rowA, labelA, stepsA, repsForSession(tA,sA), distForSession(tA,sA)) +
       '<div style="height:14px;"></div>' +
-      renderSingleRowTable(tB, rowB, labelB, stepsB, repsForSession(tB,sB)) +
+      renderSingleRowTable(tB, rowB, labelB, stepsB, repsForSession(tB,sB), distForSession(tB,sB)) +
       `<div style="font-size:11px; color:#8a97a0; margin-top:6px;">${tA.family==='rpset'||tB.family==='rpset' ? 'RP Set tipi protokollerde set yapısı her kayıtta değişebildiği için satır bazlı fark gösterilmiyor.' : 'A ve B farklı test protokolleri olduğu için satır bazlı fark gösterilmiyor.'}</div>`;
   }
   wrap.innerHTML = html;
@@ -2422,7 +2550,7 @@ function populateApDateChecks(){
     const rows = g.entries.map(e=>{
       const s = e.session;
       const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
-      const repsDistStr = g.t.family==='tekrarli' ? `${repsForSession(g.t,s)}x${g.t.config.dist}m` : '';
+      const repsDistStr = g.t.family==='tekrarli' ? `${repsForSession(g.t,s)}x${distForSession(g.t,s)}m` : '';
       const bits = [repsDistStr, s.interval||''].filter(Boolean).join(' · ');
       return `<label style="display:flex; align-items:center; gap:6px; padding:2px 0 2px ${multi?'14px':'0'}; font-size:12.5px; font-weight:400; cursor:pointer;">
         <input type="checkbox" class="apDateCheck" value="${s.id}" checked> ${dateStr}${bits ? ' · '+bits : ''}
@@ -2611,13 +2739,19 @@ function stepRowSplitValues(columns, row){
 // "1:23.00" (200m'den 300m'ye kadar geçen süre) görünür. İlk checkpoint'te
 // split = kümülatif olduğu için ikinci satır boş bırakılır.
 function renderRowCellsHtml(cols, rowData){
-  let prevCumSec = null;
+  let prevCumSec = null, curCumGroup = null;
   return cols.map(c=>{
     let v = rowData[c.key];
+    const isCum = typeof c.sub === 'string' && c.sub.indexOf('kümülatif') >= 0;
     if(c.type==='time'){
       const sec = parseTimeStr(v);
       const mainTxt = sec!==null ? fmtTime(sec) : '—';
-      if(c.sub==='kümülatif'){
+      if(isCum){
+        // Aynı basamağın checkpoint'leri arası segment (split) süresini
+        // ana kümülatif derecenin ALTINA küçük gri yazıyla ekle.
+        // RP Set anahtarı "s3_cp150" -> grup "s3"; aile anahtarı "cp150" -> "cp".
+        const grp = (String(c.key).match(/^s\d+/) || ['cp'])[0];
+        if(grp !== curCumGroup){ curCumGroup = grp; prevCumSec = null; }
         let splitHtml = '';
         if(sec!==null){
           if(prevCumSec!==null) splitHtml = `<div style="font-size:10px; color:#8a97a0; margin-top:1px;">${fmtTime(sec-prevCumSec)}</div>`;
@@ -2808,7 +2942,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
       protoEntries.forEach(pe=>{
         pe.entries.forEach(e=>{
           const dateStr = new Date(e.session.date).toLocaleDateString('tr-TR');
-          const repsDistStr = family==='tekrarli' ? `${repsForSession(pe.t, e.session)}x${pe.t.config.dist}` : '';
+          const repsDistStr = family==='tekrarli' ? `${repsForSession(pe.t, e.session)}x${distForSession(pe.t, e.session)}` : '';
           const intervalSuffix = e.session.interval ? `${e.session.interval}` : '';
           const extraBits = [repsDistStr, intervalSuffix].filter(Boolean).join(' · ');
           out.push({
@@ -2928,8 +3062,9 @@ function renderBulkProtocols(protoIds, wrap){
     sessions.forEach(s=>{
       const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
       const sessRepsN = repsForSession(t,s);
-      const cols = buildColumns(t, steps, sessRepsN);
-      const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${t.config.dist}m — ` : '';
+      const sessDistN = (t.family==='tekrarli' && t.config.distPerSession) ? distForSession(t,s) : undefined;
+      const cols = buildColumns(t, steps, sessRepsN, sessDistN);
+      const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${distForSession(t,s)}m — ` : '';
       const allAthletes = s.athletes || [];
       html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? esc(s.note)+' — ' : ''}${allAthletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);

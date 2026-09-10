@@ -570,6 +570,34 @@
 .sp-hint{font-size:10.5px;color:var(--foam-dim);margin:0 0 5px;}
 .sp-tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid rgba(26,46,53,0.2);border-radius:2px;max-height:72vh;background:#fffdf9;}
 .sp-tablewrap:has(table.sp-compact){max-height:82vh;}
+.sp-kodlar{margin:8px 0 4px;font-family:'Archivo',sans-serif;}
+.sp-kodlar>summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--pool-900);padding:5px 0;list-style:revert;}
+.sp-kodlar[open]>summary{margin-bottom:6px;}
+.sp-kodlar table{border-collapse:collapse;font-size:11.5px;background:#fffdf9;}
+.sp-kodlar td{border:1px solid rgba(26,46,53,0.15);padding:3px 8px;vertical-align:top;}
+.sp-kodlar tr:first-child td{background:var(--pool-900);color:#fff;font-weight:700;}
+/* ---- Sezon Takvimi görsel panosu ---- */
+.sp-takvim{border:1px solid rgba(26,46,53,0.2);border-radius:2px;background:#fffdf9;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
+.tk-grid{display:grid;font-family:'Archivo',sans-serif;font-size:10px;min-width:max-content;}
+.tk-row{display:contents;}
+.tk-lab{position:sticky;left:0;z-index:3;background:#eef4f6;border-right:2px solid rgba(26,46,53,0.25);border-bottom:1px solid rgba(26,46,53,0.1);padding:2px 8px;font-weight:700;font-size:9.5px;color:var(--pool-900);display:flex;align-items:center;white-space:nowrap;}
+.tk-cell{border-right:1px solid rgba(26,46,53,0.08);border-bottom:1px solid rgba(26,46,53,0.08);padding:1px 2px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tk-week{font-weight:700;color:var(--pool-900);}
+.tk-month{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--foam-dim);text-transform:uppercase;letter-spacing:.04em;background:#f6f2e8;}
+.tk-band{padding:3px 4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;color:#1a2e35;border-right:1px solid rgba(255,255,255,0.5);border-bottom:1px solid rgba(26,46,53,0.1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tk-period{font-size:8.5px;font-weight:700;border-radius:2px;margin:1px;padding:2px 1px;}
+.tk-volwrap{position:relative;border-bottom:1px solid rgba(26,46,53,0.15);}
+.tk-bar{position:absolute;bottom:0;background:var(--pool-700);border-radius:1px 1px 0 0;}
+.tk-bar.zero{background:rgba(26,46,53,0.12);}
+.tk-barval{position:absolute;left:0;right:0;text-align:center;font-size:8px;color:var(--foam-dim);}
+.tk-int{display:flex;flex-direction:column-reverse;height:26px;border-right:1px solid rgba(26,46,53,0.08);}
+.tk-int span{display:block;}
+.tk-race{cursor:default;}
+.tk-race .dot{display:inline-block;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:8px solid var(--lane-coral);}
+.tk-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:10px;color:var(--foam-dim);padding:6px 8px;}
+.tk-legend b{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+.tk-yaxis{position:absolute;left:0;top:0;bottom:0;width:100%;pointer-events:none;}
+.tk-yaxis .gl{position:absolute;left:0;right:0;border-top:1px dashed rgba(26,46,53,0.15);font-size:8px;color:var(--foam-dim);padding-left:2px;}
 table.sp-grid{border-collapse:separate;border-spacing:0;font-size:12px;font-family:'Archivo',sans-serif;}
 table.sp-grid td{border-right:1px solid rgba(26,46,53,0.15);border-bottom:1px solid rgba(26,46,53,0.15);padding:6px 7px;vertical-align:top;white-space:pre-wrap;word-break:break-word;min-width:64px;max-width:260px;line-height:1.35;outline:none;}
 table.sp-grid td:first-child{position:sticky;left:0;z-index:2;background:#eaf3f6;font-weight:600;color:var(--pool-900);min-width:78px;}
@@ -1026,6 +1054,7 @@ table.sp-grid.sp-compact td.sp-col-wide:focus{max-width:360px;white-space:pre-wr
     <div class="sp-toolbar">
       <div class="sp-title" id="spSheetTitle">Sezon Takvimi</div>
       <div class="sp-toolbar-actions">
+        <button type="button" class="btn btn-ghost" id="spTakvimModeBtn" hidden title="Görsel sezon panosu ↔ ham tablo">◧ Ham tablo</button>
         <button type="button" class="btn btn-ghost" id="spCompactBtn" title="Izgarayı ekrana sığdır — küçük font, dar hücreler, açıklama sütunu kısaltılır">⊟ Sığdır</button>
         <button type="button" class="btn btn-ghost" id="spImportBtn">Excel'den Güncelle</button>
         <button type="button" class="btn btn-ghost" id="spExportBtn">⬆⬇ Excel Dosyasını Güncelle</button>
@@ -1038,6 +1067,8 @@ table.sp-grid.sp-compact td.sp-col-wide:focus{max-width:360px;white-space:pre-wr
     <div id="spNav"></div>
     <div class="sp-hint">Hucreye dokunup duzenleyebilirsin -- degisiklikler otomatik kaydedilir ve butun cihazlarinda senkronize olur.</div>
     <div class="sp-tablewrap"><table class="sp-grid" id="spGrid"></table></div>
+    <details id="spKodlar" class="sp-kodlar" hidden><summary>Antrenman kodları</summary><div id="spKodlarBody"></div></details>
+    <div id="spTakvim" class="sp-takvim" hidden></div>
   </div><!-- /modeSezonplan -->
 
 </div>
@@ -4161,8 +4192,16 @@ function spGuessGroupAndLabel(key){
   if(/KARA ANTRENMAN|ANTRENMAN/.test(upper)) return {group:'Referans', label: norm};
   return {group:'Diğer Sayfalar', label: norm};
 }
+// "HAFTALIK PLAN" / "GÜNLÜK PROGRAM" sayfası uygulamada gösterilmiyor —
+// günlük hücresel plan kullanılmıyor, Sezon Takvimi görseli onun yerini
+// alıyor. Sayfa Excel/Firebase verisinde durur; sadece uygulama bunu
+// atlar (sekme yok, Excel'e geri yazmada dokunulmaz). Geri istenirse
+// bu filtreyi kaldırmak yeter.
+function spIsHidden(key){
+  return /HAFTALIK|GÜNLÜK|GUNLUK/.test(String(key||'').toLocaleUpperCase('tr'));
+}
 function spBuildOrderAndNav(dataObj){
-  const keys = Object.keys(dataObj);
+  const keys = Object.keys(dataObj).filter(k => !spIsHidden(k));
   SP_ORDER = keys;
   const groups = {};
   const groupOrder = [];
@@ -4316,9 +4355,26 @@ async function spSelectSheet(key){
   spRefreshNavActive();
   document.getElementById('spSheetTitle').textContent = spLabelFor(key);
   document.getElementById('spPdfBtn').style.display = spCanExportPdf(key) ? '' : 'none';
+  const isTk = spIsTakvim(key);
+  const tkBtn = document.getElementById('spTakvimModeBtn');
+  const tablewrap = document.querySelector('.sp-tablewrap');
+  const tkBox = document.getElementById('spTakvim');
+  let rawMode = false;
+  try{ rawMode = localStorage.getItem('sp_takvim_raw') === '1'; }catch(e){}
+  if(tkBtn) tkBtn.hidden = !isTk;
+  if(isTk && !rawMode){
+    if(tablewrap) tablewrap.hidden = true;
+    document.getElementById('spKodlar').hidden = true;
+    if(tkBox) tkBox.hidden = false;
+    if(tkBtn) tkBtn.textContent = '◧ Ham tablo';
+    spRenderTakvim(SP_DATA[key]);
+    return;
+  }
+  if(tkBox) tkBox.hidden = true;
+  if(tablewrap) tablewrap.hidden = false;
+  if(isTk && tkBtn) tkBtn.textContent = '▦ Görsel pano';
   await spRenderSheet(key);
-  const wrap = document.querySelector('.sp-tablewrap');
-  if(wrap){ wrap.scrollTop = 0; wrap.scrollLeft = 0; }
+  if(tablewrap){ tablewrap.scrollTop = 0; tablewrap.scrollLeft = 0; }
 }
 async function spRenderSheet(key){
   const sheet = SP_DATA[key];
@@ -4337,10 +4393,12 @@ async function spRenderSheet(key){
   const computed = spComputedCells(key); // r_c -> otomatik hesaplanan değer
   const syns = spSyntheticTotalRows(key); // MESO: her "Others" üstüne "Genel Toplam" satırı
   const colCls = spColClasses(sheet);     // {wide:Set, narrow:Set} — kompakt modda sütun daraltma
+  const kodStart = spKodlarStartRow(sheet, key); // MESO: "ANTRENMAN KODLARI" bloğu — ızgarada gizli, altta katlanır
   const table = document.getElementById('spGrid');
   table.innerHTML = '';
   const frag = document.createDocumentFragment();
   grid.forEach((row,r)=>{
+    if(kodStart>=0 && r>=kodStart) return; // "Antrenman kodları" bloğu ana ızgarada çizilmez
     const synHere = syns.find(s=>s.beforeRowIdx===r);
     if(synHere) frag.appendChild(spBuildSyntheticTr(synHere));
     const tr = document.createElement('tr');
@@ -4380,8 +4438,202 @@ async function spRenderSheet(key){
     frag.appendChild(tr);
   });
   table.appendChild(frag);
+  spRenderKodlar(sheet, kodStart);
   // Hesaplanan değerleri edits-katmanına yaz (Excel dışa aktarımı görsün).
   await spApplyComputed(key, false);
+}
+
+// MESO sayfalarında "ANTRENMAN KODLARI" başlık satırının indeksini bulur
+// (yoksa -1). Sabit numara değil — Excel'den farklı düzenli plan yüklense
+// de içerikten bulur.
+function spKodlarStartRow(sheet, key){
+  if(!/^MESO/i.test(String(key||'').trim())) return -1;
+  const grid = sheet.grid;
+  for(let r=0;r<grid.length;r++){
+    for(let c=0;c<2;c++){
+      const v = String(grid[r] && (Array.isArray(grid[r][c])?grid[r][c][0]:grid[r][c]) || '')
+        .trim().toLocaleUpperCase('tr').replace(/\s+/g,' ');
+      if(v === 'ANTRENMAN KODLARI') return r;
+    }
+  }
+  return -1;
+}
+
+// "Antrenman kodları" bloğunu alttaki katlanır <details> içine küçük bir
+// tabloyla yerleştirir. Blok yoksa gizler.
+function spRenderKodlar(sheet, kodStart){
+  const box = document.getElementById('spKodlar');
+  const body = document.getElementById('spKodlarBody');
+  if(!box || !body) return;
+  if(kodStart < 0){ box.hidden = true; body.innerHTML = ''; return; }
+  box.hidden = false;
+  const grid = sheet.grid;
+  const cell = (r,c)=> String(grid[r] && (Array.isArray(grid[r][c])?grid[r][c][0]:grid[r][c]) || '').trim();
+  // Bu blokta hangi sütunlarda içerik var (fazladan boş sütun basma)
+  let maxCol = 0;
+  for(let r=kodStart+1;r<grid.length;r++){
+    for(let c=0;c<(grid[r]||[]).length;c++){ if(cell(r,c)) maxCol = Math.max(maxCol,c); }
+  }
+  let html = '<table>';
+  for(let r=kodStart+1;r<grid.length;r++){
+    const cells = [];
+    let any = false;
+    for(let c=0;c<=maxCol;c++){ const v = cell(r,c); if(v) any = true; cells.push('<td>'+escapeHtml(v)+'</td>'); }
+    if(any) html += '<tr>'+cells.join('')+'</tr>';
+  }
+  html += '</table>';
+  body.innerHTML = html;
+}
+
+// ================= SEZON TAKVİMİ — GÖRSEL PANO =================
+function spIsTakvim(key){
+  const sheet = SP_DATA[key];
+  if(!sheet) return false;
+  if(/SEZON|TAKV[İI]M/i.test(String(key).trim())) return true;
+  const g = sheet.grid;
+  let macro=false, period=false;
+  for(let r=0;r<Math.min(g.length,25);r++){
+    for(let c=0;c<2;c++){
+      const v = String(g[r] && (Array.isArray(g[r][c])?g[r][c][0]:g[r][c]) || '').trim().toLocaleUpperCase('tr').replace(/\s+/g,' ');
+      if(v==='MACRO CYCLE') macro=true;
+      if(v==='PERIOD') period=true;
+    }
+  }
+  return macro && period;
+}
+
+function spRenderTakvim(sheet){
+  const box = document.getElementById('spTakvim');
+  if(!box || !sheet) return;
+  const g = sheet.grid, MG = sheet.merges || [];
+  const raw = (r,c)=>{ const v=g[r]&&g[r][c]; return Array.isArray(v)?v[0]:(v==null?'':v); };
+  const txt = (r,c)=> String(raw(r,c)).trim();
+  const U = s=> String(s).trim().toLocaleUpperCase('tr').replace(/\s+/g,' ');
+  const num = v=>{ const n=parseFloat(String(v).replace(',','.')); return isNaN(n)?null:n; };
+  const findRow = (labels)=>{
+    const want = labels.map(U);
+    for(let r=0;r<g.length;r++){ for(let c=0;c<2;c++){ if(want.includes(U(raw(r,c)))) return r; } }
+    return -1;
+  };
+  const weekRow = findRow(['WEEK']);
+  if(weekRow<0){ box.innerHTML = '<div style="padding:24px;color:#8a97a0">Takvim yapısı tanınamadı — "Ham tablo"ya geç.</div>'; return; }
+  const weekCols = [];
+  for(let c=2;c<(g[weekRow]||[]).length;c++){ if(num(raw(weekRow,c))!==null) weekCols.push(c); }
+  if(!weekCols.length){ box.innerHTML = '<div style="padding:24px;color:#8a97a0">Hafta sütunları bulunamadı.</div>'; return; }
+  const firstC = weekCols[0], lastC = weekCols[weekCols.length-1], nW = weekCols.length;
+
+  const monthRow = 0;
+  const dateRow  = findRow(['PAZARTESİ','PAZARTESI']);
+  const macroRow = findRow(['MACRO CYCLE']);
+  const periodRow= findRow(['PERIOD']);
+  const raceRow  = findRow(['YARIŞMA','YARISMA']);
+  const aecRow   = findRow(['AEC']);
+  const volRow   = aecRow>0 ? aecRow-1 : -1;
+
+  const segments = (row)=>{
+    if(row<0) return [];
+    const spanAt = {}, covered = new Set();
+    MG.forEach(m=>{ if(m[0]===row){ spanAt[m[1]] = m[3]-m[1]+1; for(let c=m[1]+1;c<=m[3];c++) covered.add(c); } });
+    const segs=[];
+    for(let c=firstC;c<=lastC;c++){
+      if(covered.has(c)) continue;
+      segs.push({ span: spanAt[c] || 1, text: txt(row,c) });
+    }
+    return segs;
+  };
+
+  const MONTHS = {1:'OCA',2:'ŞUB',3:'MAR',4:'NİS',5:'MAY',6:'HAZ',7:'TEM',8:'AĞU',9:'EYL',10:'EKİ',11:'KAS',12:'ARA'};
+  const phaseColor = (p)=>{ const u=U(p);
+    if(u.indexOf('PRE')===0) return '#cfe8f5';
+    if(u.indexOf('HIZ')===0) return '#d6ecd8';
+    if(u.indexOf('MİX')===0||u.indexOf('MIX')===0) return '#fde3c4';
+    if(u.indexOf('TPR')===0||u.indexOf('TAPER')>=0) return '#e6d6f0';
+    if(u.indexOf('TRN')===0) return '#e2e2e2';
+    return 'transparent'; };
+  const macroColor = (m)=>{ const u=U(m);
+    if(u.indexOf('GHIZEL')>=0||u.indexOf('GENEL')>=0) return '#d6ecd8';
+    if(u.indexOf('ÖZEL')>=0) return '#cfe8f5';
+    if(u.indexOf('YARIŞMA')>=0||u.indexOf('YARISMA')>=0) return '#f6d3ce';
+    if(u.indexOf('TPR')>=0) return '#e6d6f0';
+    if(u.indexOf('TRNS')>=0) return '#e2e2e2';
+    return '#f0ece2'; };
+
+  const vols = weekCols.map(c=> num(raw(volRow,c)) || 0);
+  const maxVol = Math.max(10, ...vols);
+
+  const zoneRows = { AEC:[], AEP:[], ANC:[], ANP:[], SPR:[] };
+  let curZone = null;
+  for(let r=aecRow; r<g.length && aecRow>=0; r++){
+    const c0 = U(raw(r,0));
+    if(['AEC','AEP','ANC','ANP','SPR'].indexOf(c0)>=0) curZone = c0;
+    else if(c0 && (c0.indexOf('DRYLAND')>=0 || c0.indexOf('OTHERS')>=0)) break;
+    if(curZone) zoneRows[curZone].push(r);
+  }
+  const zoneColors = { AEC:'#3a7d8c', AEP:'#6bb0c2', ANC:'#f2941a', ANP:'#c0603a', SPR:'#7a4fd0' };
+  const intByWeek = weekCols.map(c=>{
+    const z={}; let tot=0;
+    for(const k in zoneRows){ let s=0; zoneRows[k].forEach(r=> s += (num(raw(r,c))||0)); z[k]=s; tot+=s; }
+    return { z, tot };
+  });
+
+  const CW=30, LW=96, CH=130;
+  let html = `<div class="tk-grid" style="grid-template-columns:${LW}px repeat(${nW}, ${CW}px)">`;
+
+  html += `<div class="tk-lab">Ay</div>` + weekCols.map(c=>{
+    const m = num(raw(monthRow,c)); return `<div class="tk-cell tk-month">${m?(MONTHS[m]||''):''}</div>`;
+  }).join('');
+
+  html += `<div class="tk-lab">Hafta</div>` + weekCols.map(c=>`<div class="tk-cell tk-week">${escapeHtml(txt(weekRow,c))}</div>`).join('');
+
+  if(dateRow>=0) html += `<div class="tk-lab">Tarih</div>` + weekCols.map(c=>`<div class="tk-cell">${escapeHtml(txt(dateRow,c).slice(0,5))}</div>`).join('');
+
+  if(macroRow>=0){
+    html += `<div class="tk-lab">Makro</div>`;
+    segments(macroRow).forEach(s=>{
+      html += `<div class="tk-band" style="grid-column:span ${s.span};background:${s.text?macroColor(s.text):'transparent'}">${escapeHtml(s.text)}</div>`;
+    });
+  }
+  if(periodRow>=0){
+    html += `<div class="tk-lab">Dönem</div>` + weekCols.map(c=>{
+      const p = txt(periodRow,c);
+      return `<div class="tk-cell" style="padding:0"><div class="tk-period" style="background:${phaseColor(p)}">${escapeHtml(p)}</div></div>`;
+    }).join('');
+  }
+
+  html += `<div class="tk-lab">Hacim<br><span style="font-weight:400">km</span></div>`;
+  html += `<div class="tk-volwrap" style="grid-column:span ${nW};height:${CH}px">`;
+  html += `<div class="tk-yaxis">` + [0.25,0.5,0.75,1].map(f=>`<div class="gl" style="bottom:${f*100}%">${Math.round(maxVol*f)}</div>`).join('') + `</div>`;
+  vols.forEach((v,i)=>{
+    const h = v>0 ? Math.max(2, v/maxVol*CH) : 3;
+    html += `<div class="tk-bar${v>0?'':' zero'}" title="Hafta ${escapeHtml(txt(weekRow,weekCols[i]))}: ${v} km" style="left:${i*CW+3}px;width:${CW-6}px;height:${h}px"></div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="tk-lab">Şiddet</div>`;
+  intByWeek.forEach(w=>{
+    let seg = '';
+    if(w.tot>0){
+      for(const k of ['AEC','AEP','ANC','ANP','SPR']){
+        const p = w.z[k]/w.tot*100;
+        if(p>0) seg += `<span style="height:${p}%;background:${zoneColors[k]}"></span>`;
+      }
+    }
+    html += `<div class="tk-int" title="${['AEC','AEP','ANC','ANP','SPR'].map(k=>k+': '+w.z[k]).join('   ')}">${seg}</div>`;
+  });
+
+  if(raceRow>=0){
+    html += `<div class="tk-lab">Yarış</div>` + weekCols.map(c=>{
+      const t = txt(raceRow,c);
+      return `<div class="tk-cell tk-race" title="${escapeHtml(t)}">${t?'<span class="dot"></span>':''}</div>`;
+    }).join('');
+  }
+  html += `</div>`;
+
+  html += `<div class="tk-legend">`
+    + ['AEC','AEP','ANC','ANP','SPR'].map(k=>`<span><b style="background:${zoneColors[k]}"></b>${k}</span>`).join('')
+    + `<span style="margin-left:14px"><b style="background:#d6ecd8"></b>Genel Haz.</span><span><b style="background:#cfe8f5"></b>Özel Haz.</span><span><b style="background:#f6d3ce"></b>Yarışma</span><span><b style="background:#e6d6f0"></b>Taper</span>`
+    + `</div>`;
+  box.innerHTML = html;
 }
 
 // MESO sayfalarında HER "Others" satırının ÜSTÜNE bir sanal "Genel Toplam"
@@ -4682,6 +4934,12 @@ document.getElementById('spCompactBtn').addEventListener('click', ()=>{
   try{ on = localStorage.getItem('sp_compact') === '1'; }catch(e){}
   try{ localStorage.setItem('sp_compact', on ? '0' : '1'); }catch(e){}
   spApplyCompact();
+});
+document.getElementById('spTakvimModeBtn').addEventListener('click', ()=>{
+  let raw = false;
+  try{ raw = localStorage.getItem('sp_takvim_raw') === '1'; }catch(e){}
+  try{ localStorage.setItem('sp_takvim_raw', raw ? '0' : '1'); }catch(e){}
+  spSelectSheet(spCurrentSheet);
 });
 document.getElementById('spResetBtn').addEventListener('click', async ()=>{
   if(!confirm('Bu sayfadaki tum degisiklikleri silip orijinal plana donmek istiyor musun?')) return;
