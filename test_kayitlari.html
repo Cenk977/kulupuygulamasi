@@ -1855,11 +1855,9 @@ async function saveRpSetSession(){
   // Düzenleme modunda o id'li kayda yazılır; aksi halde HER ZAMAN yeni ayrı kayıt.
   const existing = EDIT_SESSION_ID ? MANUAL.sessions.find(s=>s.id===EDIT_SESSION_ID) : null;
   if(existing){
-    clean.forEach(newA=>{
-      const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
-      if(idx>-1) existing.athletes[idx] = newA; else existing.athletes.push(newA);
-    });
-    if(note) existing.note = note;
+    // Düzenleme = tam anlık görüntü: çıkarılan sporcular kayıttan silinir.
+    existing.athletes = clean;
+    existing.note = note;
     existing.steps = stepsToSave;
   } else {
     MANUAL.sessions.push({ id: uid(), templateId: ACTIVE_PROTO.id, date, note, steps: stepsToSave, athletes: clean });
@@ -2074,11 +2072,10 @@ async function saveSession(){
   const distInp = $('#entryDist');
   const distToSave = (ACTIVE_PROTO.family==='tekrarli' && ACTIVE_PROTO.config.distPerSession && distInp) ? Math.max(1, parseInt(distInp.value)||1) : undefined;
   if(existing){
-    clean.forEach(newA=>{
-      const idx = existing.athletes.findIndex(a=>a.athlete===newA.athlete);
-      if(idx>-1) existing.athletes[idx] = newA; else existing.athletes.push(newA);
-    });
-    if(note) existing.note = note;
+    // Düzenleme = tam anlık görüntü: giriş tablosunda olmayan sporcular
+    // (✕ ile çıkarılanlar) kayıttan da silinir.
+    existing.athletes = clean;
+    existing.note = note;
     if(repsToSave) existing.reps = repsToSave;
     if(distToSave) existing.dist = distToSave;
   } else {
