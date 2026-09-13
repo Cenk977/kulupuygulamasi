@@ -1939,7 +1939,7 @@ function populateApProtoChecks(){
   const protos = bulk ? allProtocolsWithData() : protocolsForAthlete($('#apAthlete').value);
   if(!protos.length){ box.innerHTML = `<div style="font-size:12px; color:#8a97a0;">Kayıt yok</div>`; $('#apDateField').style.display='none'; return; }
   box.innerHTML = protos.map(t=>`<label style="display:flex; align-items:center; gap:6px; padding:3px 0; font-size:13px; font-weight:400; cursor:pointer;">
-    <input type="checkbox" class="apProtoCheck" value="${esc(t.id)}" checked> ${esc(t.name)}
+    <input type="checkbox" class="apProtoCheck" value="${esc(t.id)}"> ${esc(t.name)}
   </label>`).join('');
   box.querySelectorAll('.apProtoCheck').forEach(cb=> cb.addEventListener('change', ()=>{ populateApDateChecks(); updateApTargetFieldVisibility(); renderAthleteProgress(); }));
   populateApDateChecks();
