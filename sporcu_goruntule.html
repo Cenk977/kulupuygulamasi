@@ -1421,8 +1421,31 @@ $('#btnQuickAddConfirm').onclick = ()=>{
   $('#quickAddOverlay').classList.remove('show');
   if(ACTIVE_PROTO && ACTIVE_PROTO.family==='rpset') renderRpSetEntryBox(); else renderEntryBox();
 };
+// Kümülatif basamak için split noktaları (test_kayitlari.html ile birebir
+// aynı — oradaki "Split aralığı" özelliğinin okuma tarafı).
+//   splitEvery = 0  -> "Yok": tek nokta (sadece bitiş derecesi)
+//   splitEvery = 25/50/100 -> o aralıkla otomatik (mesafeye kadar)
+//   splitEvery = 'ozel' -> s.checkpoints listesi kullanılır
+//   splitEvery yok (eski kayıt) -> checkpoints varsa o, yoksa [dist]
+function stepCheckpoints(s){
+  const dist = parseInt(s.dist) || 0;
+  const se = s.splitEvery;
+  if(se === 'ozel'){
+    return (Array.isArray(s.checkpoints) && s.checkpoints.length) ? s.checkpoints : (dist ? [dist] : [50,100,150,200]);
+  }
+  const ev = parseInt(se) || 0;
+  if(ev > 0 && dist > 0){
+    const cps = [];
+    for(let d = ev; d < dist; d += ev) cps.push(d);
+    cps.push(dist);
+    return cps;
+  }
+  if(se === 0 && dist > 0) return [dist];
+  if(Array.isArray(s.checkpoints) && s.checkpoints.length) return s.checkpoints;
+  return dist ? [dist] : [50,100,150,200];
+}
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
-function buildColumns(t, steps, repsOverride){
+function buildColumns(t, steps, repsOverride, distOverride){
   const cols = [];
   if(t.family==='ayak'){
     [400,200,100,50].forEach(d=> cols.push({ key:`d${d}`, label:`${d}m`, type:'time', ph:'ör. 1:17' }));
@@ -1435,7 +1458,7 @@ function buildColumns(t, steps, repsOverride){
         // checkpoint'ler + o basamak icin TEK (checkpoint basina degil)
         // Kol Sayisi / Nabiz. 7x200 Step Test gibi setlerin duz 200'leri
         // icin kullanilir.
-        const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+        const cps = stepCheckpoints(s);
         cps.forEach(d=> cols.push({ key:`s${si}_cp${d}`, label:`${branchName} ${d}m`, sub: `B${si+1} · kümülatif`, type:'time', ph:'ör. 1:16' }));
         if(s.kolSayisi) cols.push({ key:`s${si}_kol`, label:`B${si+1} Kol Sayısı`, type:'num', ph:'#' });
         if(s.nabiz) cols.push({ key:`s${si}_nabiz`, label:`B${si+1} Nabız`, type:'num', ph:'#' });
@@ -1460,8 +1483,9 @@ function buildColumns(t, steps, repsOverride){
     });
   } else if(t.family==='tekrarli'){
     const N = repsOverride || t.config.reps;
+    const D = distOverride || t.config.dist;
     for(let i=1;i<=N;i++){
-      cols.push({ key:`rep${i}`, label:`${i}`, sub:`${t.config.dist}m`, type:'time', ph:'ör. 38.60' });
+      cols.push({ key:`rep${i}`, label:`${i}`, sub:`${D}m`, type:'time', ph:'ör. 38.60' });
       if(t.config.kolMode==='tek') cols.push({ key:`kol${i}`, label:'KS', type:'num', ph:'#' });
       if(t.config.kolMode==='iki'){
         cols.push({ key:`kolA${i}`, label:t.config.kolLabels[0]||'KS1', type:'num', ph:'#' });
@@ -1499,15 +1523,27 @@ function maxRepsForProtocol(t){
 // arasında tekrar sayısı değişiyorsa (ör. bazen 24x100, bazen 20x100)
 // bunu bir aralık olarak gösterir.
 function repsRangeLabel(t){
-  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps).filter(Boolean);
-  if(!sessReps.length) return `${t.config.reps} x ${t.config.dist}m`;
-  const mn = Math.min(...sessReps, t.config.reps), mx = Math.max(...sessReps, t.config.reps);
-  if(mn===mx) return `${mn} x ${t.config.dist}m`;
-  return `${mn}–${mx} x ${t.config.dist}m (kayda göre değişir)`;
+  const rangeStr = (vals, def)=>{
+    const list = vals.filter(Boolean);
+    if(!list.length) return String(def);
+    const mn = Math.min(...list, def), mx = Math.max(...list, def);
+    return mn===mx ? String(mn) : `${mn}–${mx}`;
+  };
+  const sessReps = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.reps);
+  const repsStr = rangeStr(sessReps, t.config.reps);
+  let distStr = `${t.config.dist}m`;
+  let note = (sessReps.filter(Boolean).length && repsStr.indexOf('–')>=0) ? ' (kayda göre değişir)' : '';
+  if(t.config.distPerSession){
+    const sessDist = MANUAL.sessions.filter(s=>s.templateId===t.id).map(s=>s.dist);
+    distStr = `${rangeStr(sessDist, t.config.dist)}m`;
+    if(sessDist.filter(Boolean).length && distStr.indexOf('–')>=0) note = ' (kayda göre değişir)';
+  }
+  return `${repsStr} x ${distStr}${note}`;
 }
-// Bir kaydın (session) gerçek tekrar sayısını döndürür — kayıtta
+// Bir kaydın (session) gerçek tekrar sayısını/mesafesini döndürür — kayıtta
 // belirtilmemişse şablonun varsayılanına düşer.
-function repsForSession(t, s){ return (s && s.reps) || (t && t.config.reps); }
+function repsForSession(t, s){ return (s && s.reps) || (t && t.config && t.config.reps) || null; }
+function distForSession(t, s){ return (s && s.dist) || (t && t.config && t.config.dist) || null; }
 // Bir satırın ortalama/pace değerini hesaplar — hem DOM güncellemesinde
 // hem de karşılaştırma tablosunda ortak kullanılır (yalnızca gerçekten
 // girilmiş tekrarlar sayılır, boş tekrarlar ortalamayı bozmaz).
@@ -1535,7 +1571,7 @@ function computeAvg(t, row, steps, repsOverride){
     (steps||[]).forEach((s,si)=>{
       const stype = s.type || 'basit';
       if(stype==='kumulatif'){
-        const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+        const cps = stepCheckpoints(s);
         const lastCp = cps[cps.length-1];
         const sec = parseTimeStr(row[`s${si}_cp${lastCp}`]);
         if(sec!==null) parts.push(`B${si+1}: ${fmtTime(sec)}`);
@@ -1634,7 +1670,7 @@ function stepSummaryHtml(steps){
     const type = s.type || 'basit';
     let bits;
     if(type==='kumulatif'){
-      const cps = (s.checkpoints && s.checkpoints.length) ? s.checkpoints : [s.dist];
+      const cps = stepCheckpoints(s);
       bits = [`<b>B${si+1}:</b> Kümülatif ${cps.join('/')}m ${branchName}`];
       if(s.kolSayisi) bits.push('Kol Sayısı');
       if(s.nabiz) bits.push('Nabız');
@@ -1655,7 +1691,7 @@ function stepSummaryHtml(steps){
 }
 function detailTitleFor(t, s){
   const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
-  const repsDistStr = t.family==='tekrarli' ? ` — ${repsForSession(t,s)}x${t.config.dist}m` : '';
+  const repsDistStr = t.family==='tekrarli' ? ` — ${repsForSession(t,s)}x${distForSession(t,s)}m` : '';
   const intervalStr = s.interval ? ` · İnterval: ${s.interval}` : '';
   const noteStr = s.note ? ` · ${s.note}` : '';
   return `${t.name} — ${dateStr}${repsDistStr}${intervalStr}${noteStr}`;
@@ -1707,24 +1743,75 @@ function printNow(title, bodyHtml){
   $('#printArea').innerHTML = buildPrintHtml(title, bodyHtml);
   window.print();
 }
-function downloadPdf(title, bodyEl, filenameBase){
+function downloadPdf(title, bodyEl, filenameBase, opts){
   // Not: html2canvas, ekran dışına (ör. left:-9999px) yerleştirilmiş
   // gizli kopyaları güvenilir şekilde yakalayamıyor (boş/şeffaf çıktı
   // üretebiliyor). Bu yüzden gerçekten EKRANDA GÖRÜNEN öğeyi
   // kullanıyoruz — geçici bir başlık ekleyip PDF sonrası kaldırıyoruz.
+  opts = opts || {};
   const header = document.createElement('div');
   header.style.cssText = 'font-family:Segoe UI,Arial,sans-serif; padding:0 0 10px;';
   header.innerHTML = `<h2 style="color:#0b2942; margin:0 0 2px; font-size:17px;">${title}</h2>
     <div style="color:#647680; font-size:11px;">Bursa Kolejliler Spor Kulübü</div>`;
   bodyEl.insertBefore(header, bodyEl.firstChild);
-  const cleanup = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
-  return html2pdf().set({
+  const cleanup0 = ()=>{ if(header.parentNode) header.parentNode.removeChild(header); };
+
+  let pdfOptions = {
     margin: 8,
     filename: `${filenameBase}.pdf`,
     image: { type:'jpeg', quality:0.98 },
     html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
     jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-  }).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
+  };
+  let cleanupWide = ()=>{};
+
+  if(opts.fitOnePage){
+    // Genellikle modal genişliği (ör. 820px) sabit olduğu için çok
+    // sütunlu tablolar (ör. 7x200 Step Test) sıkışıp başlıklar satır
+    // sarıyor, bu da PDF'in birden fazla sayfaya bölünmesine yol
+    // açıyor. Burada geçici olarak modal/tablo genişlik kısıtlarını
+    // kaldırıp tabloyu DOĞAL genişliğine açıyoruz, sonra o gerçek
+    // piksel boyutuna göre TEK sayfalık özel bir PDF sayfa ölçüsü
+    // hesaplıyoruz — böylece hiçbir şey kırpılmadan tek sayfaya sığar.
+    const modalEl = bodyEl.closest('.modal');
+    const tables = bodyEl.querySelectorAll('table');
+    const prevModalStyle = modalEl ? modalEl.getAttribute('style') : null;
+    const prevBodyStyle = bodyEl.getAttribute('style');
+    const prevTableStyles = Array.from(tables).map(t=> t.getAttribute('style'));
+
+    if(modalEl) modalEl.style.cssText += ';max-width:none !important; width:max-content !important;';
+    bodyEl.style.cssText += ';width:max-content !important; max-width:none !important;';
+    tables.forEach(t=>{ t.style.cssText += ';width:auto !important;'; t.querySelectorAll('th,td').forEach(c=> c.style.whiteSpace='nowrap'); });
+
+    // Reflow sonrası gerçek (doğal) piksel boyutlarını ölç.
+    const pxW = bodyEl.scrollWidth;
+    const pxH = bodyEl.scrollHeight;
+    const pxToMm = 25.4/96;
+    const marginMm = 10;
+    const wMm = Math.max(60, pxW*pxToMm + marginMm*2);
+    const hMm = Math.max(40, pxH*pxToMm + marginMm*2);
+
+    pdfOptions = {
+      margin: marginMm,
+      filename: `${filenameBase}.pdf`,
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
+      jsPDF: { unit:'mm', format:[wMm, hMm], orientation: wMm>=hMm ? 'landscape' : 'portrait' },
+      pagebreak: { mode:['avoid-all'] }
+    };
+
+    cleanupWide = ()=>{
+      if(modalEl){ if(prevModalStyle===null) modalEl.removeAttribute('style'); else modalEl.setAttribute('style', prevModalStyle); }
+      if(prevBodyStyle===null) bodyEl.removeAttribute('style'); else bodyEl.setAttribute('style', prevBodyStyle);
+      tables.forEach((t,i)=>{
+        if(prevTableStyles[i]===null) t.removeAttribute('style'); else t.setAttribute('style', prevTableStyles[i]);
+        t.querySelectorAll('th,td').forEach(c=> c.style.whiteSpace='');
+      });
+    };
+  }
+
+  const cleanup = ()=>{ cleanup0(); cleanupWide(); };
+  return html2pdf().set(pdfOptions).from(bodyEl).save().then(cleanup).catch((err)=>{ console.error(err); cleanup(); alert('PDF oluşturulurken bir hata oluştu, tekrar dener misin?'); });
 }
 $('#btnCloseManualDetail').onclick = ()=> $('#manualDetailOverlay').classList.remove('show');
 $('#btnPrintManualDetail').onclick = ()=>{
@@ -1779,19 +1866,14 @@ function populateCmpAthletes(side){
   if(!s || !s.athletes.length){ athSel.innerHTML = `<option value="">Sporcu yok</option>`; return; }
   athSel.innerHTML = s.athletes.map((a,i)=>`<option value="${i}">${esc(a.athlete)}</option>`).join('');
 }
-function renderSingleRowTable(t, row, label, steps, repsOverride){
-  const cols = buildColumns(t, steps, repsOverride);
+function renderSingleRowTable(t, row, label, steps, repsOverride, distOverride){
+  const cols = buildColumns(t, steps, repsOverride, distOverride);
   let html = stepSummaryHtml(steps);
   html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Kayıt</th>`;
   cols.forEach(c=> html += `<th>${c.label}${c.sub?` (${c.sub})`:''}</th>`);
   html += `<th>${t.family==='kumulatif' ? 'Ort. Pace/100' : (t.family==='rpset' ? 'Basamak Ortalamaları' : 'Ortalama')}</th></tr>`;
   html += `<tr><td class="who">${esc(label)}</td>`;
-  cols.forEach(c=>{
-    let v = row[c.key];
-    if(c.type==='time'){ const sec = parseTimeStr(v); v = sec!==null ? fmtTime(sec) : '—'; }
-    else if(v===undefined || v===''){ v = '—'; }
-    html += `<td>${esc(v)}</td>`;
-  });
+  html += renderRowCellsHtml(cols, row);
   html += `<td style="font-weight:700; color:var(--navy-2);">${computeAvg(t,row,steps,repsOverride).text}</td></tr></table></div>`;
   return html;
 }
@@ -1857,9 +1939,9 @@ function renderCompareResult(){
     html += `</tr></table></div>
     <div style="font-size:11px; color:#8a97a0; margin-top:6px;">Yeşil: B daha hızlı/erken. Kırmızı: B daha yavaş.</div>`;
   } else {
-    html = renderSingleRowTable(tA, rowA, labelA, stepsA, repsForSession(tA,sA)) +
+    html = renderSingleRowTable(tA, rowA, labelA, stepsA, repsForSession(tA,sA), distForSession(tA,sA)) +
       '<div style="height:14px;"></div>' +
-      renderSingleRowTable(tB, rowB, labelB, stepsB, repsForSession(tB,sB)) +
+      renderSingleRowTable(tB, rowB, labelB, stepsB, repsForSession(tB,sB), distForSession(tB,sB)) +
       `<div style="font-size:11px; color:#8a97a0; margin-top:6px;">${tA.family==='rpset'||tB.family==='rpset' ? 'RP Set tipi protokollerde set yapısı her kayıtta değişebildiği için satır bazlı fark gösterilmiyor.' : 'A ve B farklı test protokolleri olduğu için satır bazlı fark gösterilmiyor.'}</div>`;
   }
   wrap.innerHTML = html;
@@ -1967,7 +2049,7 @@ function populateApDateChecks(){
     const rows = g.entries.map(e=>{
       const s = e.session;
       const dateStr = new Date(s.date).toLocaleDateString('tr-TR');
-      const repsDistStr = g.t.family==='tekrarli' ? `${repsForSession(g.t,s)}x${g.t.config.dist}m` : '';
+      const repsDistStr = g.t.family==='tekrarli' ? `${repsForSession(g.t,s)}x${distForSession(g.t,s)}m` : '';
       const bits = [repsDistStr, s.interval||''].filter(Boolean).join(' · ');
       return `<label style="display:flex; align-items:center; gap:6px; padding:2px 0 2px ${multi?'14px':'0'}; font-size:12.5px; font-weight:400; cursor:pointer;">
         <input type="checkbox" class="apDateCheck" value="${esc(s.id)}" checked> ${dateStr}${bits ? ' · '+esc(bits) : ''}
@@ -2155,13 +2237,19 @@ function stepRowSplitValues(columns, row){
 // ALTINA, o checkpoint'e özel TEK SEGMENT (split) süresini küçük gri
 // yazıyla ekler. Bkz. test_kayitlari.html'deki aynı isimli fonksiyon.
 function renderRowCellsHtml(cols, rowData){
-  let prevCumSec = null;
+  let prevCumSec = null, curCumGroup = null;
   return cols.map(c=>{
     let v = rowData[c.key];
+    const isCum = typeof c.sub === 'string' && c.sub.indexOf('kümülatif') >= 0;
     if(c.type==='time'){
       const sec = parseTimeStr(v);
       const mainTxt = sec!==null ? fmtTime(sec) : '—';
-      if(c.sub==='kümülatif'){
+      if(isCum){
+        // Aynı basamağın checkpoint'leri arası segment (split) süresini
+        // ana kümülatif derecenin ALTINA küçük gri yazıyla ekle.
+        // RP Set anahtarı "s3_cp150" -> grup "s3"; aile anahtarı "cp150" -> "cp".
+        const grp = (String(c.key).match(/^s\d+/) || ['cp'])[0];
+        if(grp !== curCumGroup){ curCumGroup = grp; prevCumSec = null; }
         let splitHtml = '';
         if(sec!==null){
           if(prevCumSec!==null) splitHtml = `<div style="font-size:10px; color:#8a97a0; margin-top:1px;">${fmtTime(sec-prevCumSec)}</div>`;
@@ -2352,7 +2440,7 @@ function renderAthleteMultiDetail(athlete, protoIds, wrap, sessionIds){
       protoEntries.forEach(pe=>{
         pe.entries.forEach(e=>{
           const dateStr = new Date(e.session.date).toLocaleDateString('tr-TR');
-          const repsDistStr = family==='tekrarli' ? `${repsForSession(pe.t, e.session)}x${pe.t.config.dist}` : '';
+          const repsDistStr = family==='tekrarli' ? `${repsForSession(pe.t, e.session)}x${distForSession(pe.t, e.session)}` : '';
           const intervalSuffix = e.session.interval ? `${e.session.interval}` : '';
           const extraBits = [repsDistStr, intervalSuffix].filter(Boolean).join(' · ');
           out.push({
@@ -2476,8 +2564,9 @@ function renderBulkProtocols(protoIds, wrap){
     sessions.forEach(s=>{
       const steps = t.family==='rpset' ? (s.steps||[]) : undefined;
       const sessRepsN = repsForSession(t,s);
-      const cols = buildColumns(t, steps, sessRepsN);
-      const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${t.config.dist}m — ` : '';
+      const sessDistN = (t.family==='tekrarli' && t.config.distPerSession) ? distForSession(t,s) : undefined;
+      const cols = buildColumns(t, steps, sessRepsN, sessDistN);
+      const repsDistStr = t.family==='tekrarli' ? `${sessRepsN}x${distForSession(t,s)}m — ` : '';
       html += `<div style="font-size:12px; color:#647680; margin:8px 0 4px; font-weight:600;">${new Date(s.date).toLocaleDateString('tr-TR')} — ${repsDistStr}${s.note ? esc(s.note)+' — ' : ''}${s.athletes.length} sporcu</div>`;
       html += stepSummaryHtml(steps);
       html += `<div style="overflow-x:auto;"><table class="detail-table"><tr><th>Sporcu</th>`;
