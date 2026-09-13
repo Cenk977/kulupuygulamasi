@@ -147,6 +147,21 @@
     border:1px solid var(--line);
   }
   #athleteProgressOverlay h3, #apModeField, #btnCloseAthleteProgress{ display:none; }
+  #athleteProgressOverlay.ap-hidden{ display:none !important; }
+  /* Genel Bakış (dashboard) — sporcu linkini açınca ilk görünen ekran */
+  #dashboardWrap{ max-width:1000px; margin:18px auto; padding:0 20px; }
+  #dashboardWrap.ap-hidden{ display:none !important; }
+  #dashboardWrap h3{ color:var(--navy); margin:0 0 4px; }
+  .dash-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); gap:14px; margin-top:14px; }
+  .dash-card{
+    border:1px solid var(--line); border-radius:10px; background:#fff;
+    padding:14px 14px 10px; cursor:pointer; transition:box-shadow .15s, transform .15s;
+  }
+  .dash-card:hover{ box-shadow:0 3px 14px rgba(11,41,66,.10); transform:translateY(-1px); }
+  .dash-card h4{ margin:0 0 6px; font-size:13.5px; color:var(--navy); }
+  .dash-best{ font-size:23px; font-weight:800; color:var(--navy-2); line-height:1.15; }
+  .dash-best-date{ font-size:11.5px; color:#647680; margin:2px 0 8px; }
+  #dashboardMoreLink{ display:block; margin-top:16px; font-size:12.5px; }
   #readOnlyNotice{
     max-width:1000px; margin:14px auto 0; padding:10px 16px; background:var(--pool-light);
     color:var(--navy-2); border-radius:8px; font-size:12.5px; text-align:center;
@@ -382,8 +397,17 @@
   </div>
 </div>
 <!-- Athlete progress / development modal -->
-<div class="overlay" id="athleteProgressOverlay">
+<div id="dashboardWrap">
+  <h3>Genel Bakış</h3>
+  <div style="font-size:12.5px; color:#647680; margin:-2px 0 4px;">
+    Her test için en iyi derecen ve gidişatın. Bir karta tıklayınca o testin ayrıntılı geçmişini/grafiğini görürsün.
+  </div>
+  <div class="dash-grid" id="dashboardCards"></div>
+  <a href="#" id="dashboardMoreLink">📋 Tüm test kayıtlarını incele (RP Set / basamaklı setler dahil) →</a>
+</div>
+<div class="overlay ap-hidden" id="athleteProgressOverlay">
   <div class="modal" style="max-width:960px;">
+    <button type="button" class="btn btn-line" id="btnBackToDashboard" style="margin-bottom:12px;">← Genel Bakış</button>
     <h3>Sporcu Gelişimi</h3>
     <div style="font-size:12.5px; color:#647680; margin:-6px 0 12px;">
       Aşağıdan testleri seçerek gelişimini görebilirsin. Bu sadece kendi kayıtlarını gösteren, salt-okunur bir sayfadır.
@@ -563,6 +587,7 @@ const RosterStorage = {
 };
 let ROSTER = [];
 let ROSTER_EMBEDDED = false;
+let ATHLETE_NAME = null; // bu sayfanın sahibi olan tek sporcunun adı (Genel Bakış dashboard'u için)
 try{ ROSTER_EMBEDDED = !!(window.parent && window.parent !== window && window.parent.storage); }catch(e){ ROSTER_EMBEDDED = false; }
 async function loadRoster(){
   ROSTER = await RosterStorage.load();
@@ -2667,6 +2692,75 @@ function showAccessError(msg){
 // SALT-OKUNUR GİRİŞ NOKTASI: hiçbir zaman Storage.save / saveManual /
 // saveRosterList çağırmaz — sadece okur ve URL'deki ?id= parametresine
 // ait sporcunun kendi verisiyle bellekteki MANUAL/ROSTER'ı daraltır.
+/* =========================================================
+   GENEL BAKIŞ (DASHBOARD) — her test için en iyi derece + trend
+   Sporcu linkini açınca ilk görünen ekran. Sadece tek bir "en iyi"
+   sayısı olan test aileleri kartlaşır (ayak/tekrarlı/kümülatif);
+   RP Set (basamaklı özel set) çok parçalı olduğu için kartlaşmaz,
+   "Tüm test kayıtlarını incele" linkinden erişilir.
+   ========================================================= */
+function showDashboard(){
+  $('#athleteProgressOverlay').classList.add('ap-hidden');
+  $('#dashboardWrap').classList.remove('ap-hidden');
+}
+function openAthleteDetailView(protoId){
+  $('#dashboardWrap').classList.add('ap-hidden');
+  $('#athleteProgressOverlay').classList.remove('ap-hidden');
+  $('#apModeAthlete').checked = true;
+  $('#apAthleteField').style.display = '';
+  populateApAthletes();
+  $('#apAthlete').value = ATHLETE_NAME;
+  populateApProtoChecks();
+  // protoId verilmişse sadece o test işaretli açılır (karttan gelindiyse);
+  // verilmemişse ("Tüm kayıtları incele" linki) hepsi işaretlenir.
+  document.querySelectorAll('.apProtoCheck').forEach(cb=>{
+    cb.checked = protoId ? (cb.value===protoId) : true;
+  });
+  populateApDateChecks();
+  updateApTargetFieldVisibility();
+  renderAthleteProgress();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+$('#btnBackToDashboard').onclick = showDashboard;
+$('#dashboardMoreLink').addEventListener('click', (e)=>{ e.preventDefault(); openAthleteDetailView(null); });
+function renderDashboard(){
+  const wrap = $('#dashboardCards');
+  const allProtos = protocolsForAthlete(ATHLETE_NAME);
+  const cardProtos = allProtos.filter(t=> t.family!=='rpset');
+  const cards = [];
+  cardProtos.forEach(t=>{
+    const entries = athleteEntriesForProto(ATHLETE_NAME, t.id);
+    const points = [];
+    entries.forEach(e=>{
+      const repsN = repsForSession(t, e.session);
+      const avg = computeAvg(t, e.row, undefined, repsN);
+      if(avg.sec!==null) points.push({ date: e.session.date, sec: avg.sec, text: avg.text });
+    });
+    if(!points.length) return;
+    const best = points.reduce((a,b)=> b.sec<a.sec ? b : a);
+    const bestDateStr = new Date(best.date).toLocaleDateString('tr-TR');
+    const chartHtml = points.length>1
+      ? renderTrendSvg(points.map(p=>({date:p.date, sec:p.sec})), t.family==='kumulatif')
+      : `<div style="font-size:11.5px; color:#8a97a0; margin-top:2px;">Tek kayıt var — trend için en az 2 kayıt gerekir.</div>`;
+    cards.push(`<div class="dash-card" data-proto="${esc(t.id)}">
+      <h4>${esc(t.name)}</h4>
+      <div class="dash-best">🏆 ${esc(best.text)}</div>
+      <div class="dash-best-date">En iyi — ${bestDateStr} · ${points.length} kayıt</div>
+      ${chartHtml}
+    </div>`);
+  });
+  wrap.innerHTML = cards.length ? cards.join('') : `<div class="empty-side">Henüz kart oluşturacak test kaydın yok.</div>`;
+  wrap.querySelectorAll('.dash-card').forEach(card=> card.onclick = ()=> openAthleteDetailView(card.dataset.proto));
+  const rpsetCount = allProtos.length - cardProtos.length;
+  const moreLink = $('#dashboardMoreLink');
+  if(!allProtos.length){ moreLink.style.display = 'none'; }
+  else{
+    moreLink.style.display = '';
+    moreLink.textContent = rpsetCount
+      ? '📋 Tüm test kayıtlarını incele (RP Set / basamaklı setler dahil) →'
+      : '📋 Tüm test kayıtlarını incele →';
+  }
+}
 async function loadAndRenderAthlete(athleteId){
   await loadRoster();
   const target = ROSTER.find(a => a.id === athleteId);
@@ -2684,6 +2778,7 @@ async function loadAndRenderAthlete(athleteId){
   // Belleği bu sporcuyla sınırla: başka hiçbir sporcunun adı ya da
   // test kaydı bu sayfanın JS'inde/DOM'unda hiç var olmaz.
   ROSTER = [target];
+  ATHLETE_NAME = target.sporcuAdi;
   MANUAL.sessions = MANUAL.sessions
     .map(s => ({ ...s, athletes: (s.athletes||[]).filter(a => a.athlete === target.sporcuAdi) }))
     .filter(s => s.athletes.length > 0);
@@ -2695,20 +2790,14 @@ async function loadAndRenderAthlete(athleteId){
   $('#readOnlyNoticeText').textContent = `${target.sporcuAdi} — kendi test kayıtların, salt-okunur görünüm. Yeni bir test eklendiyse "Yenile"ye bas.`;
 
   if(!knownAthletes().length){
-    $('#athleteProgressOverlay').classList.add('show');
-    $('#apResultWrap').innerHTML = `<div class="empty-side">Henüz test kaydın yok.</div>`;
-    $('#apProtoChecks').innerHTML = '';
-    $('#apDateField').style.display = 'none';
-    apDisableButtons();
+    $('#dashboardCards').innerHTML = `<div class="empty-side">Henüz test kaydın yok.</div>`;
+    $('#dashboardMoreLink').style.display = 'none';
+    showDashboard();
     return;
   }
 
-  populateApAthletes();
-  $('#apAthlete').value = target.sporcuAdi;
-  $('#apModeAthlete').checked = true;
-  populateApProtoChecks();
-  renderAthleteProgress();
-  $('#athleteProgressOverlay').classList.add('show');
+  renderDashboard();
+  showDashboard();
 }
 
 (async function init(){
