@@ -1469,6 +1469,19 @@ function stepCheckpoints(s){
   if(Array.isArray(s.checkpoints) && s.checkpoints.length) return s.checkpoints;
   return dist ? [dist] : [50,100,150,200];
 }
+// Tekrarlı sette bir tekrarın split noktaları (test_kayitlari.html ile
+// birebir aynı — mesafe kayda göre değişebildiği için "özel" liste yok).
+function tekrarSplitCheckpoints(ev, dist){
+  ev = parseInt(ev) || 0;
+  dist = parseInt(dist) || 0;
+  if(ev > 0 && dist > 0){
+    const cps = [];
+    for(let d = ev; d < dist; d += ev) cps.push(d);
+    cps.push(dist);
+    return cps;
+  }
+  return dist ? [dist] : [];
+}
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
 function buildColumns(t, steps, repsOverride, distOverride){
   const cols = [];
@@ -1509,8 +1522,13 @@ function buildColumns(t, steps, repsOverride, distOverride){
   } else if(t.family==='tekrarli'){
     const N = repsOverride || t.config.reps;
     const D = distOverride || t.config.dist;
+    const repEv = t.config.repSplitEvery || 0;
     for(let i=1;i<=N;i++){
-      cols.push({ key:`rep${i}`, label:`${i}`, sub:`${D}m`, type:'time', ph:'ör. 38.60' });
+      if(repEv > 0){
+        tekrarSplitCheckpoints(repEv, D).forEach(d=> cols.push({ key:`rep${i}_cp${d}`, label:`${i}.${d}m`, sub:`Tekrar ${i} · kümülatif`, type:'time', ph:'ör. 38.60' }));
+      } else {
+        cols.push({ key:`rep${i}`, label:`${i}`, sub:`${D}m`, type:'time', ph:'ör. 38.60' });
+      }
       if(t.config.kolMode==='tek') cols.push({ key:`kol${i}`, label:'KS', type:'num', ph:'#' });
       if(t.config.kolMode==='iki'){
         cols.push({ key:`kolA${i}`, label:t.config.kolLabels[0]||'KS1', type:'num', ph:'#' });
@@ -1576,7 +1594,21 @@ function computeAvg(t, row, steps, repsOverride){
   if(t.family==='tekrarli'){
     let vals = [];
     const N = repsOverride || t.config.reps;
-    for(let i=1;i<=N;i++){ const sec = parseTimeStr(row[`rep${i}`]); if(sec!==null) vals.push(sec); }
+    const useSplit = !!t.config.repSplitEvery;
+    for(let i=1;i<=N;i++){
+      let sec;
+      if(useSplit){
+        const prefix = `rep${i}_cp`;
+        let maxD = -1;
+        Object.keys(row).forEach(k=>{
+          if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
+        });
+        sec = maxD>=0 ? parseTimeStr(row[`${prefix}${maxD}`]) : null;
+      } else {
+        sec = parseTimeStr(row[`rep${i}`]);
+      }
+      if(sec!==null) vals.push(sec);
+    }
     if(!vals.length) return { text:'–', sec:null };
     const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
     return { text: fmtTime(avg), sec: avg };
@@ -2236,7 +2268,18 @@ function protocolSplitGroups(t, sessionsForUnion){
 }
 function stepRowValues(columns, row){
   const out = {};
-  columns.forEach(c=>{ out[c.key] = parseTimeStr(row[c.key]); });
+  columns.forEach(c=>{
+    let v = row[c.key];
+    if(v===undefined){
+      const prefix = `${c.key}_cp`;
+      let maxD = -1;
+      Object.keys(row).forEach(k=>{
+        if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
+      });
+      if(maxD>=0) v = row[`${prefix}${maxD}`];
+    }
+    out[c.key] = parseTimeStr(v);
+  });
   return out;
 }
 // Kumulatif ailede grafik için: X ekseni değerleri KÜMÜLATİF derece
@@ -2273,7 +2316,7 @@ function renderRowCellsHtml(cols, rowData){
         // Aynı basamağın checkpoint'leri arası segment (split) süresini
         // ana kümülatif derecenin ALTINA küçük gri yazıyla ekle.
         // RP Set anahtarı "s3_cp150" -> grup "s3"; aile anahtarı "cp150" -> "cp".
-        const grp = (String(c.key).match(/^s\d+/) || ['cp'])[0];
+        const grp = (String(c.key).match(/^(?:s|rep)\d+/) || ['cp'])[0];
         if(grp !== curCumGroup){ curCumGroup = grp; prevCumSec = null; }
         let splitHtml = '';
         if(sec!==null){
