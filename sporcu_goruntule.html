@@ -1482,6 +1482,19 @@ function tekrarSplitCheckpoints(ev, dist){
   }
   return dist ? [dist] : [];
 }
+// Split'li bir alanın SATIRDAKİ en büyük alt checkpoint değerini bulur
+// (test_kayitlari.html ile birebir aynı).
+function lastSplitValue(row, baseKey){
+  const prefix = baseKey + '_';
+  let maxD = -1, maxKey = null;
+  Object.keys(row).forEach(k=>{
+    if(k.indexOf(prefix)===0){
+      const m = k.slice(prefix.length).match(/(\d+)$/);
+      if(m){ const d = parseInt(m[1]); if(d>maxD){ maxD = d; maxKey = k; } }
+    }
+  });
+  return maxKey ? row[maxKey] : undefined;
+}
 // Protokol ailesine göre sütun listesi üretir (giriş formu + detay tablosu + karşılaştırma ortak kullanır)
 function buildColumns(t, steps, repsOverride, distOverride){
   const cols = [];
@@ -1542,7 +1555,14 @@ function buildColumns(t, steps, repsOverride, distOverride){
     if(t.config.setNabiz) cols.push({ key:'setNabiz', label:'Toparlanma Nb.', type:'txt', ph:'ör. 28' });
     if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
   } else { // kumulatif
-    t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub:'kümülatif', type:'time', ph:'ör. 5:16' }));
+    if(t.config.restBetweenCp && t.config.legSplitEvery){
+      t.config.checkpoints.forEach(D=>{
+        tekrarSplitCheckpoints(t.config.legSplitEvery, D).forEach(d=> cols.push({ key:`cp${D}_s${d}`, label:`${D}m: ${d}m`, sub:`${D}m bacak · kümülatif`, type:'time', ph:'ör. 5:16' }));
+      });
+    } else {
+      const sub = t.config.restBetweenCp ? 'bacak' : 'kümülatif';
+      t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub, type:'time', ph:'ör. 5:16' }));
+    }
     if(t.config.perCpKol) t.config.checkpoints.forEach(d=> cols.push({ key:`kol${d}`, label:`KS ${d}m`, type:'num', ph:'#' }));
     if(t.config.perCpNabiz) t.config.checkpoints.forEach(d=> cols.push({ key:`nb${d}`, label:`Nb ${d}m`, type:'num', ph:'#' }));
     if(t.config.singleNabiz) cols.push({ key:'nb_single', label:'Nabız', type:'num', ph:'#' });
@@ -1594,19 +1614,8 @@ function computeAvg(t, row, steps, repsOverride){
   if(t.family==='tekrarli'){
     let vals = [];
     const N = repsOverride || t.config.reps;
-    const useSplit = !!t.config.repSplitEvery;
     for(let i=1;i<=N;i++){
-      let sec;
-      if(useSplit){
-        const prefix = `rep${i}_cp`;
-        let maxD = -1;
-        Object.keys(row).forEach(k=>{
-          if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
-        });
-        sec = maxD>=0 ? parseTimeStr(row[`${prefix}${maxD}`]) : null;
-      } else {
-        sec = parseTimeStr(row[`rep${i}`]);
-      }
+      const sec = parseTimeStr(row[`rep${i}`] !== undefined ? row[`rep${i}`] : lastSplitValue(row, `rep${i}`));
       if(sec!==null) vals.push(sec);
     }
     if(!vals.length) return { text:'–', sec:null };
@@ -1616,7 +1625,7 @@ function computeAvg(t, row, steps, repsOverride){
   if(t.family==='kumulatif'){
     const cps = t.config.checkpoints;
     const lastCp = cps[cps.length-1];
-    const lastSec = parseTimeStr(row[`cp${lastCp}`]);
+    const lastSec = parseTimeStr(row[`cp${lastCp}`] !== undefined ? row[`cp${lastCp}`] : lastSplitValue(row, `cp${lastCp}`));
     if(lastSec===null) return { text:'–', sec:null };
     const pace = lastSec/(lastCp/100);
     return { text: fmtTime(pace)+' /100', sec: pace };
@@ -2269,15 +2278,7 @@ function protocolSplitGroups(t, sessionsForUnion){
 function stepRowValues(columns, row){
   const out = {};
   columns.forEach(c=>{
-    let v = row[c.key];
-    if(v===undefined){
-      const prefix = `${c.key}_cp`;
-      let maxD = -1;
-      Object.keys(row).forEach(k=>{
-        if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
-      });
-      if(maxD>=0) v = row[`${prefix}${maxD}`];
-    }
+    const v = row[c.key] !== undefined ? row[c.key] : lastSplitValue(row, c.key);
     out[c.key] = parseTimeStr(v);
   });
   return out;
@@ -2316,7 +2317,7 @@ function renderRowCellsHtml(cols, rowData){
         // Aynı basamağın checkpoint'leri arası segment (split) süresini
         // ana kümülatif derecenin ALTINA küçük gri yazıyla ekle.
         // RP Set anahtarı "s3_cp150" -> grup "s3"; aile anahtarı "cp150" -> "cp".
-        const grp = (String(c.key).match(/^(?:s|rep)\d+/) || ['cp'])[0];
+        const grp = (String(c.key).match(/^(?:s|rep)\d+|^cp\d+(?=_s)/) || ['cp'])[0];
         if(grp !== curCumGroup){ curCumGroup = grp; prevCumSec = null; }
         let splitHtml = '';
         if(sec!==null){

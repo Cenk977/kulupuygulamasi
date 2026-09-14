@@ -910,6 +910,21 @@ function tekrarSplitCheckpoints(ev, dist){
   }
   return dist ? [dist] : [];
 }
+// Split'li bir alanın (ör. "rep2" ya da "cp400") SATIRDAKİ en büyük alt
+// checkpoint değerini bulur ("rep2_cp50/cp100" ya da "cp400_s50/s100"
+// içinden en büyüğü) — config'e değil satırın kendi anahtarlarına bakar,
+// böylece mesafe kayda göre değişse (distPerSession) bile doğru okunur.
+function lastSplitValue(row, baseKey){
+  const prefix = baseKey + '_';
+  let maxD = -1, maxKey = null;
+  Object.keys(row).forEach(k=>{
+    if(k.indexOf(prefix)===0){
+      const m = k.slice(prefix.length).match(/(\d+)$/);
+      if(m){ const d = parseInt(m[1]); if(d>maxD){ maxD = d; maxKey = k; } }
+    }
+  });
+  return maxKey ? row[maxKey] : undefined;
+}
 let draftSteps = []; // rpset ailesi: o günün basamak yapısı (geçici)
 let MANUAL = { templates: [], sessions: [] };
 let ACTIVE_PROTO = null;
@@ -1154,6 +1169,18 @@ function renderCustomForm(existing){
           </div>
         </div>
         <div class="field-row">
+          <label class="checkfield"><input type="checkbox" id="cfRestBetweenCp" ${t.config.restBetweenCp?'checked':''}> Kontrol noktaları arasında dinlenme var (ör. ICS Test: 100 yüz-dinlen-200 yüz-dinlen...)</label>
+        </div>
+        <div id="cfLegSplitWrap" class="field" style="display:${t.config.restBetweenCp?'':'none'}; margin:-6px 0 12px;">
+          <label>Her bacak kendi içinde split'lere ayrılsın mı?</label>
+          <select id="cfLegSplitEvery">
+            <option value="0" ${!t.config.legSplitEvery?'selected':''}>Kapalı — her bacak tek derece</option>
+            <option value="25" ${t.config.legSplitEvery===25?'selected':''}>Her 25m'de bir</option>
+            <option value="50" ${t.config.legSplitEvery===50?'selected':''}>Her 50m'de bir</option>
+            <option value="100" ${t.config.legSplitEvery===100?'selected':''}>Her 100m'de bir</option>
+          </select>
+        </div>
+        <div class="field-row">
           <label class="checkfield"><input type="checkbox" id="cfPerCpKol" ${t.config.perCpKol?'checked':''}> Her kontrol noktasında kulaç sayısı</label>
           <label class="checkfield"><input type="checkbox" id="cfPerCpNabiz" ${t.config.perCpNabiz?'checked':''}> Her kontrol noktasında nabız</label>
         </div>
@@ -1168,6 +1195,9 @@ function renderCustomForm(existing){
         const auto = $('#cfCpMode').value==='auto';
         $('#cfCpManualWrap').style.display = auto ? 'none' : '';
         $('#cfCpAutoWrap').style.display = auto ? '' : 'none';
+      };
+      $('#cfRestBetweenCp').onchange = ()=>{
+        $('#cfLegSplitWrap').style.display = $('#cfRestBetweenCp').checked ? '' : 'none';
       };
     }
   }
@@ -1215,6 +1245,8 @@ $('#btnSaveCustom').onclick = async ()=>{
     config = {
       checkpoints: cps,
       cpSplitEvery: cpSplitEvery || undefined,
+      restBetweenCp: $('#cfRestBetweenCp').checked,
+      legSplitEvery: $('#cfRestBetweenCp').checked ? (parseInt($('#cfLegSplitEvery').value)||0) : 0,
       perCpKol: $('#cfPerCpKol').checked,
       perCpNabiz: $('#cfPerCpNabiz').checked,
       singleNabiz: $('#cfSingleNabiz').checked,
@@ -2018,7 +2050,22 @@ function buildColumns(t, steps, repsOverride, distOverride){
     if(t.config.setNabiz) cols.push({ key:'setNabiz', label:'Toparlanma Nb.', type:'txt', ph:'ör. 28' });
     if(t.config.branch) cols.push({ key:'branch', label:'Branş', type:'select', ph:'' });
   } else { // kumulatif
-    t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub:'kümülatif', type:'time', ph:'ör. 5:16' }));
+    if(t.config.restBetweenCp && t.config.legSplitEvery){
+      // Dinlenmeli bacaklar (ör. ICS Test: 100 yüz-dinlen-200 yüz-dinlen...):
+      // her kontrol noktası kendi başına bağımsız bir bacak, bacaklar
+      // arası fark HESAPLANMAZ. Her bacak kendi içinde split'lere ayrılır.
+      t.config.checkpoints.forEach(D=>{
+        tekrarSplitCheckpoints(t.config.legSplitEvery, D).forEach(d=> cols.push({ key:`cp${D}_s${d}`, label:`${D}m: ${d}m`, sub:`${D}m bacak · kümülatif`, type:'time', ph:'ör. 5:16' }));
+      });
+    } else {
+      // Dinlenme yoksa (T-Test) her nokta baştan itibaren kümülatif derece,
+      // sub'daki "kümülatif" ardışık split gösterimini tetikler.
+      // Dinlenme VARSA ama bacak içi split kapalıysa aynı tek alan kalır,
+      // sadece sub'dan "kümülatif" çıkarılır ki yanlış split gösterilmesin
+      // (bacaklar arası zaten anlamsız — aralarda dinlenme var).
+      const sub = t.config.restBetweenCp ? 'bacak' : 'kümülatif';
+      t.config.checkpoints.forEach(d=> cols.push({ key:`cp${d}`, label:`${d}m`, sub, type:'time', ph:'ör. 5:16' }));
+    }
     if(t.config.perCpKol) t.config.checkpoints.forEach(d=> cols.push({ key:`kol${d}`, label:`KS ${d}m`, type:'num', ph:'#' }));
     if(t.config.perCpNabiz) t.config.checkpoints.forEach(d=> cols.push({ key:`nb${d}`, label:`Nb ${d}m`, type:'num', ph:'#' }));
     if(t.config.singleNabiz) cols.push({ key:'nb_single', label:'Nabız', type:'num', ph:'#' });
@@ -2080,23 +2127,11 @@ function computeAvg(t, row, steps, repsOverride){
   if(t.family==='tekrarli'){
     let vals = [];
     const N = repsOverride || t.config.reps;
-    const useSplit = !!t.config.repSplitEvery;
     for(let i=1;i<=N;i++){
-      let sec;
-      if(useSplit){
-        // Split'li tekrarda "bitiş" derecesi o tekrarın EN BÜYÜK
-        // checkpoint'i (ör. rep1_cp200) — satırdaki anahtarlardan bulunur,
-        // böylece mesafe kayda göre değişse (distPerSession) bile doğru
-        // okunur; config.dist'e bağımlı olmaz.
-        const prefix = `rep${i}_cp`;
-        let maxD = -1;
-        Object.keys(row).forEach(k=>{
-          if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
-        });
-        sec = maxD>=0 ? parseTimeStr(row[`${prefix}${maxD}`]) : null;
-      } else {
-        sec = parseTimeStr(row[`rep${i}`]);
-      }
+      // Split'li tekrarda (rep2_cp50/cp100/...) "bitiş" derecesi satırdaki
+      // en büyük checkpoint'ten okunur (bkz. lastSplitValue) — düz
+      // tekrarda ("rep2") doğrudan kendi değeri kullanılır.
+      const sec = parseTimeStr(row[`rep${i}`] !== undefined ? row[`rep${i}`] : lastSplitValue(row, `rep${i}`));
       if(sec!==null) vals.push(sec);
     }
     if(!vals.length) return { text:'–', sec:null };
@@ -2106,7 +2141,9 @@ function computeAvg(t, row, steps, repsOverride){
   if(t.family==='kumulatif'){
     const cps = t.config.checkpoints;
     const lastCp = cps[cps.length-1];
-    const lastSec = parseTimeStr(row[`cp${lastCp}`]);
+    // Dinlenmeli bacaklarda (restBetweenCp) + bacak içi split açıksa
+    // "cpLAST" yok, "cpLAST_sD" var — en büyüğü lastSplitValue ile bulunur.
+    const lastSec = parseTimeStr(row[`cp${lastCp}`] !== undefined ? row[`cp${lastCp}`] : lastSplitValue(row, `cp${lastCp}`));
     if(lastSec===null) return { text:'–', sec:null };
     const pace = lastSec/(lastCp/100);
     return { text: fmtTime(pace)+' /100', sec: pace };
@@ -2862,18 +2899,9 @@ function protocolSplitGroups(t, sessionsForUnion){
 function stepRowValues(columns, row){
   const out = {};
   columns.forEach(c=>{
-    let v = row[c.key];
-    if(v===undefined){
-      // Tekrarlı sette split'li tekrar (repSplitEvery): "rep2" gibi tek
-      // bir anahtar yok, "rep2_cp50/cp100/..." var — bitiş derecesi için
-      // en büyük checkpoint'i satırdan bulup onu kullan (bkz. computeAvg).
-      const prefix = `${c.key}_cp`;
-      let maxD = -1;
-      Object.keys(row).forEach(k=>{
-        if(k.indexOf(prefix)===0){ const d = parseInt(k.slice(prefix.length)); if(!isNaN(d) && d>maxD) maxD = d; }
-      });
-      if(maxD>=0) v = row[`${prefix}${maxD}`];
-    }
+    // Split'li tekrar/bacak: "rep2"/"cp400" gibi tek bir anahtar yoksa
+    // satırdaki en büyük alt checkpoint'ten bitiş derecesini bul.
+    const v = row[c.key] !== undefined ? row[c.key] : lastSplitValue(row, c.key);
     out[c.key] = parseTimeStr(v);
   });
   return out;
@@ -2913,8 +2941,9 @@ function renderRowCellsHtml(cols, rowData){
         // Aynı basamağın checkpoint'leri arası segment (split) süresini
         // ana kümülatif derecenin ALTINA küçük gri yazıyla ekle.
         // RP Set anahtarı "s3_cp150" -> grup "s3"; tekrarlı sette split'li
-        // tekrar "rep2_cp100" -> grup "rep2"; aile anahtarı "cp150" -> "cp".
-        const grp = (String(c.key).match(/^(?:s|rep)\d+/) || ['cp'])[0];
+        // tekrar "rep2_cp100" -> grup "rep2"; dinlenmeli kümülatif bacak
+        // "cp400_s100" -> grup "cp400"; kesintisiz aile anahtarı "cp150" -> "cp".
+        const grp = (String(c.key).match(/^(?:s|rep)\d+|^cp\d+(?=_s)/) || ['cp'])[0];
         if(grp !== curCumGroup){ curCumGroup = grp; prevCumSec = null; }
         let splitHtml = '';
         if(sec!==null){
