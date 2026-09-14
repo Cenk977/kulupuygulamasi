@@ -2225,6 +2225,19 @@ async function saveSession(){
   renderProtoList();
   renderSessionList();
 }
+// Kümülatif ailede kayıt kartının içerik özeti: kontrol noktaları +
+// (varsa) branş, ör. "100-200-300m Kurbağalama". Branş sporcu bazlı bir
+// alan olduğu için, o kayıttaki ilk dolu branşı temsili gösterir.
+function kumulatifSummary(t, s){
+  const cps = t.config.checkpoints;
+  const distStr = (cps && cps.length) ? cps.join('-')+'m' : '';
+  let branchStr = '';
+  if(t.config.branch){
+    const found = (s.athletes||[]).find(a=> a.branch);
+    if(found) branchStr = found.branch;
+  }
+  return [distStr, branchStr].filter(Boolean).join(' ');
+}
 function renderSessionList(){
   const wrap = $('#sessionListWrap');
   if(!wrap) return;
@@ -2233,8 +2246,9 @@ function renderSessionList(){
   wrap.innerHTML = sessions.map(s=>{
     const repsDistStr = ACTIVE_PROTO.family==='tekrarli' ? `${repsForSession(ACTIVE_PROTO, s)}x${distForSession(ACTIVE_PROTO, s)}m` : '';
     const stepStr = ACTIVE_PROTO.family==='rpset' ? stepSummaryCompact(s.steps) : '';
+    const cpStr = ACTIVE_PROTO.family==='kumulatif' ? kumulatifSummary(ACTIVE_PROTO, s) : '';
     const intervalPart = s.interval ? `İnterval: ${s.interval}` : '';
-    const topLine = (repsDistStr || stepStr || intervalPart) ? `<div class="s-interval">${esc([repsDistStr, stepStr, intervalPart].filter(Boolean).join(' · '))}</div>` : '';
+    const topLine = (repsDistStr || stepStr || cpStr || intervalPart) ? `<div class="s-interval">${esc([repsDistStr, stepStr, cpStr, intervalPart].filter(Boolean).join(' · '))}</div>` : '';
     const noteLine = s.note ? `<div class="s-note">${esc(s.note)}</div>` : '';
     return `<div class="session-card">
       <div><div class="s-date">${new Date(s.date).toLocaleDateString('tr-TR')}</div>
