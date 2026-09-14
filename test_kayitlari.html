@@ -1128,10 +1128,30 @@ function renderCustomForm(existing){
         kendin oluşturursun — en fazla 6 basamak.
       </div>`;
     } else {
+      const cpAuto = !!t.config.cpSplitEvery;
+      const cpMaxDist = Math.max(...(t.config.checkpoints||[400]));
       box.innerHTML = `
         <div class="field">
+          <label>Kontrol noktaları nasıl girilsin?</label>
+          <select id="cfCpMode">
+            <option value="manual" ${!cpAuto?'selected':''}>Elle liste gir</option>
+            <option value="auto" ${cpAuto?'selected':''}>Split aralığıyla otomatik oluştur</option>
+          </select>
+        </div>
+        <div id="cfCpManualWrap" class="field" style="display:${cpAuto?'none':''};">
           <label>Kontrol Noktaları (virgülle ayrılmış metre)</label>
           <input type="text" id="cfCheckpoints" style="width:100%;" value="${(t.config.checkpoints||[100,200,300,400]).join(', ')}" placeholder="100, 200, 300, 400">
+        </div>
+        <div id="cfCpAutoWrap" class="field-row" style="display:${cpAuto?'':'none'};">
+          <div class="field"><label>Toplam Mesafe (m)</label><input type="number" id="cfCpDist" min="1" step="25" value="${cpMaxDist}"></div>
+          <div class="field">
+            <label>Split aralığı</label>
+            <select id="cfCpSplitEvery">
+              <option value="25" ${t.config.cpSplitEvery===25?'selected':''}>Her 25m'de bir</option>
+              <option value="50" ${!t.config.cpSplitEvery || t.config.cpSplitEvery===50?'selected':''}>Her 50m'de bir</option>
+              <option value="100" ${t.config.cpSplitEvery===100?'selected':''}>Her 100m'de bir</option>
+            </select>
+          </div>
         </div>
         <div class="field-row">
           <label class="checkfield"><input type="checkbox" id="cfPerCpKol" ${t.config.perCpKol?'checked':''}> Her kontrol noktasında kulaç sayısı</label>
@@ -1144,6 +1164,11 @@ function renderCustomForm(existing){
           <label class="checkfield"><input type="checkbox" id="cfBranch" ${t.config.branch?'checked':''}> Branş (stil) alanı ekle</label>
           <label class="checkfield"><input type="checkbox" id="cfExtraBranch" ${t.config.extraBranch?'checked':''}> Ek branş ölçümü (50m + 100m tek stil)</label>
         </div>`;
+      $('#cfCpMode').onchange = ()=>{
+        const auto = $('#cfCpMode').value==='auto';
+        $('#cfCpManualWrap').style.display = auto ? 'none' : '';
+        $('#cfCpAutoWrap').style.display = auto ? '' : 'none';
+      };
     }
   }
   $('#cfFamily').onchange = renderFamilyFields;
@@ -1176,10 +1201,20 @@ $('#btnSaveCustom').onclick = async ()=>{
       kolLabels: $('#cfKolMode').value==='iki' ? ['1.Bölge KS','2.Bölge KS'] : ['Kel KS','Sırt KS','Kur KS','Ser KS']
     };
   } else {
-    const cps = $('#cfCheckpoints').value.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n)&&n>0);
+    const cpAuto = $('#cfCpMode').value==='auto';
+    let cps, cpSplitEvery;
+    if(cpAuto){
+      cpSplitEvery = parseInt($('#cfCpSplitEvery').value)||50;
+      const cpDist = Math.max(1, parseInt($('#cfCpDist').value)||400);
+      cps = tekrarSplitCheckpoints(cpSplitEvery, cpDist);
+    } else {
+      cps = $('#cfCheckpoints').value.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n)&&n>0);
+      cpSplitEvery = 0;
+    }
     if(!cps.length){ alert('En az bir kontrol noktası gir.'); return; }
     config = {
       checkpoints: cps,
+      cpSplitEvery: cpSplitEvery || undefined,
       perCpKol: $('#cfPerCpKol').checked,
       perCpNabiz: $('#cfPerCpNabiz').checked,
       singleNabiz: $('#cfSingleNabiz').checked,
